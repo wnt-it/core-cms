@@ -12,6 +12,7 @@ export interface AuthBranding {
 
 export async function getAuthBranding(): Promise<AuthBranding> {
   try {
+    console.error("[getAuthBranding] NEXT_PUBLIC_SUPABASE_URL =", process.env.NEXT_PUBLIC_SUPABASE_URL);
     const supabase = await createClient();
     const { data, error } = await supabase
       .from("site_settings")
