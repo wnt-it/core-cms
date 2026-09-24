@@ -81,13 +81,10 @@ export async function updateHeroImageSetting(fieldId: string, url: string | null
     return { success: false, error: error.message };
   }
 
+  // "layout" invalidiert den kompletten Seitenbaum - reicht projektübergreifend,
+  // ohne einzelne kundenspezifische Routen (die hier vorher fest verdrahtet waren
+  // und in anderen Projekten als reines No-op ins Leere liefen) fest zu verdrahten.
   revalidatePath("/", "layout");
-  revalidatePath("/sortiment");
-  revalidatePath("/marken");
-  revalidatePath("/abverkauf");
-  revalidatePath("/aktionen");
-  revalidatePath("/jobs");
-  revalidatePath("/kontakt");
   return { success: true };
 }
 
