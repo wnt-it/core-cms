@@ -13,17 +13,22 @@ export interface AuthBranding {
 export async function getAuthBranding(): Promise<AuthBranding> {
   try {
     const supabase = await createClient();
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("site_settings")
       .select("site_name, logo_url")
       .eq("id", "general")
       .maybeSingle();
 
+    if (error) {
+      console.error("[getAuthBranding] site_settings query failed:", error.message);
+    }
+
     return {
       siteName: data?.site_name || "Admin",
       logoUrl: data?.logo_url || null,
     };
-  } catch {
+  } catch (err) {
+    console.error("[getAuthBranding] unexpected error:", err);
     return { siteName: "Admin", logoUrl: null };
   }
 }
