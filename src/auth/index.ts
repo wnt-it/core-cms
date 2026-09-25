@@ -17,3 +17,6 @@ export { default as LoginPage } from "./LoginPage";
 export type { LoginPageProps } from "./LoginPage";
 export { default as ForgotPasswordPage } from "./ForgotPasswordPage";
 export { default as UpdatePasswordPage } from "./UpdatePasswordPage";
+export { default as AccountPage } from "./AccountPage";
+export { default as AccountForm } from "./AccountForm";
+export type { AccountFormProps } from "./AccountForm";
