@@ -9,6 +9,7 @@
 // kundenindividuelle Formularfelder (z.B. projectType/amount/energyType).
 
 import { createClient } from "../supabase/server";
+import { createServiceRoleClient } from "../supabase/service-role";
 import { decrypt } from "../supabase/encryption";
 import { getEmailProvider, type EmailProvider } from "../email";
 import type { ContactPayload } from "./types";
@@ -99,13 +100,22 @@ export async function submitContactForm(payload: ContactPayload, options: Submit
       fromEmail = process.env.SMTP_FROM_EMAIL || "";
       recipientEmail = process.env.SMTP_RECIPIENT || "";
 
-      // Falls Umgebungsvariablen nicht gesetzt sind, lade aus der Supabase Tabelle site_settings
+      // Falls Umgebungsvariablen nicht gesetzt sind, lade aus der Supabase Tabelle email_settings.
+      // Bewusst über den Service-Role-Client (nicht den normalen anon-Client): diese Tabelle
+      // enthält SMTP-Zugangsdaten und darf nicht per RLS öffentlich lesbar sein (anders als
+      // site_settings, das absichtlich öffentlich ist für Logo/Site-Name/Kontaktdaten).
       if (!smtpHost || !smtpUser || !smtpPassword) {
-        const { data: dbSettings } = await supabase
-          .from("site_settings")
-          .select("smtp_host, smtp_port, smtp_user, smtp_pass, smtp_from_name, smtp_from_email, smtp_recipient")
-          .eq("id", "general")
-          .maybeSingle();
+        const serviceRoleClient = createServiceRoleClient();
+        if (!serviceRoleClient) {
+          console.warn("[submitContactForm] SUPABASE_SERVICE_ROLE_KEY fehlt - kann email_settings nicht laden.");
+        }
+        const { data: dbSettings } = serviceRoleClient
+          ? await serviceRoleClient
+              .from("email_settings")
+              .select("smtp_host, smtp_port, smtp_user, smtp_pass, smtp_from_name, smtp_from_email, smtp_recipient")
+              .eq("id", "general")
+              .maybeSingle()
+          : { data: null };
 
         if (dbSettings) {
           smtpHost = dbSettings.smtp_host || smtpHost;
