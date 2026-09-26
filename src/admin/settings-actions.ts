@@ -34,12 +34,14 @@ export async function saveSmtpSettings(formData: FormData) {
     updatePayload.smtp_pass = encrypt(pass);
   }
 
+  // email_settings statt site_settings: SMTP-Zugangsdaten dürfen nicht öffentlich lesbar
+  // sein (site_settings hat bewusst eine public-read RLS-Policy für Logo/Site-Name/Kontakt).
   const { error } = await supabase
-    .from("site_settings")
+    .from("email_settings")
     .upsert(updatePayload);
 
   if (error) {
-    console.error("Failed to save SMTP settings to site_settings:", error);
+    console.error("Failed to save SMTP settings to email_settings:", error);
     return { success: false, error: "Fehler beim Speichern der SMTP-Einstellungen: " + error.message };
   }
 
@@ -91,7 +93,7 @@ export async function updateHeroImageSetting(fieldId: string, url: string | null
 export async function getSmtpSettings() {
   const supabase = await createClient();
   const { data, error } = await supabase
-    .from("site_settings")
+    .from("email_settings")
     .select("smtp_host, smtp_port, smtp_user, smtp_pass, smtp_from_name, smtp_from_email, smtp_recipient")
     .eq("id", "general")
     .maybeSingle();
