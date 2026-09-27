@@ -94,6 +94,46 @@ niemals im Browser verwenden. Ohne diese Variable funktioniert weiterhin alles a
 automatischen SMTP-Versand über die Datenbank-Einstellungen (ENV-basiertes SMTP via
 `SMTP_HOST`/`SMTP_USER`/`SMTP_PASSWORD` funktioniert davon unabhängig).
 
+## Neue Admin-Seiten automatisch an alle Projekte ausrollen
+
+**Problem, das dieses Muster löst:** Bis v0.3.1 landete eine neue core-cms-Seite
+(z.B. "Mein Konto", v0.3.0) nur dann in einem Kundenprojekt, wenn dort zusätzlich
+*manuell* eine Route-Datei angelegt und der Sidebar-Nav-Eintrag von Hand ergänzt
+wurde. Ein reiner Versions-Bump von `core-cms` allein reichte nicht — das führte
+dazu, dass `veee` nach dem Update auf v0.3.1 trotzdem keine "Mein Konto"-Seite hatte,
+weil dieser zweite Schritt schlicht vergessen wurde.
+
+**Lösung (ab v0.4.0):** `core-cms/src/admin/core-pages.tsx` enthält eine zentrale
+Liste `coreAdminPages` (Slug, Label, Icon, Komponente) sowie eine generische
+`CoreAdminRoute`, die anhand des URL-Segments die passende Seite rendert. Jedes
+Kundenprojekt richtet dafür **einmalig** zwei Dinge ein:
+
+1. **Catch-all-Route-Stub** unter `src/app/admin/(dashboard)/[...core]/page.tsx`:
+   ```tsx
+   export { CoreAdminRoute as default } from "core-cms/src/admin";
+   ```
+   (Next.js bevorzugt eine exakt passende statische Route vor dem Catch-all —
+   bestehende einzelne Stub-Seiten wie `konto/page.tsx` können daher entfernt werden,
+   sobald der Catch-all eingerichtet ist.)
+2. **Nav-Einträge dynamisch aus `coreAdminPages` rendern**, statt sie hart zu
+   codieren, z.B. in `AdminLayoutClient.tsx`:
+   ```tsx
+   import { coreAdminPages } from "core-cms/src/admin";
+   // ...
+   {coreAdminPages.map((page) => (
+     <Link key={page.slug} href={`/admin/${page.slug}`}>
+       <page.icon size={18} /> {page.label}
+     </Link>
+   ))}
+   ```
+
+Danach reicht für jede **künftige** core-cms-Admin-Seite ein Eintrag in
+`coreAdminPages` + ein core-cms-Versionsbump im Kundenprojekt — Route und
+Nav-Eintrag erscheinen automatisch, ohne weitere Datei-Änderungen im Projekt.
+Eingerichtet bei `richardprinz` und `veee` seit v0.4.0. `template` und
+`alb-naturenergie` bekommen es zusammen mit ihrem nächsten core-cms-Update
+(aktuell noch auf v0.2.3).
+
 ## Migrationsstand
 
 Siehe Kommentare in den jeweiligen `src/*/index.ts`-Dateien für den Stand pro Modul.
