@@ -1,25 +1,25 @@
 {
-  "checked_at": "2026-09-27T00:00:00Z",
-  "latest_core_cms_tag": "v0.3.1",
+  "checked_at": "2026-09-28T06:27:57Z",
+  "latest_core_cms_tag": "v0.4.0",
   "projects": {
     "richardprinz": {
-      "gepinnte_version": "v0.3.1",
-      "neueste_version": "v0.3.1",
+      "gepinnte_version": "v0.4.0",
+      "neueste_version": "v0.4.0",
       "ist_aktuell": true
     },
     "veee": {
-      "gepinnte_version": "v0.3.1",
-      "neueste_version": "v0.3.1",
+      "gepinnte_version": "v0.4.0",
+      "neueste_version": "v0.4.0",
       "ist_aktuell": true
     },
     "templates": {
       "gepinnte_version": "v0.2.3",
-      "neueste_version": "v0.3.1",
+      "neueste_version": "v0.4.0",
       "ist_aktuell": false
     },
     "alb-naturenergie": {
       "gepinnte_version": "v0.2.3",
-      "neueste_version": "v0.3.1",
+      "neueste_version": "v0.4.0",
       "ist_aktuell": false
     }
   }
