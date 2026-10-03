@@ -1,8 +1,9 @@
 // Quelle: template/src/lib/services/submissions.ts (submitContactForm)
 //
 // Umgebaut auf das EmailProvider-Interface aus ../email statt fest verdrahtetem
-// Nodemailer/SMTP-Aufruf. Verwendet weiterhin SMTP standardmäßig (liest Zugangsdaten
-// aus ENV oder der site_settings-Tabelle, wie im Original), kann aber genauso mit
+// Nodemailer/SMTP-Aufruf. Verwendet SMTP standardmäßig (liest Zugangsdaten
+// ausschließlich aus email_settings, d. h. dem, was im Admin gepflegt ist - keine
+// ENV-Variablen, keine Standardwerte), kann aber genauso mit
 // dem Resend-Adapter aufgerufen werden, indem `emailProvider` übergeben wird.
 //
 // Generisch gehalten: feste Felder (name/email/...) + offenes `metadata` für
@@ -86,59 +87,51 @@ export async function submitContactForm(payload: ContactPayload, options: Submit
   // 2. Optionale E-Mail-Benachrichtigung (SMTP per Default, oder übergebener Provider)
   try {
     let provider = options.emailProvider;
-    let fromName = options.siteName || "Formular-Service";
+    let fromName = "";
     let fromEmail = "";
     let recipientEmail = "";
 
     if (!provider) {
-      let smtpHost: string = process.env.SMTP_HOST || "";
-      let smtpPort: number = Number(process.env.SMTP_PORT) || 587;
-      let smtpUser: string = process.env.SMTP_USER || "";
-      let rawPassword = process.env.SMTP_PASSWORD || "";
-      let smtpPassword: string = rawPassword.includes(":") ? decrypt(rawPassword) : rawPassword;
-      fromName = process.env.SMTP_FROM_NAME || fromName;
-      fromEmail = process.env.SMTP_FROM_EMAIL || "";
-      recipientEmail = process.env.SMTP_RECIPIENT || "";
-
-      // Falls Umgebungsvariablen nicht gesetzt sind, lade aus der Supabase Tabelle email_settings.
+      // SMTP-Konfiguration ausschließlich aus email_settings (im Admin gepflegt).
+      // Keine Umgebungsvariablen, keine Standardwerte: ist etwas nicht gepflegt,
+      // wird keine E-Mail gesendet (die Anfrage ist trotzdem in "submissions" gespeichert).
       // Bewusst über den Service-Role-Client (nicht den normalen anon-Client): diese Tabelle
       // enthält SMTP-Zugangsdaten und darf nicht per RLS öffentlich lesbar sein (anders als
       // site_settings, das absichtlich öffentlich ist für Logo/Site-Name/Kontaktdaten).
-      if (!smtpHost || !smtpUser || !smtpPassword) {
-        const serviceRoleClient = createServiceRoleClient();
-        if (!serviceRoleClient) {
-          console.warn("[submitContactForm] SUPABASE_SERVICE_ROLE_KEY fehlt - kann email_settings nicht laden.");
-        }
-        const { data: dbSettings } = serviceRoleClient
-          ? await serviceRoleClient
-              .from("email_settings")
-              .select("smtp_host, smtp_port, smtp_user, smtp_pass, smtp_from_name, smtp_from_email, smtp_recipient")
-              .eq("id", "general")
-              .maybeSingle()
-          : { data: null };
+      const serviceRoleClient = createServiceRoleClient();
+      if (!serviceRoleClient) {
+        console.warn("[submitContactForm] SUPABASE_SERVICE_ROLE_KEY fehlt - kann email_settings nicht laden, keine E-Mail gesendet.");
+      } else {
+        const { data: dbSettings } = await serviceRoleClient
+          .from("email_settings")
+          .select("smtp_host, smtp_port, smtp_user, smtp_pass, smtp_from_name, smtp_from_email, smtp_recipient")
+          .eq("id", "general")
+          .maybeSingle();
 
-        if (dbSettings) {
-          smtpHost = dbSettings.smtp_host || smtpHost;
-          smtpPort = Number(dbSettings.smtp_port) || smtpPort;
-          smtpUser = dbSettings.smtp_user || smtpUser;
-          if (dbSettings.smtp_pass) {
-            try {
-              smtpPassword = decrypt(dbSettings.smtp_pass);
-            } catch {
-              smtpPassword = dbSettings.smtp_pass;
-            }
+        let smtpPassword = "";
+        if (dbSettings?.smtp_pass) {
+          try {
+            smtpPassword = decrypt(dbSettings.smtp_pass);
+          } catch {
+            smtpPassword = "";
           }
-          fromName = dbSettings.smtp_from_name || fromName;
-          fromEmail = dbSettings.smtp_from_email || fromEmail || smtpUser || "noreply@example.com";
-          recipientEmail = dbSettings.smtp_recipient || recipientEmail || fromEmail;
         }
-      }
+        const smtpPort = Number(dbSettings?.smtp_port);
 
-      if (smtpHost && smtpUser && smtpPassword) {
-        provider = getEmailProvider({
-          type: "smtp",
-          config: { host: smtpHost, port: smtpPort, user: smtpUser, pass: smtpPassword },
-        });
+        if (
+          dbSettings?.smtp_host && smtpPort > 0 && dbSettings.smtp_user && smtpPassword &&
+          dbSettings.smtp_from_email && dbSettings.smtp_recipient
+        ) {
+          fromName = dbSettings.smtp_from_name || "";
+          fromEmail = dbSettings.smtp_from_email;
+          recipientEmail = dbSettings.smtp_recipient;
+          provider = getEmailProvider({
+            type: "smtp",
+            config: { host: dbSettings.smtp_host, port: smtpPort, user: dbSettings.smtp_user, pass: smtpPassword },
+          });
+        } else {
+          console.warn("[submitContactForm] SMTP im Admin nicht vollständig eingerichtet - keine E-Mail gesendet.");
+        }
       }
     }
 
@@ -175,7 +168,7 @@ export async function submitContactForm(payload: ContactPayload, options: Submit
         subject: `[${options.notificationSubjectPrefix || "Kontakt"}] ${cleanSubject}`,
         html,
         fromName,
-        fromEmail: fromEmail || recipientEmail,
+        fromEmail,
       });
     }
   } catch (mailErr) {

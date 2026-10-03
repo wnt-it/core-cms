@@ -33,11 +33,13 @@ export class SmtpEmailProvider implements EmailProvider {
   }
 
   async send(message: EmailMessage): Promise<void> {
-    const fromName = message.fromName || "Website";
-    const fromEmail = message.fromEmail || message.to;
+    // Keine Standardwerte: Absender-Adresse muss vom Aufrufer (aus dem Admin) kommen.
+    if (!message.fromEmail) {
+      throw new Error("SmtpEmailProvider: fromEmail fehlt - Absender-Adresse im Admin pflegen.");
+    }
 
     await this.transporter.sendMail({
-      from: `"${fromName}" <${fromEmail}>`,
+      from: message.fromName ? `"${message.fromName}" <${message.fromEmail}>` : message.fromEmail,
       to: message.to,
       subject: message.subject,
       html: message.html,

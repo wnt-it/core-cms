@@ -22,11 +22,13 @@ export class ResendEmailProvider implements EmailProvider {
   }
 
   async send(message: EmailMessage): Promise<void> {
-    const fromName = message.fromName || "Website";
-    const fromEmail = message.fromEmail || "onboarding@resend.dev";
+    // Keine Standardwerte: Absender-Adresse muss vom Aufrufer (aus dem Admin) kommen.
+    if (!message.fromEmail) {
+      throw new Error("ResendEmailProvider: fromEmail fehlt - Absender-Adresse im Admin pflegen.");
+    }
 
     const { error } = await this.client.emails.send({
-      from: `${fromName} <${fromEmail}>`,
+      from: message.fromName ? `${message.fromName} <${message.fromEmail}>` : message.fromEmail,
       to: message.to,
       subject: message.subject,
       html: message.html,
