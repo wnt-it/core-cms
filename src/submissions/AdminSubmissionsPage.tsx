@@ -1,7 +1,7 @@
 // Quelle: template/src/app/admin/(dashboard)/submissions/page.tsx
 // Als wiederverwendbare Server-Component statt Next.js-Routendatei, damit sie aus
 // core-cms importiert werden kann. Der Titel ist optional/generisch, statt
-// hartcodiert "richardprinz Admin".
+// eines hartcodierten Namens.
 
 import { createClient } from '../supabase/server'
 import SubmissionsAdminClient from './SubmissionsAdminClient'

@@ -1,7 +1,6 @@
 # core-cms
 
-Zentrales, versioniertes CMS-Core-Package für alle WNT-IT Next.js/Supabase-Projekte
-(`template`, `richardprinz`, `veee`, `alb-naturenergie`, `dago`, `wnt-it`).
+Zentrales, versioniertes CMS-Core-Package für WNT-IT Next.js/Supabase-Projekte.
 
 Ersetzt das bisherige Datei-Kopier-Skript `scripts/sync-core.ps1`: statt Core-Dateien
 1:1 in jedes Projekt zu kopieren, installiert jedes Projekt dieses Package als
@@ -60,11 +59,8 @@ Konsequenzen, die im Kundenprojekt (nicht in core-cms selbst) nachgezogen werden
    ```css
    @source "../../core-cms/src";
    ```
-   (Pfad relativ zur CSS-Datei anpassen.) Das war die Ursache dafür, dass der Posteingang in
-   richardprinz nach der Migration kaputt aussah, obwohl der Component-Code mit `veee`/`template`
-   praktisch identisch war — am 2026-09-24 gefixt, siehe `richardprinz/src/index.css`.
+   (Pfad relativ zur CSS-Datei anpassen.)
 
-Bei richardprinz bereits so eingerichtet (siehe dortige `tsconfig.json`/`next.config.mjs`/`src/index.css`).
 **Sobald core-cms über GitHub als echte Dependency installiert wird** (nicht mehr per `file:`),
 entfällt Punkt 2 komplett — npm kopiert das Package dann als echten Unterordner in
 `node_modules/core-cms`, kein Symlink mehr, normale Node-Modulauflösung greift wieder.
@@ -100,8 +96,8 @@ automatischen SMTP-Versand über die Datenbank-Einstellungen (ENV-basiertes SMTP
 (z.B. "Mein Konto", v0.3.0) nur dann in einem Kundenprojekt, wenn dort zusätzlich
 *manuell* eine Route-Datei angelegt und der Sidebar-Nav-Eintrag von Hand ergänzt
 wurde. Ein reiner Versions-Bump von `core-cms` allein reichte nicht — das führte
-dazu, dass `veee` nach dem Update auf v0.3.1 trotzdem keine "Mein Konto"-Seite hatte,
-weil dieser zweite Schritt schlicht vergessen wurde.
+dazu, dass nach einem Update trotzdem Seiten fehlten, weil dieser zweite Schritt
+schlicht vergessen wurde.
 
 **Lösung (ab v0.4.0):** `core-cms/src/admin/core-pages.tsx` enthält eine zentrale
 Liste `coreAdminPages` (Slug, Label, Icon, Komponente) sowie eine generische
@@ -130,9 +126,6 @@ Kundenprojekt richtet dafür **einmalig** zwei Dinge ein:
 Danach reicht für jede **künftige** core-cms-Admin-Seite ein Eintrag in
 `coreAdminPages` + ein core-cms-Versionsbump im Kundenprojekt — Route und
 Nav-Eintrag erscheinen automatisch, ohne weitere Datei-Änderungen im Projekt.
-Eingerichtet bei `richardprinz` und `veee` seit v0.4.0. `template` und
-`alb-naturenergie` bekommen es zusammen mit ihrem nächsten core-cms-Update
-(aktuell noch auf v0.2.3).
 
 ## Migrationsstand
 
@@ -145,6 +138,6 @@ Siehe Kommentare in den jeweiligen `src/*/index.ts`-Dateien für den Stand pro M
 | 2 | Auth | offen |
 | 3 | Media Library + Site-Settings | offen |
 | 4 | Submissions + E-Mail-Adapter (Resend/SMTP) | offen |
-| 5 | Pilotprojekt (richardprinz) migrieren | offen |
-| 6 | Restliche Projekte + template migrieren | offen |
+| 5 | Pilotprojekt migrieren | offen |
+| 6 | Restliche Projekte migrieren | offen |
 | 7 | sync-core.ps1 abschalten | offen |
