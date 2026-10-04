@@ -75,10 +75,6 @@ SUPABASE_URL=
 SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=  # Pflicht ab v0.3.1 - siehe unten
 RESEND_API_KEY=          # falls Resend als Provider gewählt wird
-SMTP_HOST=                # falls eigener SMTP-Server gewünscht
-SMTP_PORT=
-SMTP_USER=
-SMTP_PASS=
 ```
 
 **`SUPABASE_SERVICE_ROLE_KEY` (ab v0.3.1 Pflicht):** Wird ausschließlich serverseitig genutzt,
@@ -87,8 +83,12 @@ anon-Key, da `site_settings` öffentlich lesbar ist und SMTP-Daten dort nicht li
 siehe Sicherheitsfix v0.3.1). Zu finden im Supabase-Dashboard unter
 **Project Settings → API → service_role secret**. Niemals mit `NEXT_PUBLIC_`-Präfix setzen,
 niemals im Browser verwenden. Ohne diese Variable funktioniert weiterhin alles außer dem
-automatischen SMTP-Versand über die Datenbank-Einstellungen (ENV-basiertes SMTP via
-`SMTP_HOST`/`SMTP_USER`/`SMTP_PASSWORD` funktioniert davon unabhängig).
+SMTP-Versand.
+
+**SMTP-Zugangsdaten** (Host, Port, Benutzer, Passwort, Absender, Empfänger) werden ausschließlich
+im Admin unter „Einstellungen & SMTP“ gepflegt (Tabelle `email_settings`). Es gibt keine
+`SMTP_*`-Umgebungsvariablen und keine Standardwerte: Ist etwas nicht gepflegt, wird keine
+E-Mail gesendet (die Anfrage bleibt trotzdem im Posteingang gespeichert).
 
 ## Neue Admin-Seiten automatisch an alle Projekte ausrollen
 
