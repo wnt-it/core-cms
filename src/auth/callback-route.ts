@@ -3,10 +3,6 @@
 //
 // Verwendung im Kundenprojekt: app/admin/auth/callback/route.ts re-exportiert GET
 // aus core-cms, z.B. `export { GET } from "core-cms/auth"`.
-//
-// Hinweis: Kundenprojekt hat eine divergente Version dieser Datei (zusätzliches
-// Error-Logging der Fehlerdetails). Kundenprojekt wird NICHT auf diese Datei
-// umgestellt (siehe Abschlussbericht).
 
 import { createClient } from '../supabase/server'
 import { NextResponse } from 'next/server'
