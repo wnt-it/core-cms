@@ -2,10 +2,6 @@
 
 // Quelle: template/src/app/admin/login/actions.ts
 // Import von createClient auf core-cms-internen relativen Pfad umgestellt.
-//
-// Hinweis: richardprinz hat eine divergente Version dieser Datei (abweichende
-// Fehlerbehandlung beim Login). richardprinz wird NICHT auf diese Datei
-// umgestellt (siehe Abschlussbericht).
 
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'

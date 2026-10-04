@@ -24,7 +24,7 @@ export interface SubmitContactFormOptions {
   emailProvider?: EmailProvider;
   /** Absendername für die Benachrichtigungs-E-Mail, falls kein Provider übergeben wird. */
   notificationSubjectPrefix?: string;
-  /** Anzeigename der Website für das E-Mail-Template (z.B. "richardprinz"). */
+  /** Anzeigename der Website für das E-Mail-Template (z. B. Firmenname). */
   siteName?: string;
   /** Akzentfarbe für das E-Mail-Template (Hex), Standard: neutral-schwarz. */
   brandColor?: string;
