@@ -1,7 +1,8 @@
 import { notFound } from "next/navigation";
-import { UserCircle } from "lucide-react";
+import { Package, UserCircle } from "lucide-react";
 import type { ComponentType } from "react";
 import { AccountPage } from "../auth";
+import VersionPage from "./VersionPage";
 
 export interface CoreAdminPage {
   /** URL-Segment unter /admin/, z.B. "konto" -> /admin/konto */
@@ -22,6 +23,7 @@ export interface CoreAdminPage {
  */
 export const coreAdminPages: CoreAdminPage[] = [
   { slug: "konto", label: "Mein Konto", icon: UserCircle, Component: AccountPage },
+  { slug: "version", label: "Core-Version", icon: Package, Component: VersionPage },
 ];
 
 export function getCoreAdminPage(slug: string): CoreAdminPage | undefined {

@@ -127,6 +127,11 @@ Danach reicht für jede **künftige** core-cms-Admin-Seite ein Eintrag in
 `coreAdminPages` + ein core-cms-Versionsbump im Kundenprojekt — Route und
 Nav-Eintrag erscheinen automatisch, ohne weitere Datei-Änderungen im Projekt.
 
+**Core-Version & Changelog:** Die Seite `/admin/version` ist als Core-Admin-Seite
+registriert (`coreAdminPages`) und zeigt die installierte Core-Version samt
+Changelog. Beide Daten stehen in `src/admin/changelog.ts` (`CORE_VERSION`,
+`CORE_CHANGELOG`) und müssen bei jedem Release vor dem Tag gepflegt werden.
+
 ## Migrationsstand
 
 Siehe Kommentare in den jeweiligen `src/*/index.ts`-Dateien für den Stand pro Modul.
