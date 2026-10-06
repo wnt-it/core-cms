@@ -1,0 +1,26 @@
+{
+  "checked_at": "2026-10-06T00:00:00Z",
+  "latest_core_cms_tag": "v0.6.0",
+  "projects": {
+    "richardprinz": {
+      "gepinnte_version": "v0.6.0",
+      "neueste_version": "v0.6.0",
+      "ist_aktuell": true
+    },
+    "veee": {
+      "gepinnte_version": "v0.6.0",
+      "neueste_version": "v0.6.0",
+      "ist_aktuell": true
+    },
+    "templates": {
+      "gepinnte_version": "v0.6.0",
+      "neueste_version": "v0.6.0",
+      "ist_aktuell": true
+    },
+    "alb-naturenergie": {
+      "gepinnte_version": "v0.6.0",
+      "neueste_version": "v0.6.0",
+      "ist_aktuell": true
+    }
+  }
+}
