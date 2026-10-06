@@ -132,6 +132,34 @@ registriert (`coreAdminPages`) und zeigt die installierte Core-Version samt
 Changelog. Beide Daten stehen in `src/admin/changelog.ts` (`CORE_VERSION`,
 `CORE_CHANGELOG`) und müssen bei jedem Release vor dem Tag gepflegt werden.
 
+## Admin-Leiste auf der öffentlichen Website (ab v0.7.0)
+
+Angemeldete Nutzer sehen auf der öffentlichen Website eine schwebende Leiste mit Button
+zum Dashboard, Ausklappmenü (Schnellzugriffe, „Abmelden“) und Schließen-Button für die
+aktuelle Sitzung. Nicht angemeldet oder auf `/admin` bleibt sie unsichtbar. Einbindung
+mit einer Zeile im Root-Layout (`src/app/layout.tsx`):
+
+```tsx
+import { AdminLiveBar } from "core-cms/src/admin";
+
+// im <body>:
+<AdminLiveBar />
+```
+
+Optional: `dashboardHref` (Standard `/admin`) und projektspezifische Schnellzugriffe:
+
+```tsx
+<AdminLiveBar
+  links={[
+    { href: "/admin/termine", label: "Termine", icon: CalendarDays },
+    { href: "/admin/inbox", label: "Posteingang", icon: Inbox },
+  ]}
+/>
+```
+
+Die Farben kommen aus den Tailwind-Tokens des Projekts (`primary`). Die Tailwind-Quellen
+müssen `node_modules/core-cms` erfassen (wie bei den übrigen Core-Komponenten).
+
 ## Migrationsstand
 
 Siehe Kommentare in den jeweiligen `src/*/index.ts`-Dateien für den Stand pro Modul.

@@ -1,4 +1,6 @@
 export * from "./settings-actions";
+export { default as AdminLiveBar } from "./AdminLiveBar";
+export type { AdminLiveBarProps, AdminLiveBarLink } from "./AdminLiveBar";
 export { default as SmtpSettingsForm } from "./SmtpSettingsForm";
 export { default as GeneralSettingsForm } from "./GeneralSettingsForm";
 export type { GeneralSettingsFormProps } from "./GeneralSettingsForm";

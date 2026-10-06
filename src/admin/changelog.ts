@@ -12,10 +12,17 @@ export interface ChangelogEntry {
   changes: { type: ChangeType; text: string }[];
 }
 
-export const CORE_VERSION = "0.6.0";
+export const CORE_VERSION = "0.7.0";
 
 /** Neueste Version zuerst. */
 export const CORE_CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "0.7.0",
+    date: "2026-10-06",
+    changes: [
+      { type: "feature", text: "Neue Admin-Leiste für die öffentliche Website: Wer angemeldet ist, sieht unten einen Button zum Dashboard, ein Menü mit Schnellzugriffen und „Abmelden“. Einbau mit einer Zeile im Layout." },
+    ],
+  },
   {
     version: "0.6.0",
     date: "2026-10-05",
