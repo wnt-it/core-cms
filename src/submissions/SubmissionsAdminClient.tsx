@@ -118,6 +118,27 @@ export default function SubmissionsAdminClient({ initialSubmissions }: Submissio
     })
   }
 
+  // Eintrag öffnen: neue Anfragen gelten damit als gesehen (Status „In Bearbeitung“)
+  const openSubmission = (sub: Submission) => {
+    if (sub.status !== 'Neu') {
+      setActiveSubmission(sub)
+      return
+    }
+    const seen = { ...sub, status: 'In Bearbeitung' as const }
+    setActiveSubmission(seen)
+    setSubmissions((prev) => prev.map((s) => (s.id === sub.id ? seen : s)))
+    startTransition(async () => {
+      const { error } = await supabase
+        .from('submissions')
+        .update({ status: 'In Bearbeitung', updated_at: new Date().toISOString() })
+        .eq('id', sub.id)
+      if (error) {
+        toast.error('Fehler beim Aktualisieren: ' + error.message)
+        router.refresh()
+      }
+    })
+  }
+
   // Löschen
   const handleDelete = async (id: string, name: string) => {
     if (!confirm(`Eintrag von „${name}“ wirklich löschen?`)) return
@@ -219,7 +240,7 @@ export default function SubmissionsAdminClient({ initialSubmissions }: Submissio
                   return (
                     <tr
                       key={sub.id}
-                      onClick={() => setActiveSubmission(sub)}
+                      onClick={() => openSubmission(sub)}
                       className={`transition-colors cursor-pointer ${
                         isSelected
                           ? 'bg-green/5 border-l-4 border-l-green'

@@ -9,8 +9,15 @@ import { encrypt, decrypt } from "../supabase/encryption";
 import { revalidatePath } from "next/cache";
 import { SmtpEmailProvider } from "../email/smtp-provider";
 
+// Defense in depth: Server Actions sind öffentlich aufrufbar, daher nie nur auf RLS verlassen.
+async function isLoggedIn(supabase: Awaited<ReturnType<typeof createClient>>) {
+  const { data: { user } } = await supabase.auth.getUser();
+  return !!user;
+}
+
 export async function saveSmtpSettings(formData: FormData) {
   const supabase = await createClient();
+  if (!(await isLoggedIn(supabase))) return { success: false, error: "Nicht angemeldet." };
 
   const host = formData.get("smtp_host")?.toString() || "";
   const port = formData.get("smtp_port")?.toString() || "587";
@@ -32,7 +39,11 @@ export async function saveSmtpSettings(formData: FormData) {
   };
 
   if (pass) {
-    updatePayload.smtp_pass = encrypt(pass);
+    try {
+      updatePayload.smtp_pass = encrypt(pass);
+    } catch (err: any) {
+      return { success: false, error: err?.message || "Passwort konnte nicht verschlüsselt werden." };
+    }
   }
 
   // email_settings statt site_settings: SMTP-Zugangsdaten dürfen nicht öffentlich lesbar
@@ -52,6 +63,7 @@ export async function saveSmtpSettings(formData: FormData) {
 
 export async function saveGeneralSettings(payload: any) {
   const supabase = await createClient();
+  if (!(await isLoggedIn(supabase))) return { success: false, error: "Nicht angemeldet." };
   const { error } = await supabase
     .from("site_settings")
     .upsert({
@@ -71,6 +83,7 @@ export async function saveGeneralSettings(payload: any) {
 
 export async function updateHeroImageSetting(fieldId: string, url: string | null) {
   const supabase = await createClient();
+  if (!(await isLoggedIn(supabase))) return { success: false, error: "Nicht angemeldet." };
   const { error } = await supabase
     .from("site_settings")
     .upsert({
@@ -93,6 +106,9 @@ export async function updateHeroImageSetting(fieldId: string, url: string | null
 
 export async function getSmtpSettings() {
   const supabase = await createClient();
+  if (!(await isLoggedIn(supabase))) {
+    return { host: "", port: "587", user: "", pass: "", fromName: "", fromEmail: "", recipient: "" };
+  }
   const { data, error } = await supabase
     .from("email_settings")
     .select("smtp_host, smtp_port, smtp_user, smtp_pass, smtp_from_name, smtp_from_email, smtp_recipient")
@@ -103,7 +119,13 @@ export async function getSmtpSettings() {
     return { host: "", port: "587", user: "", pass: "", fromName: "", fromEmail: "", recipient: "" };
   }
 
-  const decryptedPass = data.smtp_pass ? decrypt(data.smtp_pass) : "";
+  let decryptedPass = "";
+  try {
+    decryptedPass = data.smtp_pass ? decrypt(data.smtp_pass) : "";
+  } catch {
+    // Schlüssel fehlt/stimmt nicht: Passwort muss neu eingegeben werden.
+    decryptedPass = "";
+  }
 
   return {
     host: data.smtp_host || "",

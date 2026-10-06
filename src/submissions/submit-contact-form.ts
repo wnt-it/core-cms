@@ -15,6 +15,21 @@ import { decrypt } from "../supabase/encryption";
 import { getEmailProvider, type EmailProvider } from "../email";
 import type { ContactPayload } from "./types";
 
+// Eingaben aus dem öffentlichen Formular dürfen nie als HTML in die Mail gelangen.
+function esc(value: unknown): string {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+// Akzentfarbe nur als gültiger Hex-Wert zulassen (landet in style-Attributen).
+function safeColor(value: string | undefined): string {
+  return value && /^#[0-9a-fA-F]{3,8}$/.test(value) ? value : "#111111";
+}
+
 export interface SubmitContactFormOptions {
   /**
    * Optionaler, bereits konfigurierter EmailProvider (z.B. Resend). Wenn nicht
@@ -136,25 +151,25 @@ export async function submitContactForm(payload: ContactPayload, options: Submit
     }
 
     if (provider && recipientEmail) {
-      const brandColor = options.brandColor || "#111111";
-      const siteLabel = options.siteName || fromName;
+      const brandColor = safeColor(options.brandColor);
+      const siteLabel = esc(options.siteName || fromName);
 
       const html = `
         <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e0e0e0; border-radius: 16px; padding: 28px; color: #111111;">
           <div style="background-color: ${brandColor}; color: white; padding: 16px 20px; border-radius: 12px; margin-bottom: 24px;">
             <span style="font-size: 11px; font-weight: bold; text-transform: uppercase; letter-spacing: 1px;">${siteLabel} Formulareingang</span>
-            <h2 style="margin: 4px 0 0 0; font-size: 20px; color: white;">Neue ${type}-Meldung</h2>
-            <p style="margin: 4px 0 0 0; font-size: 12px; color: #e8f5e9;">Herkunft: ${derivedSourcePage}</p>
+            <h2 style="margin: 4px 0 0 0; font-size: 20px; color: white;">Neue ${esc(type)}-Meldung</h2>
+            <p style="margin: 4px 0 0 0; font-size: 12px; color: #e8f5e9;">Herkunft: ${esc(derivedSourcePage)}</p>
           </div>
           <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 14px;">
-            <tr><td style="padding: 8px 0; border-bottom: 1px solid #f0f0f0; font-weight: bold; width: 140px; color: #666666;">Absender:</td><td style="padding: 8px 0; border-bottom: 1px solid #f0f0f0; font-weight: bold;">${name}</td></tr>
-            <tr><td style="padding: 8px 0; border-bottom: 1px solid #f0f0f0; font-weight: bold; color: #666666;">E-Mail:</td><td style="padding: 8px 0; border-bottom: 1px solid #f0f0f0;"><a href="mailto:${email}" style="color: ${brandColor}; font-weight: bold;">${email}</a></td></tr>
-            ${phone ? `<tr><td style="padding: 8px 0; border-bottom: 1px solid #f0f0f0; font-weight: bold; color: #666666;">Telefon:</td><td style="padding: 8px 0; border-bottom: 1px solid #f0f0f0;">${phone}</td></tr>` : ""}
-            ${company ? `<tr><td style="padding: 8px 0; border-bottom: 1px solid #f0f0f0; font-weight: bold; color: #666666;">Firma:</td><td style="padding: 8px 0; border-bottom: 1px solid #f0f0f0;">${company}</td></tr>` : ""}
+            <tr><td style="padding: 8px 0; border-bottom: 1px solid #f0f0f0; font-weight: bold; width: 140px; color: #666666;">Absender:</td><td style="padding: 8px 0; border-bottom: 1px solid #f0f0f0; font-weight: bold;">${esc(name)}</td></tr>
+            <tr><td style="padding: 8px 0; border-bottom: 1px solid #f0f0f0; font-weight: bold; color: #666666;">E-Mail:</td><td style="padding: 8px 0; border-bottom: 1px solid #f0f0f0;"><a href="mailto:${esc(email)}" style="color: ${brandColor}; font-weight: bold;">${esc(email)}</a></td></tr>
+            ${phone ? `<tr><td style="padding: 8px 0; border-bottom: 1px solid #f0f0f0; font-weight: bold; color: #666666;">Telefon:</td><td style="padding: 8px 0; border-bottom: 1px solid #f0f0f0;">${esc(phone)}</td></tr>` : ""}
+            ${company ? `<tr><td style="padding: 8px 0; border-bottom: 1px solid #f0f0f0; font-weight: bold; color: #666666;">Firma:</td><td style="padding: 8px 0; border-bottom: 1px solid #f0f0f0;">${esc(company)}</td></tr>` : ""}
           </table>
           ${message ? `
             <h4 style="color: #111111; margin-bottom: 8px; font-size: 14px;">Nachricht:</h4>
-            <div style="background-color: #f9f9f9; border: 1px solid #eeeeee; padding: 16px; border-radius: 12px; font-size: 13px; line-height: 1.6; white-space: pre-wrap;">${message}</div>
+            <div style="background-color: #f9f9f9; border: 1px solid #eeeeee; padding: 16px; border-radius: 12px; font-size: 13px; line-height: 1.6; white-space: pre-wrap;">${esc(message)}</div>
           ` : ""}
           <div style="font-size: 11px; color: #888888; margin-top: 24px; border-top: 1px solid #eee; padding-top: 16px; display: flex; justify-content: space-between;">
             <span>${siteLabel}</span>
@@ -165,7 +180,7 @@ export async function submitContactForm(payload: ContactPayload, options: Submit
 
       await provider.send({
         to: recipientEmail,
-        subject: `[${options.notificationSubjectPrefix || "Kontakt"}] ${cleanSubject}`,
+        subject: `[${options.notificationSubjectPrefix || "Kontakt"}] ${cleanSubject}`.replace(/[\r\n]+/g, " "),
         html,
         fromName,
         fromEmail,

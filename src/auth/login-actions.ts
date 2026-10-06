@@ -64,8 +64,8 @@ export async function updatePassword(formData: FormData) {
   const supabase = await createClient()
   const password = formData.get('password') as string
 
-  if (!password || password.length < 6) {
-    return { error: 'Das Passwort muss mindestens 6 Zeichen lang sein.' }
+  if (!password || password.length < 10) {
+    return { error: 'Das Passwort muss mindestens 10 Zeichen lang sein.' }
   }
 
   const { error } = await supabase.auth.updateUser({
@@ -142,8 +142,8 @@ export async function updateOwnPassword(formData: FormData) {
   const currentPassword = formData.get('currentPassword') as string
   const newPassword = formData.get('password') as string
 
-  if (!currentPassword || !newPassword || newPassword.length < 6) {
-    return { error: 'Bitte aktuelles Passwort und ein neues Passwort (min. 6 Zeichen) angeben.' }
+  if (!currentPassword || !newPassword || newPassword.length < 10) {
+    return { error: 'Bitte aktuelles Passwort und ein neues Passwort (min. 10 Zeichen) angeben.' }
   }
 
   const reauth = await reauthenticate(supabase, currentPassword)

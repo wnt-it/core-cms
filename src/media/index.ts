@@ -7,3 +7,4 @@ export { default as MoveModal } from "./MoveModal";
 export { default as PromptModal } from "./PromptModal";
 export { default as MediaLibraryModal } from "./MediaLibraryModal";
 export { default as ImageUpload } from "./ImageUpload";
+export { LARGE_FILE_WARN_BYTES, confirmLargeFiles } from "./upload-limits";

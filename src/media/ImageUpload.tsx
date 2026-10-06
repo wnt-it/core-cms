@@ -8,6 +8,7 @@ import { createClient } from '../supabase/client'
 import Image from 'next/image'
 import { UploadCloud, X, Loader2, Image as ImageIcon } from 'lucide-react'
 import MediaLibraryModal from './MediaLibraryModal'
+import { confirmLargeFiles } from './upload-limits'
 
 interface ImageUploadProps {
   name?: string
@@ -46,6 +47,7 @@ export default function ImageUpload({
   }
 
   const processFile = async (file: File) => {
+    if (!confirmLargeFiles([file])) return
     setIsUploading(true)
     setError(null)
 

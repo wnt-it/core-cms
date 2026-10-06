@@ -6,6 +6,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '../supabase/client'
 import { toast } from 'sonner'
+import { confirmLargeFiles } from './upload-limits'
 
 interface UseMediaLibraryConfig {
   bucket?: string
@@ -183,6 +184,7 @@ export function useMediaLibrary({
 
   const handleUpload = async (files: FileList | File[] | null) => {
     if (!files || files.length === 0) return
+    if (!confirmLargeFiles(Array.from(files))) return
 
     setUploading(true)
     setError(null)

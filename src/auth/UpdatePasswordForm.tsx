@@ -41,13 +41,13 @@ export default function UpdatePasswordForm() {
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         <div className="flex flex-col gap-1.5">
           <label className="font-sans text-xs font-bold uppercase tracking-wider text-black">
-            Neues Passwort (min. 6 Zeichen)
+            Neues Passwort (min. 10 Zeichen)
           </label>
           <input
             type="password"
             name="password"
             required
-            minLength={6}
+            minLength={10}
             className="w-full px-4 py-3 rounded-xl border border-black/10 bg-neutral-50 focus:bg-white focus:ring-2 focus:ring-primary/40 focus:border-primary outline-none text-sm"
             placeholder="••••••••"
           />

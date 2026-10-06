@@ -27,7 +27,7 @@ Solange kein privates npm-Registry genutzt wird, als Git-Dependency einbinden:
 
 ```json
 "dependencies": {
-  "core-cms": "github:wnt-it/core-cms#v0.1.0"
+  "core-cms": "github:wnt-it/core-cms#v0.7.0"
 }
 ```
 
@@ -74,8 +74,15 @@ Abhängigkeit), sondern ausschließlich als Vercel-Environment-Variablen pro Pro
 SUPABASE_URL=
 SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=  # Pflicht ab v0.3.1 - siehe unten
+ENCRYPTION_KEY=          # Pflicht ab v0.7.0 - verschlüsselt das SMTP-Passwort
 RESEND_API_KEY=          # falls Resend als Provider gewählt wird
 ```
+
+**`ENCRYPTION_KEY` (ab v0.7.0 Pflicht):** Zufälliger, geheimer Wert (mind. 32 Zeichen, z.B.
+`openssl rand -hex 32`), pro Projekt in Vercel setzen. Es gibt keinen Ersatzschlüssel mehr
+(das Repo ist öffentlich). Ohne den Wert lässt sich das SMTP-Passwort weder speichern noch
+lesen. Wurde ein Passwort mit dem früheren Ersatzschlüssel gespeichert, muss es nach dem
+Setzen des Werts im Admin einmal neu eingegeben werden.
 
 **`SUPABASE_SERVICE_ROLE_KEY` (ab v0.3.1 Pflicht):** Wird ausschließlich serverseitig genutzt,
 um SMTP-Zugangsdaten aus der Tabelle `email_settings` zu lesen (bewusst nicht über den

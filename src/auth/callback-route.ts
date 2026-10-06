@@ -13,7 +13,9 @@ export async function GET(request: Request) {
   const token_hash = searchParams.get('token_hash')
   const type = searchParams.get('type') as EmailOtpType | null
   const code = searchParams.get('code')
-  const next = searchParams.get('next') || '/admin/update-password'
+  // Nur interne Pfade erlauben (kein Open Redirect über next=//fremde.seite oder next=@...)
+  const nextParam = searchParams.get('next') || ''
+  const next = /^\/(?![\/\\])/.test(nextParam) ? nextParam : '/admin/update-password'
 
   if (searchParams.get('error')) {
     console.error("Auth callback received error from Supabase:", {

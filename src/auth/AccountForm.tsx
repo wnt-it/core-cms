@@ -176,12 +176,12 @@ function PasswordSection() {
             </div>
           </div>
           <div className="space-y-1.5">
-            <label className="font-bold text-neutral-700">Neues Passwort (min. 6 Zeichen)</label>
+            <label className="font-bold text-neutral-700">Neues Passwort (min. 10 Zeichen)</label>
             <div className="relative">
               <input
                 type={showNew ? 'text' : 'password'}
                 required
-                minLength={6}
+                minLength={10}
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
                 placeholder="••••••••"
