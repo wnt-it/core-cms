@@ -4,7 +4,7 @@
 // angemeldete Nutzer (nicht auf /admin) und führt mit einem Klick ins Dashboard.
 // Einbindung: <AdminLiveBar /> einmal im Root-Layout des Projekts.
 
-import { useEffect, useState, type ComponentType } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { LayoutDashboard, ChevronUp, LogOut, X } from 'lucide-react'
@@ -13,7 +13,8 @@ import { createClient } from '../supabase/client'
 export interface AdminLiveBarLink {
   href: string
   label: string
-  icon?: ComponentType<{ size?: number; className?: string }>
+  /** Fertiges Element, z.B. <Inbox size={16} />. Keine Komponente (Funktionen dürfen nicht von einem Server-Layout in diese Client-Komponente gereicht werden). */
+  icon?: ReactNode
   /** Zeigt hinter dem Eintrag die Zahl neuer Anfragen (Status „Neu“) an – für den Posteingang. */
   showNewSubmissions?: boolean
 }
@@ -82,14 +83,13 @@ export default function AdminLiveBar({ dashboardHref = '/admin', links = [] }: A
       {open && (
         <div className="mb-2 rounded-2xl border border-black/10 bg-white p-2 shadow-xl">
           {links.map((link) => {
-            const Icon = link.icon
             return (
               <Link
                 key={link.href}
                 href={link.href}
                 className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-black hover:bg-black/5"
               >
-                {Icon && <Icon size={16} className="text-primary" />}
+                {link.icon && <span className="text-primary">{link.icon}</span>}
                 <span>{link.label}</span>
                 {link.showNewSubmissions && newCount > 0 && (
                   <span className="ml-auto rounded-full bg-red-600 px-2 py-0.5 text-xs font-bold text-white">{newCount}</span>

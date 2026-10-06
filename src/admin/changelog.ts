@@ -12,10 +12,17 @@ export interface ChangelogEntry {
   changes: { type: ChangeType; text: string }[];
 }
 
-export const CORE_VERSION = "0.7.0";
+export const CORE_VERSION = "0.7.1";
 
 /** Neueste Version zuerst. */
 export const CORE_CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "0.7.1",
+    date: "2026-10-06",
+    changes: [
+      { type: "fix", text: "Admin-Leiste: Die Schnellzugriffe verursachten einen Fehler (500), wenn sie aus dem Layout einer Seite übergeben wurden. Icons werden jetzt als fertige Elemente übergeben (z. B. <Inbox size={16} />)." },
+    ],
+  },
   {
     version: "0.7.0",
     date: "2026-10-06",

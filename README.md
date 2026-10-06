@@ -158,8 +158,8 @@ Optional: `dashboardHref` (Standard `/admin`) und projektspezifische Schnellzugr
 ```tsx
 <AdminLiveBar
   links={[
-    { href: "/admin/termine", label: "Termine", icon: CalendarDays },
-    { href: "/admin/inbox", label: "Posteingang", icon: Inbox },
+    { href: "/admin/termine", label: "Termine", icon: <CalendarDays size={16} /> },
+    { href: "/admin/inbox", label: "Posteingang", icon: <Inbox size={16} /> },
   ]}
 />
 ```
