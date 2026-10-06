@@ -157,6 +157,9 @@ Optional: `dashboardHref` (Standard `/admin`) und projektspezifische Schnellzugr
 />
 ```
 
+Mit `showNewSubmissions: true` an einem Eintrag (z.B. dem Posteingang) zeigt die Leiste dort
+die Zahl neuer Anfragen (Status „Neu“); ein roter Punkt am Menü-Button weist darauf hin.
+
 Die Farben kommen aus den Tailwind-Tokens des Projekts (`primary`). Die Tailwind-Quellen
 müssen `node_modules/core-cms` erfassen (wie bei den übrigen Core-Komponenten).
 

@@ -4,8 +4,8 @@
 // Import der Server Actions auf core-cms-internen relativen Pfad umgestellt.
 
 import { useState, useEffect } from 'react'
-import { saveSmtpSettings, getSmtpSettings } from './settings-actions'
-import { Mail, Save, Eye, EyeOff, Loader2, ChevronDown, Settings2 } from 'lucide-react'
+import { saveSmtpSettings, getSmtpSettings, sendTestEmail } from './settings-actions'
+import { Mail, Send, Save, Eye, EyeOff, Loader2, ChevronDown, Settings2 } from 'lucide-react'
 import { toast } from 'sonner'
 
 interface SmtpSettingsFormProps {
@@ -32,6 +32,7 @@ export default function SmtpSettingsForm({ initialSettings }: SmtpSettingsFormPr
   })
   const [showPass, setShowPass] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
+  const [isTesting, setIsTesting] = useState(false)
   const [isLoading, setIsLoading] = useState(!initialSettings)
   const [showAdvanced, setShowAdvanced] = useState(false)
 
@@ -51,6 +52,22 @@ export default function SmtpSettingsForm({ initialSettings }: SmtpSettingsFormPr
       })
     }
   }, [initialSettings])
+
+  const handleTest = async () => {
+    setIsTesting(true)
+    try {
+      const result = await sendTestEmail()
+      if (result.success) {
+        toast.success(`Test-E-Mail gesendet an ${result.to}.`)
+      } else {
+        toast.error(result.error || 'Test-E-Mail fehlgeschlagen.')
+      }
+    } catch (err: any) {
+      toast.error('Verbindungsfehler: ' + (err.message || ''))
+    } finally {
+      setIsTesting(false)
+    }
+  }
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -247,7 +264,16 @@ export default function SmtpSettingsForm({ initialSettings }: SmtpSettingsFormPr
         </div>
 
         {/* ACTIONS */}
-        <div className="pt-4 border-t border-black/5 flex items-center justify-end">
+        <div className="pt-4 border-t border-black/5 flex flex-wrap items-center justify-end gap-3">
+          <button
+            type="button"
+            onClick={handleTest}
+            disabled={isTesting || isSaving}
+            className="px-6 py-3 rounded-xl border border-black/10 bg-white hover:bg-black/5 text-black font-bold text-xs transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
+          >
+            {isTesting ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
+            <span>Test-E-Mail senden</span>
+          </button>
           <button
             type="submit"
             disabled={isSaving}

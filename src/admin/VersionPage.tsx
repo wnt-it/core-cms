@@ -1,5 +1,5 @@
 // Admin-Seite: installierte Core-Version + Changelog
-import { Package } from 'lucide-react'
+import { Package, ArrowUpCircle, CheckCircle2 } from 'lucide-react'
 import { CORE_CHANGELOG, CORE_VERSION, type ChangeType } from './changelog'
 
 const TYPE_LABELS: Record<ChangeType, { label: string; className: string }> = {
@@ -13,7 +13,35 @@ function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' })
 }
 
-export default function VersionPage() {
+// Neueste veröffentlichte Core-Version von GitHub (öffentliches Repo, stündlich gecacht).
+// Bei Fehlern (offline, Rate-Limit) kein Hinweis statt einer Fehlerseite.
+async function getLatestCoreVersion(): Promise<string | null> {
+  try {
+    const res = await fetch('https://api.github.com/repos/wnt-it/core-cms/tags?per_page=30', {
+      next: { revalidate: 3600 },
+    })
+    if (!res.ok) return null
+    const tags: { name: string }[] = await res.json()
+    const versions = tags.map((t) => t.name.replace(/^v/, '')).filter((v) => /^\d+\.\d+\.\d+$/.test(v))
+    versions.sort((a, b) => compareVersions(b, a))
+    return versions[0] ?? null
+  } catch {
+    return null
+  }
+}
+
+function compareVersions(a: string, b: string) {
+  const pa = a.split('.').map(Number)
+  const pb = b.split('.').map(Number)
+  for (let i = 0; i < 3; i++) {
+    if (pa[i] !== pb[i]) return pa[i] - pb[i]
+  }
+  return 0
+}
+
+export default async function VersionPage() {
+  const latest = await getLatestCoreVersion()
+  const updateAvailable = latest !== null && compareVersions(latest, CORE_VERSION) > 0
   const current = CORE_CHANGELOG.find((entry) => entry.version === CORE_VERSION)
 
   return (
@@ -31,6 +59,20 @@ export default function VersionPage() {
           {current && <p className="text-xs text-neutral-500">Veröffentlicht am {formatDate(current.date)}</p>}
         </div>
       </div>
+
+      {latest !== null && (
+        updateAvailable ? (
+          <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 sm:p-5 flex items-start gap-3 text-sm text-amber-800">
+            <ArrowUpCircle size={20} className="shrink-0 mt-0.5" />
+            <p>Eine neuere Version ist verfügbar: <strong>v{latest}</strong>. Bitte WNT-IT für das Update kontaktieren.</p>
+          </div>
+        ) : (
+          <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 sm:p-5 flex items-center gap-3 text-sm text-emerald-800">
+            <CheckCircle2 size={20} className="shrink-0" />
+            <p>Sie nutzen die neueste Version.</p>
+          </div>
+        )
+      )}
 
       <div className="bg-white rounded-2xl border border-black/10 shadow-sm p-6 sm:p-8 space-y-4">
         <h2 className="font-extrabold text-xl text-black">Changelog</h2>

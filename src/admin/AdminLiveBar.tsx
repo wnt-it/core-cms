@@ -14,6 +14,8 @@ export interface AdminLiveBarLink {
   href: string
   label: string
   icon?: ComponentType<{ size?: number; className?: string }>
+  /** Zeigt hinter dem Eintrag die Zahl neuer Anfragen (Status „Neu“) an – für den Posteingang. */
+  showNewSubmissions?: boolean
 }
 
 export interface AdminLiveBarProps {
@@ -28,6 +30,7 @@ export default function AdminLiveBar({ dashboardHref = '/admin', links = [] }: A
   const [loggedIn, setLoggedIn] = useState(false)
   const [open, setOpen] = useState(false)
   const [dismissed, setDismissed] = useState(false)
+  const [newCount, setNewCount] = useState(0)
 
   useEffect(() => {
     const supabase = createClient()
@@ -43,6 +46,23 @@ export default function AdminLiveBar({ dashboardHref = '/admin', links = [] }: A
       sub.subscription.unsubscribe()
     }
   }, [])
+
+  // Zahl neuer Anfragen (nur wenn ein Eintrag sie anzeigen soll; Fehler werden ignoriert)
+  const wantsCount = links.some((l) => l.showNewSubmissions)
+  useEffect(() => {
+    if (!loggedIn || !wantsCount) return
+    let active = true
+    createClient()
+      .from('submissions')
+      .select('id', { count: 'exact', head: true })
+      .eq('status', 'Neu')
+      .then(({ count }) => {
+        if (active) setNewCount(count ?? 0)
+      })
+    return () => {
+      active = false
+    }
+  }, [loggedIn, wantsCount, pathname])
 
   // Menü beim Seitenwechsel schließen
   useEffect(() => {
@@ -71,6 +91,9 @@ export default function AdminLiveBar({ dashboardHref = '/admin', links = [] }: A
               >
                 {Icon && <Icon size={16} className="text-primary" />}
                 <span>{link.label}</span>
+                {link.showNewSubmissions && newCount > 0 && (
+                  <span className="ml-auto rounded-full bg-red-600 px-2 py-0.5 text-xs font-bold text-white">{newCount}</span>
+                )}
               </Link>
             )
           })}
@@ -97,8 +120,9 @@ export default function AdminLiveBar({ dashboardHref = '/admin', links = [] }: A
           onClick={() => setOpen((v) => !v)}
           aria-label={open ? 'Menü schließen' : 'Menü öffnen'}
           aria-expanded={open}
-          className="rounded-full p-2 text-black hover:bg-black/5"
+          className="relative rounded-full p-2 text-black hover:bg-black/5"
         >
+          {newCount > 0 && <span className="absolute right-1 top-1 h-2.5 w-2.5 rounded-full bg-red-600" />}
           <ChevronUp size={18} className={open ? 'rotate-180 transition-transform' : 'transition-transform'} />
         </button>
         <button

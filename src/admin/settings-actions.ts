@@ -7,6 +7,7 @@
 import { createClient } from "../supabase/server";
 import { encrypt, decrypt } from "../supabase/encryption";
 import { revalidatePath } from "next/cache";
+import { SmtpEmailProvider } from "../email/smtp-provider";
 
 export async function saveSmtpSettings(formData: FormData) {
   const supabase = await createClient();
@@ -113,4 +114,41 @@ export async function getSmtpSettings() {
     fromEmail: data.smtp_from_email || "",
     recipient: data.smtp_recipient || "",
   };
+}
+
+/**
+ * Sendet eine Test-E-Mail mit den GESPEICHERTEN SMTP-Einstellungen an die
+ * Empfänger-Adresse (bzw. ersatzweise die Absender-Adresse). Nur für angemeldete Nutzer.
+ */
+export async function sendTestEmail() {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    return { success: false, error: "Nicht angemeldet." };
+  }
+
+  const s = await getSmtpSettings();
+  if (!s.host || !s.user || !s.pass || !s.fromEmail) {
+    return { success: false, error: "SMTP-Einstellungen unvollständig (Server, Benutzer, Passwort und Absender-Adresse nötig). Bitte zuerst speichern." };
+  }
+  const to = s.recipient || s.fromEmail;
+
+  try {
+    const provider = new SmtpEmailProvider({
+      host: s.host,
+      port: parseInt(String(s.port), 10) || 587,
+      user: s.user,
+      pass: s.pass,
+    });
+    await provider.send({
+      to,
+      subject: "Test-E-Mail aus dem Admin",
+      html: "<p>Diese Test-E-Mail bestätigt, dass die E-Mail-Einstellungen funktionieren.</p>",
+      fromName: s.fromName || undefined,
+      fromEmail: s.fromEmail,
+    });
+    return { success: true, to };
+  } catch (err: any) {
+    return { success: false, error: err?.message || "Versand fehlgeschlagen." };
+  }
 }

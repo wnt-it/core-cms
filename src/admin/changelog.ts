@@ -21,6 +21,9 @@ export const CORE_CHANGELOG: ChangelogEntry[] = [
     date: "2026-10-06",
     changes: [
       { type: "feature", text: "Neue Admin-Leiste für die öffentliche Website: Wer angemeldet ist, sieht unten einen Button zum Dashboard, ein Menü mit Schnellzugriffen und „Abmelden“. Einbau mit einer Zeile im Layout." },
+      { type: "feature", text: "Die Admin-Leiste zeigt die Zahl neuer Anfragen im Posteingang an." },
+      { type: "feature", text: "Core-Version-Seite zeigt jetzt, ob eine neuere Version verfügbar ist." },
+      { type: "feature", text: "Bei den E-Mail-Einstellungen gibt es einen Button „Test-E-Mail senden“, um die Einstellungen sofort zu prüfen." },
     ],
   },
   {
