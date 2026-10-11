@@ -12,6 +12,7 @@ import DeleteConfirmModal from './DeleteConfirmModal'
 import { useMediaLibrary } from './useMediaLibrary'
 import { MediaGrid } from './MediaGrid'
 import { downloadMultipleMedia } from './media-download'
+import type { ImageOptimizationOptions } from './image-prepare'
 
 interface MediaLibraryModalProps {
   isOpen: boolean
@@ -19,6 +20,8 @@ interface MediaLibraryModalProps {
   onSelect: (url: string | string[]) => void
   bucket?: string
   multiSelect?: boolean
+  /** Bilder beim Upload verkleinern (Standard: an, 2000 px, WebP). */
+  imageOptimization?: ImageOptimizationOptions
 }
 
 export default function MediaLibraryModal({
@@ -26,7 +29,8 @@ export default function MediaLibraryModal({
   onClose,
   onSelect,
   bucket = 'images',
-  multiSelect = false
+  multiSelect = false,
+  imageOptimization
 }: MediaLibraryModalProps) {
   const {
     currentFolderId,
@@ -50,7 +54,7 @@ export default function MediaLibraryModal({
     handleMove,
     moveItems,
     handleSync
-  } = useMediaLibrary({ bucket, multiSelect })
+  } = useMediaLibrary({ bucket, multiSelect, imageOptimization })
 
   const [isCreateFolderOpen, setIsCreateFolderOpen] = useState(false)
   const [isRenameOpen, setIsRenameOpen] = useState(false)

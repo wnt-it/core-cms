@@ -9,6 +9,8 @@ import Image from 'next/image'
 import { UploadCloud, X, Loader2, Image as ImageIcon } from 'lucide-react'
 import MediaLibraryModal from './MediaLibraryModal'
 import { confirmLargeFiles } from './upload-limits'
+import { STORAGE_CACHE_CONTROL, type ImageOptimizationOptions } from './image-prepare'
+import { prepareFilesForUpload } from './prepare-uploads'
 
 interface ImageUploadProps {
   name?: string
@@ -18,6 +20,8 @@ interface ImageUploadProps {
   bucket?: string
   folder?: string
   onChange?: (url: string) => void
+  /** Bilder beim Upload verkleinern (Standard: an, 2000 px, WebP). */
+  imageOptimization?: ImageOptimizationOptions
 }
 
 export default function ImageUpload({
@@ -27,7 +31,8 @@ export default function ImageUpload({
   value,
   bucket = 'images',
   folder = 'uploads',
-  onChange
+  onChange,
+  imageOptimization
 }: ImageUploadProps) {
   const [internalUrl, setInternalUrl] = useState<string>(defaultValue)
   const [isUploading, setIsUploading] = useState(false)
@@ -46,12 +51,15 @@ export default function ImageUpload({
     }
   }
 
-  const processFile = async (file: File) => {
-    if (!confirmLargeFiles([file])) return
+  const processFile = async (original: File) => {
     setIsUploading(true)
     setError(null)
 
     try {
+      // Bild zuerst verkleinern; nur große Restdateien (PDF, SVG, GIF …) fragen nach
+      const [file] = await prepareFilesForUpload([original], imageOptimization)
+      if (!confirmLargeFiles([file])) return
+
       const fileExt = file.name.split('.').pop()
       const fileName = `${Math.random().toString(36).substring(2, 15)}_${Date.now()}.${fileExt}`
       const filePath = `${folder}/${fileName}`
@@ -59,7 +67,7 @@ export default function ImageUpload({
       const { error: uploadError } = await supabase.storage
         .from(bucket)
         .upload(filePath, file, {
-          cacheControl: '3600',
+          cacheControl: STORAGE_CACHE_CONTROL,
           upsert: false,
         })
 
@@ -228,6 +236,7 @@ export default function ImageUpload({
         isOpen={isLibraryOpen}
         onClose={() => setIsLibraryOpen(false)}
         bucket={bucket}
+        imageOptimization={imageOptimization}
         onSelect={(url) => {
           if (typeof url === 'string') {
             handleUrlChange(url)

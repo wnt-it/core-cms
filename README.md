@@ -170,9 +170,53 @@ die Zahl neuer Anfragen (Status „Neu“); ein roter Punkt am Menü-Button weis
 Die Farben kommen aus den Tailwind-Tokens des Projekts (`primary`). Die Tailwind-Quellen
 müssen `node_modules/core-cms` erfassen (wie bei den übrigen Core-Komponenten).
 
+## Bilder und Caching (ab v0.8.0)
+
+**Was core-cms macht:**
+- **Verkleinern beim Upload:** JPG, PNG und WebP werden im Browser auf höchstens 2000 px
+  (längste Kante, nie hochskaliert) verkleinert und als WebP (Qualität 0.82, Transparenz
+  bleibt erhalten) hochgeladen. Die EXIF-Ausrichtung wird beachtet. SVG, GIF, PDF und andere
+  Dateien bleiben unverändert. Wird das Ergebnis nicht kleiner, bleibt das Original. Kann der
+  Browser ein Bild nicht lesen (z. B. HEIC), wird das Original hochgeladen und ein Hinweis gezeigt.
+- **Ein Jahr Cache:** Uploads bekommen `Cache-Control: 31536000`. Die Dateinamen sind eindeutig
+  und werden nie überschrieben (`upsert: false`).
+- **Zentrale Next.js-Konfiguration:** `withCoreCms` setzt `transpilePackages`, Bildformate,
+  Breiten, Qualität, Cache-Dauer und erlaubt Supabase Storage.
+
+**Einbindung** in der `next.config.mjs` des Projekts (nur Projektspezifisches bleibt dort):
+
+```js
+import { withCoreCms } from 'core-cms/next-config.mjs'
+
+export default withCoreCms({
+  // z. B. redirects, rewrites, allowedDevOrigins, weitere images.remotePatterns
+})
+```
+
+Defaults: `qualities: [75]`, `formats: ['image/webp']`, `deviceSizes: [640, 828, 1200, 1920]`,
+`imageSizes: [64, 128, 256, 384]`, `minimumCacheTTL: 31536000`. Projektwerte überschreiben sie;
+nur `remotePatterns` und `transpilePackages` werden zusammengeführt.
+
+**Verkleinern anpassen** (Standard: an, 2000 px, 0.82):
+
+```tsx
+<ImageUpload imageOptimization={{ maxDimension: 1600, quality: 0.8 }} />
+<MediaLibraryModal imageOptimization={{ enabled: false }} ... />
+```
+
+**Hinweise:**
+- Im Projektcode nur `quality={75}` oder gar keine `quality` verwenden, weil `images.qualities`
+  nur `[75]` erlaubt. Andere Werte lehnt Next.js ab.
+- Die Kosten entstehen bei Vercel pro Bildtransformation (Bild x Breite x Qualität x Format).
+  Der Hobby-Plan ist nur für nicht-kommerzielle Nutzung erlaubt.
+- Bestandsbilder bleiben unverändert. Sie werden erst beim erneuten Hochladen verkleinert.
+
 ## Migrationsstand
 
 Siehe Kommentare in den jeweiligen `src/*/index.ts`-Dateien für den Stand pro Modul.
+
+**v0.8.0:** Medien-Upload verkleinert Bilder (WebP, 2000 px) und cached ein Jahr; zentrale
+`next-config.mjs` (`withCoreCms`).
 
 | Phase | Modul | Status |
 |---|---|---|

@@ -7,15 +7,20 @@ import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '../supabase/client'
 import { toast } from 'sonner'
 import { confirmLargeFiles } from './upload-limits'
+import { STORAGE_CACHE_CONTROL, type ImageOptimizationOptions } from './image-prepare'
+import { prepareFilesForUpload } from './prepare-uploads'
 
 interface UseMediaLibraryConfig {
   bucket?: string
   multiSelect?: boolean
+  /** Bilder beim Upload verkleinern (Standard: an, 2000 px, WebP). */
+  imageOptimization?: ImageOptimizationOptions
 }
 
 export function useMediaLibrary({
   bucket = 'images',
-  multiSelect = true
+  multiSelect = true,
+  imageOptimization
 }: UseMediaLibraryConfig = {}) {
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(null)
   const [folderBreadcrumbs, setFolderBreadcrumbs] = useState<{ id: string; name: string }[]>([])
@@ -184,13 +189,19 @@ export function useMediaLibrary({
 
   const handleUpload = async (files: FileList | File[] | null) => {
     if (!files || files.length === 0) return
-    if (!confirmLargeFiles(Array.from(files))) return
 
     setUploading(true)
     setError(null)
 
+    // Bilder zuerst verkleinern; nur noch große Restdateien (PDF, SVG, GIF …) fragen nach
+    const prepared = await prepareFilesForUpload(Array.from(files), imageOptimization)
+    if (!confirmLargeFiles(prepared)) {
+      setUploading(false)
+      return
+    }
+
     try {
-      const fileList = Array.from(files)
+      const fileList = prepared
       for (let i = 0; i < fileList.length; i++) {
         const file = fileList[i]
         const fileExt = file.name.split('.').pop()
@@ -199,7 +210,7 @@ export function useMediaLibrary({
 
         const { error: uploadError } = await supabase.storage
           .from(bucket)
-          .upload(storagePath, file, { cacheControl: '3600', upsert: false })
+          .upload(storagePath, file, { cacheControl: STORAGE_CACHE_CONTROL, upsert: false })
 
         if (uploadError) throw uploadError
 

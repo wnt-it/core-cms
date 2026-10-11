@@ -12,10 +12,20 @@ export interface ChangelogEntry {
   changes: { type: ChangeType; text: string }[];
 }
 
-export const CORE_VERSION = "0.7.1";
+export const CORE_VERSION = "0.8.0";
 
 /** Neueste Version zuerst. */
 export const CORE_CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "0.8.0",
+    date: "2026-10-11",
+    changes: [
+      { type: "feature", text: "Bilder werden beim Hochladen automatisch verkleinert (höchstens 2000 Pixel, WebP). Das spart Ladezeit und Speicherplatz. PDF, SVG und GIF bleiben unverändert." },
+      { type: "feature", text: "Hochgeladene Dateien werden ein Jahr lang zwischengespeichert, die Seite lädt bei Wiederbesuchen schneller." },
+      { type: "feature", text: "Die Bild-Einstellungen für Next.js kommen zentral aus dem Core (withCoreCms) und müssen nicht mehr in jedem Projekt gepflegt werden." },
+      { type: "docs", text: "Bereits hochgeladene Bilder bleiben unverändert und werden erst beim erneuten Hochladen verkleinert." },
+    ],
+  },
   {
     version: "0.7.1",
     date: "2026-10-06",
