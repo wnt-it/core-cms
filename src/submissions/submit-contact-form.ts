@@ -88,11 +88,10 @@ export async function submitContactForm(payload: ContactPayload, options: Submit
     metadata: metadata || null,
   };
 
-  const { data: submission, error: dbError } = await supabase
-    .from("submissions")
-    .insert(insertPayload)
-    .select()
-    .maybeSingle();
+  // Die ID wird hier erzeugt statt per RETURNING gelesen: Besucher dürfen Anfragen eintragen, aber nicht
+  // lesen (RLS). Mit .select() scheiterte das Speichern für nicht angemeldete Besucher.
+  const submissionId = crypto.randomUUID();
+  const { error: dbError } = await supabase.from("submissions").insert({ id: submissionId, ...insertPayload });
 
   if (dbError) {
     console.error("[CRITICAL DB INSERT ERROR]", dbError);
@@ -192,7 +191,7 @@ export async function submitContactForm(payload: ContactPayload, options: Submit
 
   return {
     success: true,
-    submissionId: submission?.id || null,
+    submissionId,
     message: "Anfrage erfolgreich erfasst und in der Datenbank gespeichert.",
   };
 }

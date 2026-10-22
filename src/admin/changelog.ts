@@ -12,10 +12,18 @@ export interface ChangelogEntry {
   changes: { type: ChangeType; text: string }[];
 }
 
-export const CORE_VERSION = "0.8.0";
+export const CORE_VERSION = "0.8.1";
 
 /** Neueste Version zuerst. */
 export const CORE_CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "0.8.1",
+    date: "2026-10-22",
+    changes: [
+      { type: "fix", text: "Kontaktformular: Anfragen von nicht angemeldeten Besuchern werden wieder gespeichert. Bisher scheiterte das Speichern mit einem Rechtefehler, weil die neue Anfrage direkt wieder gelesen wurde, was Besucher nicht dürfen. Angemeldete Admins waren nicht betroffen." },
+      { type: "security", text: "Das E-Mail-Paket (nodemailer) wurde auf Version 10 aktualisiert und schließt mehrere bekannte Sicherheitslücken." },
+    ],
+  },
   {
     version: "0.8.0",
     date: "2026-10-11",
