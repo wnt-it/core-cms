@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { updatePassword } from './login-actions'
 import { useRouter } from 'next/navigation'
 import { Loader2 } from 'lucide-react'
+import { PASSWORD_RULES_HINT } from './auth-errors'
 
 export default function UpdatePasswordForm() {
   const router = useRouter()
@@ -41,7 +42,7 @@ export default function UpdatePasswordForm() {
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         <div className="flex flex-col gap-1.5">
           <label className="font-sans text-xs font-bold uppercase tracking-wider text-black">
-            Neues Passwort (min. 10 Zeichen)
+            Neues Passwort
           </label>
           <input
             type="password"
@@ -51,6 +52,7 @@ export default function UpdatePasswordForm() {
             className="w-full px-4 py-3 rounded-xl border border-black/10 bg-neutral-50 focus:bg-white focus:ring-2 focus:ring-primary/40 focus:border-primary outline-none text-sm"
             placeholder="••••••••"
           />
+          <p className="text-[11px] text-neutral-500">{PASSWORD_RULES_HINT}</p>
         </div>
 
         <button

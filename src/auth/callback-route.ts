@@ -7,6 +7,7 @@
 import { createClient } from '../supabase/server'
 import { NextResponse } from 'next/server'
 import { type EmailOtpType } from '@supabase/supabase-js'
+import { authErrorMessage } from './auth-errors'
 
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url)
@@ -23,7 +24,7 @@ export async function GET(request: Request) {
       error_code: searchParams.get('error_code'),
       description: searchParams.get('error_description')
     })
-    return NextResponse.redirect(`${origin}/admin/login?error=${encodeURIComponent(searchParams.get('error_description') || 'Der Link ist ungültig oder abgelaufen')}`)
+    return NextResponse.redirect(`${origin}/admin/login?error=${encodeURIComponent(authErrorMessage({ code: searchParams.get('error_code') || undefined, message: searchParams.get('error_description') || undefined }, 'Der Link ist ungültig oder abgelaufen. Bitte einen neuen Link anfordern.'))}`)
   }
 
   if (token_hash && type) {
@@ -49,5 +50,5 @@ export async function GET(request: Request) {
     console.error("exchangeCodeForSession error:", error)
   }
 
-  return NextResponse.redirect(`${origin}/admin/login?error=Der Link ist ungültig oder abgelaufen`)
+  return NextResponse.redirect(`${origin}/admin/login?error=${encodeURIComponent('Der Link ist ungültig oder abgelaufen. Bitte einen neuen Link anfordern.')}`)
 }

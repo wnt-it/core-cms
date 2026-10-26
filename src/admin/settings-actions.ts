@@ -8,6 +8,7 @@ import { createClient } from "../supabase/server";
 import { encrypt, decrypt } from "../supabase/encryption";
 import { revalidatePath } from "next/cache";
 import { SmtpEmailProvider } from "../email/smtp-provider";
+import { dbErrorMessage, smtpErrorMessage } from "../auth/auth-errors";
 
 // Defense in depth: Server Actions sind öffentlich aufrufbar, daher nie nur auf RLS verlassen.
 async function isLoggedIn(supabase: Awaited<ReturnType<typeof createClient>>) {
@@ -42,7 +43,8 @@ export async function saveSmtpSettings(formData: FormData) {
     try {
       updatePayload.smtp_pass = encrypt(pass);
     } catch (err: any) {
-      return { success: false, error: err?.message || "Passwort konnte nicht verschlüsselt werden." };
+      console.error("SMTP password encryption failed:", err);
+      return { success: false, error: /ENCRYPTION_KEY/i.test(err?.message || "") ? "Der ENCRYPTION_KEY fehlt oder ist ungültig (Vercel → Environment Variables). Das Passwort kann so nicht gespeichert werden." : "Das Passwort konnte nicht verschlüsselt werden." };
     }
   }
 
@@ -54,7 +56,7 @@ export async function saveSmtpSettings(formData: FormData) {
 
   if (error) {
     console.error("Failed to save SMTP settings to email_settings:", error);
-    return { success: false, error: "Fehler beim Speichern der SMTP-Einstellungen: " + error.message };
+    return { success: false, error: dbErrorMessage(error, "Speichern der SMTP-Einstellungen") };
   }
 
   revalidatePath("/admin/einstellungen");
@@ -74,7 +76,7 @@ export async function saveGeneralSettings(payload: any) {
 
   if (error) {
     console.error("Failed to save site settings:", error);
-    return { success: false, error: error.message };
+    return { success: false, error: dbErrorMessage(error, "Speichern der Einstellungen") };
   }
 
   revalidatePath("/", "layout");
@@ -94,7 +96,7 @@ export async function updateHeroImageSetting(fieldId: string, url: string | null
 
   if (error) {
     console.error(`Failed to update hero setting ${fieldId}:`, error);
-    return { success: false, error: error.message };
+    return { success: false, error: dbErrorMessage(error, "Speichern des Bildes") };
   }
 
   // "layout" invalidiert den kompletten Seitenbaum - reicht projektübergreifend,
@@ -171,6 +173,7 @@ export async function sendTestEmail() {
     });
     return { success: true, to };
   } catch (err: any) {
-    return { success: false, error: err?.message || "Versand fehlgeschlagen." };
+    console.error("SMTP test failed:", err);
+    return { success: false, error: smtpErrorMessage(err) };
   }
 }
