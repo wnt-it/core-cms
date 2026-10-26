@@ -12,10 +12,19 @@ export interface ChangelogEntry {
   changes: { type: ChangeType; text: string }[];
 }
 
-export const CORE_VERSION = "0.8.1";
+export const CORE_VERSION = "0.8.2";
 
 /** Neueste Version zuerst. */
 export const CORE_CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "0.8.2",
+    date: "2026-10-26",
+    changes: [
+      { type: "fix", text: "Passwort ändern: Wenn das neue Passwort abgelehnt wird, steht jetzt der Grund da (z. B. fehlende Groß-/Kleinbuchstaben, Ziffer oder Sonderzeichen, gleich wie das alte, aus Datenlecks bekannt). Bisher stand nur „Fehler beim Ändern des Passworts“. Die Regeln stehen außerdem unter dem Passwortfeld." },
+      { type: "fix", text: "Anmeldung, „Passwort vergessen“, E-Mail-Adresse ändern und Links aus E-Mails: Fehlermeldungen sind jetzt auf Deutsch und nennen die Ursache (zu viele Versuche, Link abgelaufen, Mail nicht bestätigt, Konto gesperrt und weitere)." },
+      { type: "fix", text: "Einstellungen: Beim Test-Mailversand und beim Speichern erscheinen verständliche Hinweise, z. B. Benutzer oder Passwort vom Mailserver abgelehnt, Server nicht gefunden, Port oder Verschlüsselung passen nicht, fehlende Berechtigung." },
+    ],
+  },
   {
     version: "0.8.1",
     date: "2026-10-22",

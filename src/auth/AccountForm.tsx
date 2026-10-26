@@ -9,6 +9,7 @@ import { useState } from 'react'
 import { updateOwnEmail, updateOwnPassword } from './login-actions'
 import { Mail, KeyRound, Save, Eye, EyeOff, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
+import { PASSWORD_RULES_HINT } from './auth-errors'
 
 export interface AccountFormProps {
   currentEmail: string
@@ -176,7 +177,7 @@ function PasswordSection() {
             </div>
           </div>
           <div className="space-y-1.5">
-            <label className="font-bold text-neutral-700">Neues Passwort (min. 10 Zeichen)</label>
+            <label className="font-bold text-neutral-700">Neues Passwort</label>
             <div className="relative">
               <input
                 type={showNew ? 'text' : 'password'}
@@ -196,6 +197,7 @@ function PasswordSection() {
                 {showNew ? <EyeOff size={16} /> : <Eye size={16} />}
               </button>
             </div>
+            <p className="text-neutral-400">{PASSWORD_RULES_HINT}</p>
           </div>
         </div>
 

@@ -6,6 +6,7 @@
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { createClient } from '../supabase/server'
+import { authErrorMessage, PASSWORD_RULES_HINT } from './auth-errors'
 
 export async function login(formData: FormData) {
   const supabase = await createClient()
@@ -24,9 +25,7 @@ export async function login(formData: FormData) {
 
   if (error) {
     console.error("Login error from Supabase:", error)
-    const errorMsg = error.message === 'Invalid login credentials'
-      ? 'Zugangsdaten sind ungültig'
-      : (error.message || 'Zugangsdaten sind ungültig')
+    const errorMsg = authErrorMessage(error, 'Anmeldung fehlgeschlagen. Bitte später erneut versuchen.')
     redirect(`/admin/login?error=${encodeURIComponent(errorMsg)}`)
   }
 
@@ -54,7 +53,7 @@ export async function requestPasswordReset(formData: FormData) {
 
   if (error) {
     console.error("Password reset error", error)
-    return { error: 'Fehler beim Senden der E-Mail. Ist die Adresse korrekt?' }
+    return { error: authErrorMessage(error, 'Die E-Mail konnte nicht gesendet werden. Bitte die Adresse prüfen und später erneut versuchen.') }
   }
 
   return { success: true }
@@ -65,7 +64,7 @@ export async function updatePassword(formData: FormData) {
   const password = formData.get('password') as string
 
   if (!password || password.length < 10) {
-    return { error: 'Das Passwort muss mindestens 10 Zeichen lang sein.' }
+    return { error: 'Das Passwort muss mindestens 10 Zeichen lang sein. ' + PASSWORD_RULES_HINT }
   }
 
   const { error } = await supabase.auth.updateUser({
@@ -74,7 +73,7 @@ export async function updatePassword(formData: FormData) {
 
   if (error) {
     console.error("Update password error", error)
-    return { error: 'Fehler beim Aktualisieren des Passworts.' }
+    return { error: authErrorMessage(error, 'Das Passwort konnte nicht geändert werden. Möglicherweise ist der Link abgelaufen, bitte einen neuen anfordern.') }
   }
 
   return { success: true }
@@ -96,7 +95,11 @@ async function reauthenticate(supabase: Awaited<ReturnType<typeof createClient>>
     password: currentPassword,
   })
   if (error) {
-    return { error: 'Aktuelles Passwort ist falsch.' as const }
+    // Nur bei falschem Passwort so melden; andere Gründe (zu viele Versuche, Sperre) nennen
+    if (error.code === 'invalid_credentials' || error.message === 'Invalid login credentials') {
+      return { error: 'Aktuelles Passwort ist falsch.' as const }
+    }
+    return { error: authErrorMessage(error, 'Das aktuelle Passwort konnte nicht geprüft werden. Bitte später erneut versuchen.') as string }
   }
   return { user }
 }
@@ -128,7 +131,7 @@ export async function updateOwnEmail(formData: FormData) {
 
   if (error) {
     console.error("Update email error", error)
-    return { error: error.message || 'Fehler beim Ändern der E-Mail-Adresse.' }
+    return { error: authErrorMessage(error, 'Die E-Mail-Adresse konnte nicht geändert werden. Bitte später erneut versuchen.') }
   }
 
   return {
@@ -143,7 +146,7 @@ export async function updateOwnPassword(formData: FormData) {
   const newPassword = formData.get('password') as string
 
   if (!currentPassword || !newPassword || newPassword.length < 10) {
-    return { error: 'Bitte aktuelles Passwort und ein neues Passwort (min. 10 Zeichen) angeben.' }
+    return { error: 'Bitte aktuelles Passwort und ein neues Passwort angeben. ' + PASSWORD_RULES_HINT }
   }
 
   const reauth = await reauthenticate(supabase, currentPassword)
@@ -155,7 +158,7 @@ export async function updateOwnPassword(formData: FormData) {
 
   if (error) {
     console.error("Update own password error", error)
-    return { error: 'Fehler beim Ändern des Passworts.' }
+    return { error: authErrorMessage(error, 'Das Passwort konnte nicht geändert werden. Bitte später erneut versuchen.') }
   }
 
   return { success: true }
