@@ -246,6 +246,64 @@ return <>{popup && <SitePopup {...popup} />} …</>;
 Kein Cookie, nur `sessionStorage` im Browser. Für automatische Tests blendet
 `sessionStorage.setItem("site-popup-gesehen", "*")` das Pop-up aus.
 
+## Mehrfachbearbeitung (ab v0.10.0)
+
+In jeder Verwaltungsliste mehrere Einträge auswählen und ein Feld für alle ändern oder sie
+gemeinsam löschen. Der Core bringt Auswahl, Aktionsleiste, Eingabefelder und das abgesicherte
+Speichern mit, das Projekt beschreibt pro Tabelle nur die freigegebenen Felder.
+
+1. **Beschreibung** (nur Server, z. B. `src/lib/bulk.ts`):
+
+```ts
+import { defineBulk, defineBulkRegistry } from "core-cms/src/bulk/types";
+
+export const BULK = defineBulkRegistry({
+  products: defineBulk({
+    table: "products",
+    scope: { abteilung: "richardprinz" },          // gilt bei jedem Lesen und Schreiben
+    label: { one: "Produkt", many: "Produkte" },
+    fields: {
+      brand_id: { label: "Marke", type: "select", options: { table: "brands", label: "name" }, required: true },
+      price: { label: "Preis", type: "number", suffix: "€", min: 0 },
+      is_active: { label: "Online", type: "boolean", trueLabel: "Online", falseLabel: "Versteckt" },
+    },
+    delete: true,
+    revalidate: ["/"],
+  }),
+});
+```
+
+2. **Server Action** (eine pro Projekt):
+
+```ts
+"use server";
+import { runBulk } from "core-cms/src/bulk/server";
+import type { BulkRequest } from "core-cms/src/bulk/types";
+import { BULK } from "@/lib/bulk";
+
+export async function bulkAction(key: string, request: BulkRequest) {
+  return runBulk(BULK, key, request);
+}
+```
+
+3. **Liste:** Die Seite lädt `getBulkClientConfig(BULK, "products")` (Auswahlwerte aus der
+   Datenbank, ohne Funktionen) und gibt sie an die Tabelle. Dort:
+   `const selection = useBulkSelection(sichtbareIds)`, `BulkSelectAll` im Tabellenkopf,
+   `BulkCheckbox` je Zeile (Umschalt-Klick wählt einen Bereich), `BulkSelectAllRow` über
+   Kartenlisten und `<BulkBar config={bulk} selection={selection} action={bulkAction} />`.
+
+**Feldtypen:** `text`, `textarea`, `url`, `email`, `tel`, `number` (Setzen, Erhöhen, Senken, um %),
+`boolean`, `select`, `multiselect` (Spalte `text[]`/`jsonb`: Hinzufügen, Entfernen, Ersetzen),
+`relation` (Verknüpfungstabelle, z. B. Marke ↔ Bereiche), `date`, `datetime`, `color`, `image`
+und `custom` (eigene Prüfung per `validate`, eigenes Eingabefeld über `customEditors` an der `BulkBar`).
+Felder ohne `required` lassen sich auch leeren. Auswahlwerte: feste Liste, Tabelle oder eigene
+Ladefunktion `(supabase) => Promise<{ value, label }[]>`.
+
+**Sicherheit:** Der Browser schickt nur Schlüssel, IDs, Feld und Wert. Tabelle, Spalten und fester
+Filter kommen aus der Beschreibung. `runBulk` prüft die Anmeldung, jeden Wert nach Feldtyp und dass
+alle IDs im festen Filter liegen. Danach gelten zusätzlich die RLS-Regeln der Datenbank.
+Optionale Hooks: `afterUpdate` (z. B. Sortierung anpassen), `beforeDelete` (Text zurückgeben = abbrechen).
+
 ## Migrationsstand
 
 Siehe Kommentare in den jeweiligen `src/*/index.ts`-Dateien für den Stand pro Modul.

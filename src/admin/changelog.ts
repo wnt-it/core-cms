@@ -12,10 +12,19 @@ export interface ChangelogEntry {
   changes: { type: ChangeType; text: string }[];
 }
 
-export const CORE_VERSION = "0.9.1";
+export const CORE_VERSION = "0.10.0";
 
 /** Neueste Version zuerst. */
 export const CORE_CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "0.10.0",
+    date: "2026-10-28",
+    changes: [
+      { type: "feature", text: "Mehrfachbearbeitung in den Listen: mehrere Einträge ankreuzen (mit Umschalt-Klick auch einen ganzen Bereich) und unten in der Leiste ein Feld für alle auf einmal ändern, z. B. Marke, Kategorie, Sichtbarkeit, Preis um Prozent oder zugeordnete Bereiche. Vor dem Speichern steht eine Zusammenfassung da." },
+      { type: "feature", text: "Mehrere Einträge auf einmal löschen, mit Rückfrage. Das Projekt kann das Löschen sperren, wenn noch etwas daran hängt (z. B. Marken mit Produkten)." },
+      { type: "security", text: "Gespeichert wird nur, was das Projekt freigegeben hat: Tabelle, Felder und Bereich (z. B. Abteilung) prüft der Server bei jeder Änderung, ebenso jeden Wert nach seiner Art." },
+    ],
+  },
   {
     version: "0.9.1",
     date: "2026-10-28",
