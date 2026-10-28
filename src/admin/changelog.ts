@@ -12,10 +12,17 @@ export interface ChangelogEntry {
   changes: { type: ChangeType; text: string }[];
 }
 
-export const CORE_VERSION = "0.9.0";
+export const CORE_VERSION = "0.9.1";
 
 /** Neueste Version zuerst. */
 export const CORE_CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "0.9.1",
+    date: "2026-10-28",
+    changes: [
+      { type: "security", text: "Das Paket für den E-Mail-Versand über Resend ist auf Version 6 aktualisiert. Damit sind die gemeldeten Sicherheitswarnungen (deepmerge) behoben. Am Versand selbst ändert sich nichts." },
+    ],
+  },
   {
     version: "0.9.0",
     date: "2026-10-28",

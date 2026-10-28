@@ -1,7 +1,7 @@
 {
   "name": "core-cms",
   "private": true,
-  "version": "0.9.0",
+  "version": "0.9.1",
   "description": "Zentrales CMS-Core-Package für WNT-IT Kundenprojekte: Auth, Admin-Dashboard, Media Library, Site-Settings, E-Mail (Resend/SMTP), Submissions.",
   "main": "src/index.ts",
   "types": "src/index.ts",
@@ -12,7 +12,7 @@
     "lucide-react": "^0.475.0",
     "motion": "^12.38.0",
     "nodemailer": "^10.2.1",
-    "resend": "^4.0.1",
+    "resend": "^6.35.0",
     "sonner": "^2.0.7"
   },
   "peerDependencies": {
