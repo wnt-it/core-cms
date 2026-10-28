@@ -211,6 +211,41 @@ nur `remotePatterns` und `transpilePackages` werden zusammengeführt.
   Der Hobby-Plan ist nur für nicht-kommerzielle Nutzung erlaubt.
 - Bestandsbilder bleiben unverändert. Sie werden erst beim erneuten Hochladen verkleinert.
 
+## Verwaltungs-Design: WNT-Backend (ab v0.9.0)
+
+Alle Admin-Seiten nutzen ein gemeinsames Design mit den Farben von WNT-IT (`WNT_COLORS`
+in `src/ui/styles.ts`: Orange `#F18652` als Akzent, Schiefer `#0F172A`, Hintergrund `#FAFAFC`).
+Das Projekt liefert nur Logo und Menüpunkte.
+
+- **Gerüst:** `AdminShell` aus `core-cms/src/ui` (Seitenleiste „Inhalte“/„System“, Umschalter,
+  Konto, Handy-Menü). Core-Seiten aus `coreAdminPages` erscheinen automatisch, `group: "content"`
+  unter „Inhalte“, sonst unter „System“.
+- **Bausteine:** `PageHeader`, `Section`, `Card`, `Field`, `Input`, `Select`, `SwitchRow`, `Button`,
+  `SaveBar`, `Badge`, `Note`, `EmptyState`, `TableCard`, `ConfirmDialog` u. a. aus `core-cms/src/ui`.
+- **Schrift:** Das Projekt setzt die CSS-Variable `--font-admin` (z. B. Inter über `next/font`).
+- **Bildfelder:** `ImageUpload` (ein Bild) und `GalleryField` (mehrere Bilder, erstes = Hauptbild,
+  Sortieren per Ziehen oder Pfeilen, optional `name` für ein verstecktes Feld mit JSON-Liste).
+
+## Pop-up (ab v0.9.0)
+
+Ein Bild als Hinweis beim Öffnen der Website (z. B. Aktionen, Betriebsferien), pro Besuch einmal je Bild.
+
+1. **Datenbank:** einmal pro Projekt `sql/0.9.0_site_popup.sql` ausführen (Spalten `popup_enabled`,
+   `popup_image_url`, `popup_image_alt` in `site_settings`). Ohne Migration bleibt das Pop-up aus,
+   die Website läuft weiter.
+2. **Verwaltung:** `/admin/popup` erscheint automatisch über `coreAdminPages` unter „Inhalte“.
+3. **Website:** dort einbinden, wo es erscheinen soll (liest ohne Cookies, Seite bleibt statisch):
+
+```tsx
+import { SitePopup, getSitePopup } from "core-cms/src/popup";
+
+const popup = await getSitePopup();
+return <>{popup && <SitePopup {...popup} />} …</>;
+```
+
+Kein Cookie, nur `sessionStorage` im Browser. Für automatische Tests blendet
+`sessionStorage.setItem("site-popup-gesehen", "*")` das Pop-up aus.
+
 ## Migrationsstand
 
 Siehe Kommentare in den jeweiligen `src/*/index.ts`-Dateien für den Stand pro Modul.

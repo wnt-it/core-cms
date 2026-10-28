@@ -7,6 +7,9 @@ export { default as MoveModal } from "./MoveModal";
 export { default as PromptModal } from "./PromptModal";
 export { default as MediaLibraryModal } from "./MediaLibraryModal";
 export { default as ImageUpload } from "./ImageUpload";
+export { default as GalleryField } from "./GalleryField";
+export type { GalleryFieldProps } from "./GalleryField";
+export { uploadToLibrary } from "./upload-to-library";
 export { LARGE_FILE_WARN_BYTES, confirmLargeFiles } from "./upload-limits";
 export {
   DEFAULT_IMAGE_UPLOAD_OPTIONS,

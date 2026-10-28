@@ -12,7 +12,7 @@ export default function UpdatePasswordPage() {
       title="Neues Passwort festlegen"
       subtitle="Bitte vergeben Sie ein neues Passwort für Ihren Zugang."
       footer={
-        <Link href="/admin/login" className="text-xs text-neutral-500 hover:text-black transition-colors">
+        <Link href="/admin/login" className="text-[#64748B] transition-colors hover:text-[#0F172A]">
           &larr; Zurück zum Login
         </Link>
       }

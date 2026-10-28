@@ -2,10 +2,12 @@
 
 // Quelle: template/src/components/ui/MediaLibraryModal.tsx
 // Imports auf core-cms-interne relative Pfade umgestellt.
+// Wird aus AdminShell und aus Projektseiten geöffnet: Schrift, Farben und
+// Akzent-Rückfallwerte deshalb hier selbst setzen, nichts vom Projekt-CSS erben.
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { motion, AnimatePresence } from 'motion/react'
-import { X, Folder, FileImage, UploadCloud, Trash, Loader2, ChevronRight, RefreshCw, AlertCircle, FolderPlus, Pen, MoveRight, Search, Download } from 'lucide-react'
+import { X, UploadCloud, Trash2, Loader2, RefreshCw, FolderPlus, Pen, MoveRight, Search, Download } from 'lucide-react'
 import PromptModal from './PromptModal'
 import MoveModal from './MoveModal'
 import DeleteConfirmModal from './DeleteConfirmModal'
@@ -13,6 +15,8 @@ import { useMediaLibrary } from './useMediaLibrary'
 import { MediaGrid } from './MediaGrid'
 import { downloadMultipleMedia } from './media-download'
 import type { ImageOptimizationOptions } from './image-prepare'
+import { Button, Note } from '../ui/components'
+import { cx, iconButtonClass, inputClass } from '../ui/styles'
 
 interface MediaLibraryModalProps {
   isOpen: boolean
@@ -23,6 +27,17 @@ interface MediaLibraryModalProps {
   /** Bilder beim Upload verkleinern (Standard: an, 2000 px, WebP). */
   imageOptimization?: ImageOptimizationOptions
 }
+
+// Ordnerpfad: aktueller Ordner fett, Ablegeziel mit Akzent
+const crumbClass = (active: boolean, dropHover: boolean) =>
+  cx(
+    'shrink-0 cursor-pointer rounded-md px-1.5 py-1 outline-none transition-colors focus-visible:shadow-[0_0_0_3px_var(--admin-ring,rgba(241,134,82,.22))]',
+    dropHover
+      ? 'bg-[color-mix(in_srgb,var(--admin-accent,#F18652)_12%,white)] text-[#0F172A] ring-1 ring-[var(--admin-accent,#F18652)]'
+      : active
+        ? 'font-medium text-[#0F172A]'
+        : 'text-[#64748B] hover:text-[#0F172A]'
+  )
 
 export default function MediaLibraryModal({
   isOpen,
@@ -67,6 +82,23 @@ export default function MediaLibraryModal({
   const [hoveredBreadcrumbId, setHoveredBreadcrumbId] = useState<string | null>(null)
   const dragCounter = useRef(0)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const dialogRef = useRef<HTMLDivElement>(null)
+
+  // Escape schließt die Mediathek, solange kein Unterfenster offen ist
+  const subModalOpen = isCreateFolderOpen || isRenameOpen || isMoveOpen || isDeleteOpen
+  useEffect(() => {
+    if (!isOpen || subModalOpen) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [isOpen, subModalOpen, onClose])
+
+  // Fokus beim Öffnen ins Fenster
+  useEffect(() => {
+    if (isOpen) dialogRef.current?.focus()
+  }, [isOpen])
 
   const handleConfirmSelect = () => {
     if (selectedItems.length === 0) return
@@ -83,6 +115,7 @@ export default function MediaLibraryModal({
   }
 
   const isSearchActive = searchQuery.trim().length > 0
+  const selectedFileCount = selectedItems.filter(i => !i.isFolder).length
 
   // File Upload Drag & Drop Event Handlers (External files from desktop)
   const handleModalDragEnter = (e: React.DragEvent) => {
@@ -165,21 +198,27 @@ export default function MediaLibraryModal({
   return (
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-0 font-[family-name:var(--font-admin,ui-sans-serif,system-ui,sans-serif)] text-[14px] font-normal leading-normal text-[#0F172A] antialiased sm:p-6 lg:p-10 [&_:where(h1,h2,h3,h4,h5,h6)]:[font-family:inherit]!">
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.18, ease: 'easeOut' }}
             onClick={onClose}
-            className="fixed inset-0 bg-black/60 backdrop-blur-sm cursor-pointer"
+            className="fixed inset-0 cursor-pointer bg-[rgba(15,23,42,.4)]"
+            aria-hidden="true"
           />
           <motion.div
+            ref={dialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="media-library-title"
+            tabIndex={-1}
             initial={{ opacity: 0, scale: 0.97, y: 10 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.97, y: 10 }}
             transition={{ duration: 0.25, ease: [0.32, 0.72, 0, 1] as const }}
-            className="relative z-10 bg-white rounded-2xl max-w-5xl w-full h-[85vh] flex flex-col shadow-2xl border border-black/10 overflow-hidden font-sans"
+            className="relative z-10 flex h-dvh w-full max-w-[1200px] flex-col overflow-hidden bg-white outline-none shadow-[0_20px_50px_rgba(15,23,42,.15)] sm:h-full sm:max-h-[900px] sm:rounded-xl"
             onDragEnter={handleModalDragEnter}
             onDragLeave={handleModalDragLeave}
             onDragOver={handleModalDragOver}
@@ -202,158 +241,156 @@ export default function MediaLibraryModal({
 
             {/* Global Active External Files Drag-and-Drop Overlay */}
             {isDraggingFiles && (
-              <div className="absolute inset-4 z-40 flex flex-col items-center justify-center bg-white/95 backdrop-blur-md border-2 border-dashed border-primary rounded-2xl shadow-2xl pointer-events-none animate-in fade-in zoom-in-95 duration-150">
-                <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center text-primary mb-3">
-                  <UploadCloud size={36} />
-                </div>
-                <p className="text-lg font-extrabold text-black">Dateien jetzt hier ablegen</p>
-                <p className="text-xs text-neutral-500 mt-1">
+              <div className="pointer-events-none absolute inset-3 z-40 flex flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed border-[var(--admin-accent,#F18652)] bg-white/95 text-center">
+                <span className="mb-2 flex h-11 w-11 items-center justify-center rounded-xl bg-[color-mix(in_srgb,var(--admin-accent,#F18652)_12%,white)] text-[color-mix(in_srgb,var(--admin-accent,#F18652)_80%,black)]">
+                  <UploadCloud size={22} strokeWidth={1.75} />
+                </span>
+                <p className="text-[15px] font-medium text-[#0F172A]">Dateien jetzt hier ablegen</p>
+                <p className="text-[13px] text-[#64748B]">
                   Upload erfolgt direkt {currentFolderId ? 'in den aktuellen Ordner' : 'in das Hauptverzeichnis'}
                 </p>
               </div>
             )}
 
             {/* Header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-black/10 bg-neutral-50/50 shrink-0">
-              <div>
-                <h2 className="text-xl font-bold text-black flex items-center gap-2">
-                  <FileImage size={22} className="text-neutral-700" />
-                  <span>Mediathek & Medienverwaltung</span>
-                </h2>
-                <p className="text-xs text-neutral-500 mt-0.5">
-                  Laden Sie Bilder hoch oder wählen Sie bestehende Medien aus.
+            <div className="flex shrink-0 items-start justify-between gap-4 border-b border-[#F1F5F9] px-4 py-4 sm:px-6">
+              <div className="min-w-0">
+                <h2 id="media-library-title" className="text-[16px] font-semibold text-[#0F172A]">Mediathek</h2>
+                <p className="mt-0.5 text-[13px] text-[#64748B]">
+                  Bilder hochladen oder vorhandene Medien auswählen.
                 </p>
               </div>
-              <button
-                onClick={onClose}
-                className="p-2 text-neutral-400 hover:text-black rounded-xl hover:bg-neutral-100 transition-colors cursor-pointer"
-              >
-                <X size={20} />
+              <button type="button" onClick={onClose} className={cx(iconButtonClass, '-mr-2 -mt-1')} aria-label="Schließen">
+                <X size={18} strokeWidth={1.75} />
               </button>
             </div>
 
             {/* Action Toolbar */}
-            <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-3 border-b border-black/10 bg-white text-sm shrink-0">
+            <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2.5 border-b border-[#F1F5F9] px-4 py-3 sm:px-6">
 
               {/* Breadcrumbs */}
               {isSearchActive ? (
-                <div className="flex items-center gap-2 text-sm text-neutral-700 font-medium">
-                  <Search size={15} className="text-neutral-400" />
-                  <span>Suchergebnisse für: <strong className="text-black">"{searchQuery}"</strong> ({items.length} Treffer)</span>
+                <div className="flex min-w-0 flex-1 basis-full flex-wrap items-center gap-x-2 gap-y-1 text-[14px] text-[#64748B] md:basis-0">
+                  <span className="min-w-0 truncate">
+                    Treffer für <strong className="font-medium text-[#0F172A]">„{searchQuery}“</strong> · {items.length}
+                  </span>
                   <button
+                    type="button"
                     onClick={() => setSearchQuery('')}
-                    className="text-xs font-semibold text-neutral-500 hover:text-black underline ml-2 cursor-pointer"
+                    className="cursor-pointer rounded text-[13px] font-medium text-[#334155] underline underline-offset-2 outline-none hover:text-[#0F172A] focus-visible:shadow-[0_0_0_3px_var(--admin-ring,rgba(241,134,82,.22))]"
                   >
                     Suche zurücksetzen
                   </button>
                 </div>
               ) : (
-                <div className="flex items-center gap-1.5 overflow-x-auto py-1 text-sm font-medium text-neutral-600">
+                <nav aria-label="Ordnerpfad" className="-mx-1.5 flex min-w-0 flex-1 basis-full items-center gap-0.5 overflow-x-auto px-0 text-[14px] md:basis-0">
                   <button
+                    type="button"
                     onClick={() => navigateToBreadcrumb(null)}
                     onDragOver={(e) => { e.preventDefault(); setHoveredBreadcrumbId('root') }}
                     onDragLeave={() => setHoveredBreadcrumbId(null)}
                     onDrop={(e) => handleDropOnBreadcrumb(e, null)}
-                    className={`px-2.5 py-1 rounded-lg transition-colors cursor-pointer ${
-                      hoveredBreadcrumbId === 'root'
-                        ? 'bg-emerald-100 text-emerald-900 font-bold ring-1 ring-emerald-400'
-                        : !currentFolderId
-                          ? 'font-bold text-black bg-neutral-100'
-                          : 'hover:text-black hover:bg-neutral-50'
-                    }`}
-                    title="Hier ablegen, um Bilder ins Startverzeichnis zu verschieben"
+                    className={crumbClass(!currentFolderId, hoveredBreadcrumbId === 'root')}
+                    aria-current={!currentFolderId ? 'location' : undefined}
+                    title="Hier ablegen, um Bilder ins Hauptverzeichnis zu verschieben"
                   >
-                    Startverzeichnis
+                    Alle Medien
                   </button>
 
                   {folderBreadcrumbs.map((crumb) => (
-                    <div key={crumb.id} className="flex items-center gap-1.5 shrink-0">
-                      <ChevronRight size={14} className="text-neutral-400" />
+                    <span key={crumb.id} className="flex shrink-0 items-center gap-0.5">
+                      <span aria-hidden="true" className="text-[#CBD5E1]">/</span>
                       <button
+                        type="button"
                         onClick={() => navigateToBreadcrumb(crumb.id)}
                         onDragOver={(e) => { e.preventDefault(); setHoveredBreadcrumbId(crumb.id) }}
                         onDragLeave={() => setHoveredBreadcrumbId(null)}
                         onDrop={(e) => handleDropOnBreadcrumb(e, crumb.id)}
-                        className={`px-2.5 py-1 rounded-lg transition-colors cursor-pointer ${
-                          hoveredBreadcrumbId === crumb.id
-                            ? 'bg-emerald-100 text-emerald-900 font-bold ring-1 ring-emerald-400'
-                            : crumb.id === currentFolderId
-                              ? 'font-bold text-black bg-neutral-100'
-                              : 'hover:text-black hover:bg-neutral-50'
-                        }`}
-                        title={`Hier ablegen, um Bilder in "${crumb.name}" zu verschieben`}
+                        className={crumbClass(crumb.id === currentFolderId, hoveredBreadcrumbId === crumb.id)}
+                        aria-current={crumb.id === currentFolderId ? 'location' : undefined}
+                        title={`Hier ablegen, um Bilder in „${crumb.name}“ zu verschieben`}
                       >
                         {crumb.name}
                       </button>
-                    </div>
+                    </span>
                   ))}
-                </div>
+                </nav>
               )}
 
               {/* Right Action Tools */}
-              <div className="flex items-center gap-2 ml-auto">
+              <div className="flex w-full flex-wrap items-center gap-2 md:w-auto md:flex-nowrap">
                 {/* Live Search Input */}
-                <div className="relative">
+                <span className="relative flex w-full sm:w-auto sm:flex-1 md:w-[240px] md:flex-none">
+                  <Search size={16} strokeWidth={1.75} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#94A3B8]" aria-hidden="true" />
                   <input
                     type="text"
-                    placeholder="Bildname suchen..."
+                    placeholder="Bildname suchen"
+                    aria-label="Bildname suchen"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="pl-8 pr-7 py-1.5 text-xs rounded-lg border border-black/15 bg-neutral-50 hover:bg-white focus:bg-white focus:outline-none focus:ring-2 focus:ring-black/20 w-44 sm:w-56 transition-all font-medium"
+                    className={cx(inputClass, 'h-9 pl-9 pr-8 focus:border-[var(--admin-accent,#F18652)] focus:shadow-[0_0_0_3px_var(--admin-ring,rgba(241,134,82,.22))]')}
                   />
-                  <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-neutral-400 pointer-events-none" />
                   {searchQuery && (
                     <button
+                      type="button"
                       onClick={() => setSearchQuery('')}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-black p-0.5 cursor-pointer"
+                      aria-label="Suche leeren"
+                      className="absolute right-1.5 top-1/2 flex h-6 w-6 -translate-y-1/2 cursor-pointer items-center justify-center rounded-md text-[#94A3B8] hover:bg-[#F1F5F9] hover:text-[#0F172A]"
                     >
-                      <X size={13} />
+                      <X size={14} />
                     </button>
                   )}
-                </div>
+                </span>
 
-                <button
+                <Button
+                  variant="ghost"
+                  size="sm"
                   onClick={handleSync}
                   disabled={syncing || loading}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-neutral-100 hover:bg-neutral-200 text-neutral-700 rounded-lg font-semibold text-xs transition-colors disabled:opacity-50 cursor-pointer"
                   title="Cloud-Speicher scannen und neue Dateien automatisch registrieren"
+                  aria-label={syncing ? 'Synchronisiere …' : 'Synchronisieren'}
                 >
-                  <RefreshCw size={13} className={syncing ? 'animate-spin' : ''} />
-                  <span className="hidden sm:inline">{syncing ? 'Synchronisiere...' : 'Cloud Sync'}</span>
-                </button>
+                  <RefreshCw size={15} strokeWidth={1.75} className={syncing ? 'animate-spin' : ''} />
+                  <span className="hidden lg:inline">{syncing ? 'Synchronisiere …' : 'Synchronisieren'}</span>
+                </Button>
 
                 {!isSearchActive && (
-                  <button
-                    onClick={() => setIsCreateFolderOpen(true)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-neutral-100 hover:bg-neutral-200 text-black rounded-lg font-semibold text-xs transition-colors cursor-pointer"
-                  >
-                    <FolderPlus size={13} />
+                  <Button variant="secondary" size="sm" onClick={() => setIsCreateFolderOpen(true)}>
+                    <FolderPlus size={15} strokeWidth={1.75} />
                     <span>Neuer Ordner</span>
-                  </button>
+                  </Button>
                 )}
 
-                <button
-                  type="button"
+                <Button
+                  variant="primary"
+                  size="sm"
                   onClick={() => fileInputRef.current?.click()}
                   disabled={uploading}
-                  className="flex items-center gap-1.5 px-3.5 py-1.5 bg-primary hover:bg-primary/90 text-white rounded-lg font-semibold text-xs cursor-pointer transition-colors shadow-sm disabled:opacity-50"
+                  className="ml-auto md:ml-0"
                 >
-                  {uploading ? <Loader2 size={13} className="animate-spin" /> : <UploadCloud size={13} />}
-                  <span>{uploading ? 'Lädt...' : 'Hochladen'}</span>
-                </button>
+                  {uploading ? <Loader2 size={15} className="animate-spin" /> : <UploadCloud size={15} strokeWidth={1.75} />}
+                  <span>{uploading ? 'Lädt …' : 'Hochladen'}</span>
+                </Button>
               </div>
             </div>
 
             {/* Main Content Area */}
-            <div className="flex-1 p-6 overflow-y-auto bg-neutral-50/30">
+            <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 py-5 sm:px-6">
               {error && (
-                <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl text-xs flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <AlertCircle size={16} />
-                    <span>{error}</span>
-                  </div>
-                  <button onClick={() => setError(null)} className="font-bold underline cursor-pointer">Ausblenden</button>
-                </div>
+                <Note
+                  tone="error"
+                  action={
+                    <button
+                      type="button"
+                      onClick={() => setError(null)}
+                      className="cursor-pointer text-[13px] font-medium underline underline-offset-2"
+                    >
+                      Ausblenden
+                    </button>
+                  }
+                >
+                  {error}
+                </Note>
               )}
 
               <MediaGrid
@@ -373,78 +410,58 @@ export default function MediaLibraryModal({
             </div>
 
             {/* Stable Fixed Footer Bar */}
-            <div className="flex items-center justify-between px-6 py-3.5 border-t border-black/10 bg-white shrink-0 min-h-[64px]">
-              <div className="flex items-center gap-3">
+            <div className="flex shrink-0 flex-col gap-3 border-t border-[#F1F5F9] bg-[#FAFAFC] px-4 py-3 sm:min-h-[64px] sm:flex-row sm:items-center sm:px-6">
+              <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1">
                 {selectedItems.length > 0 ? (
-                  <div className="flex items-center gap-2 animate-in fade-in duration-150">
-                    <span className="text-xs font-bold text-black bg-neutral-100 px-2.5 py-1 rounded-lg">
+                  <>
+                    <span className="mr-2 text-[13px] font-medium text-[#0F172A]" aria-live="polite">
                       {selectedItems.length} ausgewählt
                     </span>
 
                     {selectedItems.length === 1 && (
-                      <button
-                        onClick={() => setIsRenameOpen(true)}
-                        className="flex items-center gap-1 px-2.5 py-1 text-xs font-semibold bg-neutral-100 hover:bg-neutral-200 text-neutral-800 rounded-lg transition-colors cursor-pointer"
-                      >
-                        <Pen size={12} />
+                      <Button variant="ghost" size="sm" onClick={() => setIsRenameOpen(true)}>
+                        <Pen size={14} strokeWidth={1.75} />
                         <span>Umbenennen</span>
-                      </button>
+                      </Button>
                     )}
 
-                    <button
-                      type="button"
-                      onClick={() => setIsMoveOpen(true)}
-                      className="flex items-center gap-1 px-2.5 py-1 text-xs font-semibold bg-neutral-100 hover:bg-neutral-200 text-neutral-800 rounded-lg transition-colors cursor-pointer"
-                    >
-                      <MoveRight size={12} />
+                    <Button variant="ghost" size="sm" onClick={() => setIsMoveOpen(true)}>
+                      <MoveRight size={14} strokeWidth={1.75} />
                       <span>Verschieben</span>
-                    </button>
+                    </Button>
 
                     {selectedItems.some(i => !i.isFolder) && (
-                      <button
-                        type="button"
+                      <Button
+                        variant="ghost"
+                        size="sm"
                         onClick={() => downloadMultipleMedia(selectedItems)}
-                        className="flex items-center gap-1 px-2.5 py-1 text-xs font-semibold bg-neutral-100 hover:bg-neutral-200 text-neutral-800 rounded-lg transition-colors cursor-pointer"
                         title="Ausgewählte Dateien herunterladen"
                       >
-                        <Download size={12} />
-                        <span>Herunterladen ({selectedItems.filter(i => !i.isFolder).length})</span>
-                      </button>
+                        <Download size={14} strokeWidth={1.75} />
+                        <span>Herunterladen ({selectedFileCount})</span>
+                      </Button>
                     )}
 
-                    <button
-                      type="button"
-                      onClick={() => setIsDeleteOpen(true)}
-                      className="flex items-center gap-1 px-2.5 py-1 text-xs font-semibold bg-red-50 hover:bg-red-100 text-red-600 rounded-lg transition-colors cursor-pointer"
-                    >
-                      <Trash size={12} />
+                    <Button variant="danger" size="sm" onClick={() => setIsDeleteOpen(true)}>
+                      <Trash2 size={14} strokeWidth={1.75} />
                       <span>Löschen</span>
-                    </button>
-                  </div>
+                    </Button>
+                  </>
                 ) : (
-                  <div className="text-xs text-neutral-400 flex items-center gap-1.5">
-                    <span>💡 Klicke ein Bild an oder ziehe es per Drag & Drop auf einen Ordner</span>
-                  </div>
+                  <p className="hidden text-[13px] text-[#64748B] sm:block">
+                    Bild anklicken zum Auswählen oder auf einen Ordner ziehen, um es zu verschieben.
+                  </p>
                 )}
               </div>
 
               {/* Right Action: Cancel & Select */}
-              <div className="flex items-center gap-2 shrink-0">
-                <button
-                  type="button"
-                  onClick={onClose}
-                  className="px-4 py-2 text-sm font-semibold text-neutral-600 hover:bg-neutral-100 rounded-xl transition-colors cursor-pointer"
-                >
+              <div className="flex shrink-0 gap-2 [&>*]:flex-1 sm:[&>*]:flex-none">
+                <Button variant="ghost" onClick={onClose}>
                   Abbrechen
-                </button>
-                <button
-                  type="button"
-                  onClick={handleConfirmSelect}
-                  disabled={selectedItems.filter(i => !i.isFolder).length === 0}
-                  className="px-5 py-2 text-sm font-semibold text-white bg-primary hover:bg-primary/90 rounded-xl transition-colors shadow-sm disabled:opacity-40 cursor-pointer"
-                >
+                </Button>
+                <Button variant="primary" onClick={handleConfirmSelect} disabled={selectedFileCount === 0}>
                   Auswahl übernehmen
-                </button>
+                </Button>
               </div>
             </div>
 
@@ -454,16 +471,23 @@ export default function MediaLibraryModal({
           <PromptModal
             isOpen={isCreateFolderOpen}
             onClose={() => setIsCreateFolderOpen(false)}
-            onConfirm={handleCreateFolder}
-            title="Neuen Ordner erstellen"
-            placeholder="Ordnername (z.B. kollektionen)"
+            onConfirm={async (name) => {
+              await handleCreateFolder(name)
+              setIsCreateFolderOpen(false)
+            }}
+            title="Neuer Ordner"
+            placeholder="Ordnername, z. B. kollektionen"
+            confirmLabel="Anlegen"
           />
 
           <PromptModal
             isOpen={isRenameOpen}
             onClose={() => setIsRenameOpen(false)}
-            onConfirm={handleRename}
-            title="Element umbenennen"
+            onConfirm={async (name) => {
+              await handleRename(name)
+              setIsRenameOpen(false)
+            }}
+            title="Umbenennen"
             initialValue={selectedItems[0]?.name || ''}
           />
 

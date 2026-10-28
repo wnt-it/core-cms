@@ -6,6 +6,7 @@
 import { createClient } from '../supabase/server'
 import SubmissionsAdminClient from './SubmissionsAdminClient'
 import { Submission } from '../supabase/types'
+import { Note, PageHeader } from '../ui'
 
 export interface AdminSubmissionsPageProps {
   heading?: string
@@ -13,8 +14,8 @@ export interface AdminSubmissionsPageProps {
 }
 
 export default async function AdminSubmissionsPage({
-  heading = 'posteingang & anfragen',
-  description = 'alle anfragen über das kontaktformular und weitere formulare an einem ort.',
+  heading = 'Posteingang',
+  description = 'Alle Anfragen über das Kontaktformular und weitere Formulare an einem Ort.',
 }: AdminSubmissionsPageProps = {}) {
   const supabase = await createClient()
 
@@ -24,25 +25,12 @@ export default async function AdminSubmissionsPage({
     .order('created_at', { ascending: false })
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-2xl sm:text-3xl font-extrabold text-black tracking-tight lowercase font-display">
-            {heading}
-          </h2>
-          <p className="text-xs sm:text-sm text-neutral-500 mt-1 lowercase">
-            {description}
-          </p>
-        </div>
-      </div>
+    <>
+      <PageHeader title={heading} description={description} />
 
-      {error && (
-        <div className="p-4 bg-red-50 text-red-600 text-xs rounded-2xl border border-red-200">
-          Fehler beim Laden der Nachrichten: {error.message}
-        </div>
-      )}
+      {error && <Note tone="error">Fehler beim Laden der Nachrichten: {error.message}</Note>}
 
       <SubmissionsAdminClient initialSubmissions={(submissions as Submission[]) || []} />
-    </div>
+    </>
   )
 }

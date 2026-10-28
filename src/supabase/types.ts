@@ -21,6 +21,10 @@ export interface SiteSettings {
   hero_aktionen_url?: string | null;
   hero_jobs_url?: string | null;
   hero_kontakt_url?: string | null;
+  /** Pop-up (ab v0.9.0, sql/0.9.0_site_popup.sql) */
+  popup_enabled?: boolean | null;
+  popup_image_url?: string | null;
+  popup_image_alt?: string | null;
   created_at?: string;
   updated_at?: string;
 }
