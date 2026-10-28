@@ -12,10 +12,24 @@ export interface ChangelogEntry {
   changes: { type: ChangeType; text: string }[];
 }
 
-export const CORE_VERSION = "0.8.2";
+export const CORE_VERSION = "0.9.0";
 
 /** Neueste Version zuerst. */
 export const CORE_CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "0.9.0",
+    date: "2026-10-28",
+    changes: [
+      { type: "feature", text: "Neues Design der ganzen Verwaltung (WNT-Backend) in den Farben von WNT-IT: Seitenleiste mit „Inhalte“ und „System“, Handy-Menü, einheitliche Seiten mit Erklärung links und Feldern rechts, Speichern-Leiste unten und Löschen mit Rückfrage." },
+      { type: "feature", text: "Anmelden, Passwort, Mein Konto, Einstellungen, SMTP, Posteingang, Mediathek und Core-Version sind neu gestaltet. Der Posteingang zeigt Anfragen als Tabelle oder auf dem Handy als Karten, mit Detailansicht, Suche und Filtern." },
+      { type: "feature", text: "Alle Auswahlfelder sind jetzt eigene, moderne Aufklappmenüs mit Suche (bei langen Listen), Gruppen und Tastaturbedienung, statt der Browser-Liste." },
+      { type: "feature", text: "Neues Bildfeld für mehrere Bilder (Galerie): Bilder hochladen oder aus der Mediathek wählen, per Ziehen sortieren, das erste ist das Hauptbild." },
+      { type: "feature", text: "Neue Seite „Pop-up“: ein Bild als Hinweis beim Öffnen der Website, z. B. für Aktionen oder Betriebsferien, pro Besuch einmal. Braucht einmal die Datenbank-Erweiterung sql/0.9.0_site_popup.sql." },
+      { type: "fix", text: "Mediathek: Das Fenster „Neuer Ordner“ bzw. „Umbenennen“ schließt sich nach dem Speichern wieder." },
+      { type: "fix", text: "Posteingang: Der Filter nach Formular findet die Anfragen jetzt auch, wenn das Formular einen Zusatz trägt (z. B. Abteilung)." },
+      { type: "fix", text: "Core-Seiten zeigen im Browser-Tab ihren eigenen Namen statt „Admin Dashboard“ (im Projekt generateCoreAdminMetadata im Catch-all einbinden)." },
+    ],
+  },
   {
     version: "0.8.2",
     date: "2026-10-26",

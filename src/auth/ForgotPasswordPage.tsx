@@ -12,7 +12,7 @@ export default function ForgotPasswordPage() {
       title="Passwort vergessen"
       subtitle="Geben Sie Ihre E-Mail-Adresse ein. Wir senden Ihnen einen Link zum Zurücksetzen."
       footer={
-        <Link href="/admin/login" className="text-xs text-neutral-500 hover:text-black transition-colors">
+        <Link href="/admin/login" className="text-[#64748B] transition-colors hover:text-[#0F172A]">
           &larr; Zurück zum Login
         </Link>
       }

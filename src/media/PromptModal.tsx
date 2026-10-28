@@ -1,8 +1,11 @@
 'use client'
 
 // Quelle: template/src/components/ui/PromptModal.tsx
+// Kleines Eingabefenster (Ordner anlegen, umbenennen). Escape schließt.
+
 import { useState, useEffect } from 'react'
-import { X, Check } from 'lucide-react'
+import { Button } from '../ui/components'
+import { inputClass } from '../ui/styles'
 
 interface PromptModalProps {
   isOpen: boolean
@@ -36,70 +39,60 @@ export default function PromptModal({
     }
   }, [isOpen, initialValue])
 
+  useEffect(() => {
+    if (!isOpen) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [isOpen, onClose])
+
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
-
-        {/* Header */}
-        <div className="flex items-start justify-between p-6 border-b border-black/5">
-          <h3 className="font-display font-bold text-lg text-black">{title}</h3>
-          <button
-            type="button"
-            onClick={onClose}
-            className="p-2 text-[#888888] hover:text-black hover:bg-neutral-100 rounded-full transition-colors -mr-2 -mt-2"
-          >
-            <X size={20} />
-          </button>
-        </div>
-
-        <div onKeyDown={(e) => {
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-[rgba(15,23,42,.4)] p-4 font-[family-name:var(--font-admin,ui-sans-serif,system-ui,sans-serif)] text-[14px] font-normal leading-normal text-[#0F172A] antialiased [&_:where(h1,h2,h3,h4,h5,h6)]:[font-family:inherit]!">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="prompt-modal-title"
+        className="w-full max-w-[420px] overflow-hidden rounded-xl bg-white shadow-[0_20px_50px_rgba(15,23,42,.15)]"
+        onKeyDown={(e) => {
           if (e.key === 'Enter') {
             e.preventDefault();
             if (value.trim()) onConfirm(value.trim());
           }
-        }}>
-          {/* Body */}
-          <div className="p-6">
-            {description && (
-              <p className="text-[#555555] text-[14px] font-sans leading-relaxed mb-4">
-                {description}
-              </p>
-            )}
-
-            <input
-              type="text"
-              value={value}
-              onChange={(e) => setValue(e.target.value)}
-              placeholder={placeholder}
-              autoFocus
-              className="w-full h-12 px-4 rounded-xl border border-black/10 bg-neutral-50 focus:bg-white focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all font-sans text-[15px]"
-            />
-          </div>
-
-          {/* Footer */}
-          <div className="flex items-center justify-end gap-3 p-6 bg-neutral-50 border-t border-black/5">
-            <button
-              type="button"
-              onClick={onClose}
-              disabled={isLoading}
-              className="px-5 py-2.5 text-[14px] font-bold text-[#555555] hover:text-black hover:bg-neutral-200 rounded-xl transition-colors disabled:opacity-50"
-            >
-              Abbrechen
-            </button>
-            <button
-              type="button"
-              onClick={() => onConfirm(value.trim())}
-              disabled={isLoading || !value.trim() || value.trim() === initialValue}
-              className="flex items-center gap-2 px-5 py-2.5 bg-primary text-white text-[14px] font-bold rounded-xl hover:bg-primary/90 transition-colors shadow-sm disabled:opacity-50"
-            >
-              <Check size={16} />
-              {isLoading ? 'Bitte warten...' : confirmLabel}
-            </button>
-          </div>
+        }}
+      >
+        <div className="flex flex-col gap-3 p-5">
+          <h2 id="prompt-modal-title" className="text-[16px] font-semibold text-[#0F172A]">{title}</h2>
+          {description && (
+            <p className="text-[14px] leading-relaxed text-[#475569]">{description}</p>
+          )}
+          <input
+            type="text"
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            placeholder={placeholder}
+            aria-label={title}
+            autoFocus
+            className={inputClass}
+          />
         </div>
 
+        <div className="flex justify-end gap-2 border-t border-[#F1F5F9] bg-[#FAFAFC] px-5 py-3">
+          <Button variant="ghost" size="sm" onClick={onClose} disabled={isLoading}>
+            Abbrechen
+          </Button>
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={() => onConfirm(value.trim())}
+            disabled={isLoading || !value.trim() || value.trim() === initialValue}
+          >
+            {isLoading ? 'Bitte warten …' : confirmLabel}
+          </Button>
+        </div>
       </div>
     </div>
   )

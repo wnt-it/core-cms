@@ -3,9 +3,7 @@
 // LoginPage/ForgotPasswordPage/UpdatePasswordPage sind jetzt zentral in core-cms
 // und automatisch gebrandet: AuthCardShell holt Logo + Site-Name aus derselben
 // site_settings-Tabelle, die auch das Admin-Settings-Formular pflegt (siehe
-// branding.ts). Farben/Schrift kommen über die Tailwind-Tokens bg-primary/
-// text-primary/font-display/font-sans, die jedes Kundenprojekt selbst in seiner
-// index.css definiert - core-cms kennt die konkreten Werte nicht, nur die Klassennamen.
+// branding.ts). Farben und Schrift sind die der Verwaltung (WNT-IT, siehe ../ui).
 
 export * from "./login-actions";
 export * from "./logout-actions";

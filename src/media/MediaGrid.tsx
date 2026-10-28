@@ -1,10 +1,13 @@
 'use client'
 
 // Quelle: template/src/components/ui/media-library/MediaGrid.tsx
+// Oben die Ordner als Zeilen, darunter die Dateien als Kacheln.
+
 import React from 'react'
 import { motion } from 'motion/react'
 import { Folder, FolderInput, Loader2, UploadCloud } from 'lucide-react'
 import { MediaItemCard } from './MediaItemCard'
+import { cx } from '../ui/styles'
 
 interface MediaGridProps {
   items: any[]
@@ -44,6 +47,8 @@ const itemVariants = {
   }
 }
 
+const filesGridClass = 'grid grid-cols-2 gap-4 min-[480px]:grid-cols-3 md:grid-cols-4 lg:grid-cols-6'
+
 export function MediaGrid({
   items,
   loading,
@@ -59,10 +64,16 @@ export function MediaGrid({
   fileInputRef
 }: MediaGridProps) {
   if (loading) {
+    // Platzhalter-Kacheln statt Drehkreis
     return (
-      <div className="flex flex-col items-center justify-center h-full gap-3 text-neutral-400 min-h-[300px]">
-        <Loader2 size={32} className="animate-spin text-neutral-600" />
-        <span className="text-sm font-medium">Lade Medien...</span>
+      <div role="status" aria-label="Lade Medien …" className={filesGridClass}>
+        {Array.from({ length: 12 }).map((_, i) => (
+          <div key={i} className="flex flex-col gap-1.5" aria-hidden="true">
+            <div className="aspect-square animate-pulse rounded-lg bg-[#F1F5F9]" />
+            <div className="h-3 w-3/4 animate-pulse rounded bg-[#F1F5F9]" />
+          </div>
+        ))}
+        <span className="sr-only">Lade Medien …</span>
       </div>
     )
   }
@@ -71,7 +82,7 @@ export function MediaGrid({
     return (
       <div
         onClick={() => fileInputRef.current?.click()}
-        className="h-full min-h-[300px] flex flex-col items-center justify-center text-neutral-400 gap-3 border-2 border-dashed border-neutral-300 hover:border-black/50 hover:bg-neutral-100/50 rounded-2xl p-8 sm:p-12 transition-colors cursor-pointer group"
+        className="group flex h-full min-h-[300px] cursor-pointer flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed border-[#E2E8F0] bg-white p-8 text-center outline-none transition-colors hover:border-[#CBD5E1] hover:bg-[#FAFAFC] focus-visible:border-[var(--admin-accent,#F18652)] focus-visible:shadow-[0_0_0_3px_var(--admin-ring,rgba(241,134,82,.22))] sm:p-12"
         role="button"
         tabIndex={0}
         onKeyDown={(e) => {
@@ -81,33 +92,36 @@ export function MediaGrid({
           }
         }}
       >
-        <div className="w-16 h-16 rounded-2xl bg-neutral-100 group-hover:bg-white flex items-center justify-center text-neutral-400 group-hover:text-black border border-neutral-200/80 shadow-sm transition-colors">
+        <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#F1F5F9] text-[#64748B] transition-colors group-hover:text-[#0F172A]">
           {uploading ? (
-            <Loader2 size={32} className="animate-spin text-black" />
+            <Loader2 size={22} className="animate-spin" />
           ) : (
-            <UploadCloud size={32} className="text-neutral-500 group-hover:text-black transition-colors" />
+            <UploadCloud size={22} strokeWidth={1.75} />
           )}
-        </div>
-        <div className="text-center space-y-1">
-          <p className="font-bold text-base text-neutral-800 group-hover:text-black transition-colors">
+        </span>
+        <div className="flex flex-col gap-1">
+          <p className="text-[15px] font-medium text-[#0F172A]">
             {uploading
-              ? 'Dateien werden hochgeladen...'
+              ? 'Dateien werden hochgeladen …'
               : isSearchActive
-              ? `Keine Bilder für "${searchQuery}" gefunden`
-              : 'Dateien per Drag & Drop hierher ziehen'}
+              ? `Keine Bilder für „${searchQuery}“ gefunden`
+              : 'Dateien hierher ziehen'}
           </p>
-          <p className="text-xs text-neutral-500">
+          <p className="text-[13.5px] text-[#64748B]">
             {isSearchActive
-              ? 'Versuche einen anderen Suchbegriff.'
-              : 'oder klicken, um Bilder & Dokumente vom Computer auszuwählen'}
+              ? 'Versuchen Sie einen anderen Suchbegriff.'
+              : 'oder klicken, um Bilder und Dokumente vom Computer auszuwählen'}
           </p>
-          <p className="text-[11px] text-neutral-400 pt-1">
-            Unterstützt PNG, JPG, WEBP, SVG & PDF (Mehrfachauswahl möglich)
+          <p className="pt-1 text-[12.5px] text-[#94A3B8]">
+            PNG, JPG, WEBP, SVG oder PDF · mehrere Dateien möglich
           </p>
         </div>
       </div>
     )
   }
+
+  const folders = isSearchActive ? [] : items.filter((i) => i.isFolder)
+  const files = items.filter((i) => !i.isFolder)
 
   return (
     <motion.div
@@ -115,13 +129,12 @@ export function MediaGrid({
       initial="hidden"
       animate="show"
       key={isSearchActive ? searchQuery : 'grid-content'}
-      className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4"
+      className="flex flex-col gap-5"
     >
       {/* Folders first */}
-      {!isSearchActive &&
-        items
-          .filter((i) => i.isFolder)
-          .map((folder) => {
+      {folders.length > 0 && (
+        <div className="grid grid-cols-1 gap-3 min-[480px]:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+          {folders.map((folder) => {
             const isSelected = selectedItems.some((i) => i.id === folder.id)
             const isDropHovered = hoveredFolderId === folder.id
 
@@ -129,8 +142,23 @@ export function MediaGrid({
               <motion.div
                 variants={itemVariants}
                 key={folder.id}
+                role="button"
+                tabIndex={0}
+                aria-pressed={isSelected}
+                aria-label={`Ordner ${folder.name}`}
+                title="Doppelklick öffnet den Ordner"
                 onDoubleClick={() => navigateTo(folder.id)}
                 onClick={() => toggleSelection(folder)}
+                onKeyDown={(e) => {
+                  // Enter öffnet, Leertaste wählt aus
+                  if (e.key === 'Enter') {
+                    e.preventDefault()
+                    navigateTo(folder.id)
+                  } else if (e.key === ' ') {
+                    e.preventDefault()
+                    toggleSelection(folder)
+                  }
+                }}
                 onDragOver={(e) => {
                   e.preventDefault()
                   e.stopPropagation()
@@ -141,47 +169,47 @@ export function MediaGrid({
                   if (hoveredFolderId === folder.id) setHoveredFolderId(null)
                 }}
                 onDrop={(e) => handleDropOnFolder(e, folder.id)}
-                className={`flex flex-col items-center justify-center p-4 border rounded-xl bg-white cursor-pointer group select-none transition-colors ${
+                className={cx(
+                  'flex min-w-0 cursor-pointer select-none items-center gap-2.5 rounded-[10px] border px-3.5 py-3 text-[14px] font-medium outline-none transition-[border-color,background-color,box-shadow] duration-150 focus-visible:shadow-[0_0_0_3px_var(--admin-ring,rgba(241,134,82,.22))]',
                   isDropHovered
-                    ? 'border-emerald-500 bg-emerald-50/90 ring-2 ring-emerald-500/40'
+                    ? 'border-dashed border-[var(--admin-accent,#F18652)] bg-[color-mix(in_srgb,var(--admin-accent,#F18652)_8%,white)]'
                     : isSelected
-                    ? 'border-primary ring-2 ring-primary/30 ring-inset bg-neutral-50'
-                    : 'border-black/10 hover:border-black/30'
-                }`}
+                    ? 'border-[var(--admin-accent,#F18652)] bg-[color-mix(in_srgb,var(--admin-accent,#F18652)_6%,white)] shadow-[0_0_0_3px_var(--admin-ring,rgba(241,134,82,.22))]'
+                    : 'border-[#E2E8F0] bg-white hover:border-[#CBD5E1] hover:bg-[#FAFAFC]'
+                )}
               >
                 {isDropHovered ? (
-                  <FolderInput size={40} className="text-emerald-600" />
+                  <FolderInput size={18} strokeWidth={1.75} className="shrink-0 text-[color-mix(in_srgb,var(--admin-accent,#F18652)_85%,black)]" />
                 ) : (
-                  <Folder size={40} className="text-amber-400 fill-amber-400/20" />
+                  <Folder size={18} strokeWidth={1.75} className={cx('shrink-0', isSelected ? 'text-[color-mix(in_srgb,var(--admin-accent,#F18652)_85%,black)]' : 'text-[#64748B]')} />
                 )}
-                <span
-                  className={`text-xs font-semibold mt-2 truncate w-full text-center ${
-                    isDropHovered ? 'text-emerald-900 font-bold' : 'text-neutral-800'
-                  }`}
-                  title={folder.name}
-                >
-                  {isDropHovered ? `In "${folder.name}" ablegen` : folder.name}
+                <span className="min-w-0 flex-1 truncate text-[#0F172A]" title={folder.name}>
+                  {isDropHovered ? `In „${folder.name}“ ablegen` : folder.name}
                 </span>
               </motion.div>
             )
           })}
+        </div>
+      )}
 
       {/* Files */}
-      {items
-        .filter((i) => !i.isFolder)
-        .map((file) => {
-          const isSelected = selectedItems.some((i) => i.id === file.id)
-          return (
-            <motion.div variants={itemVariants} key={file.id}>
-              <MediaItemCard
-                item={file}
-                isSelected={isSelected}
-                selectedItems={selectedItems}
-                toggleSelection={toggleSelection}
-              />
-            </motion.div>
-          )
-        })}
+      {files.length > 0 && (
+        <div className={filesGridClass}>
+          {files.map((file) => {
+            const isSelected = selectedItems.some((i) => i.id === file.id)
+            return (
+              <motion.div variants={itemVariants} key={file.id} className="min-w-0">
+                <MediaItemCard
+                  item={file}
+                  isSelected={isSelected}
+                  selectedItems={selectedItems}
+                  toggleSelection={toggleSelection}
+                />
+              </motion.div>
+            )
+          })}
+        </div>
+      )}
     </motion.div>
   )
 }

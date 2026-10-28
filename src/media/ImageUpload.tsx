@@ -2,15 +2,19 @@
 
 // Quelle: template/src/components/ui/ImageUpload.tsx
 // Imports auf core-cms-interne relative Pfade umgestellt.
+// Bildfeld: leer = Ablagefläche, gefüllt = Vorschau mit Ersetzen/Entfernen.
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useId } from 'react'
 import { createClient } from '../supabase/client'
 import Image from 'next/image'
-import { UploadCloud, X, Loader2, Image as ImageIcon } from 'lucide-react'
+import { UploadCloud, Loader2, Image as ImageIcon, Trash2 } from 'lucide-react'
 import MediaLibraryModal from './MediaLibraryModal'
 import { confirmLargeFiles } from './upload-limits'
-import { STORAGE_CACHE_CONTROL, type ImageOptimizationOptions } from './image-prepare'
+import type { ImageOptimizationOptions } from './image-prepare'
+import { uploadToLibrary } from './upload-to-library'
 import { prepareFilesForUpload } from './prepare-uploads'
+import { Button } from '../ui/components'
+import { cx, iconButtonDangerClass, labelClass } from '../ui/styles'
 
 interface ImageUploadProps {
   name?: string
@@ -22,6 +26,15 @@ interface ImageUploadProps {
   onChange?: (url: string) => void
   /** Bilder beim Upload verkleinern (Standard: an, 2000 px, WebP). */
   imageOptimization?: ImageOptimizationOptions
+}
+
+// Dateiname aus der Adresse, nur zur Anzeige
+function fileNameFromUrl(url: string) {
+  try {
+    return decodeURIComponent(url.split('?')[0].split('/').pop() || '')
+  } catch {
+    return url.split('/').pop() || ''
+  }
 }
 
 export default function ImageUpload({
@@ -40,6 +53,7 @@ export default function ImageUpload({
   const [error, setError] = useState<string | null>(null)
   const [isLibraryOpen, setIsLibraryOpen] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const labelId = useId()
 
   const supabase = createClient()
   const currentUrl = value !== undefined ? value : internalUrl
@@ -60,33 +74,7 @@ export default function ImageUpload({
       const [file] = await prepareFilesForUpload([original], imageOptimization)
       if (!confirmLargeFiles([file])) return
 
-      const fileExt = file.name.split('.').pop()
-      const fileName = `${Math.random().toString(36).substring(2, 15)}_${Date.now()}.${fileExt}`
-      const filePath = `${folder}/${fileName}`
-
-      const { error: uploadError } = await supabase.storage
-        .from(bucket)
-        .upload(filePath, file, {
-          cacheControl: STORAGE_CACHE_CONTROL,
-          upsert: false,
-        })
-
-      if (uploadError) {
-        throw uploadError
-      }
-
-      const { data: { publicUrl } } = supabase.storage
-        .from(bucket)
-        .getPublicUrl(filePath)
-
-      await supabase.from('media_files').insert({
-        storage_path: filePath,
-        display_name: file.name,
-        mime_type: file.type,
-        size: file.size,
-        url: publicUrl,
-        folder_id: null,
-      })
+      const publicUrl = await uploadToLibrary(supabase, file, { bucket, folder })
 
       handleUrlChange(publicUrl)
     } catch (err: any) {
@@ -130,14 +118,15 @@ export default function ImageUpload({
   }
 
   return (
-    <div className="w-full space-y-2">
+    <div
+      role="group"
+      aria-labelledby={label ? labelId : undefined}
+      className="flex w-full flex-col gap-1.5 font-[family-name:var(--font-admin,ui-sans-serif,system-ui,sans-serif)] text-[14px] font-normal leading-normal text-[#0F172A]"
+    >
       {label && (
-        <div className="flex items-center justify-between">
-          <label className="block text-xs font-bold text-neutral-700 tracking-wide uppercase">
-            {label}
-          </label>
-          <span className="text-[11px] text-neutral-400">Max. 5 MB</span>
-        </div>
+        <span id={labelId} className={labelClass}>
+          {label}
+        </span>
       )}
 
       {name && (
@@ -149,87 +138,88 @@ export default function ImageUpload({
       )}
 
       {currentUrl ? (
-        <div className="relative group rounded-2xl overflow-hidden border border-black/10 bg-neutral-50 shadow-sm aspect-video max-w-md flex items-center justify-center">
-          <Image
-            src={currentUrl}
-            alt={label || "Hochgeladenes Bild"}
-            fill
-            className="object-cover transition-transform duration-300 group-hover:scale-105"
-            sizes="(max-width: 768px) 100vw, 400px"
-          />
-          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3 backdrop-blur-[2px]">
-            <button
-              type="button"
-              onClick={() => setIsLibraryOpen(true)}
-              className="p-2.5 bg-white text-black hover:bg-neutral-100 rounded-xl font-bold text-xs shadow-lg transition-transform active:scale-95 cursor-pointer flex items-center gap-1.5"
-            >
-              <ImageIcon size={14} />
-              <span>Aus Mediathek</span>
-            </button>
+        <div className="flex max-w-md flex-col overflow-hidden rounded-[10px] border border-[#E2E8F0] bg-white">
+          <div className="relative aspect-video bg-[#F1F5F9]">
+            <Image
+              src={currentUrl}
+              alt={label || "Hochgeladenes Bild"}
+              fill
+              className="object-cover"
+              sizes="(max-width: 768px) 100vw, 448px"
+            />
+          </div>
+          <div className="flex items-center gap-2 border-t border-[#F1F5F9] px-3 py-2">
+            <span className="min-w-0 flex-1 truncate text-[13px] text-[#64748B]" title={fileNameFromUrl(currentUrl)}>
+              {fileNameFromUrl(currentUrl)}
+            </span>
+            <Button variant="secondary" size="sm" onClick={() => setIsLibraryOpen(true)}>
+              <ImageIcon size={14} strokeWidth={1.75} />
+              <span>Ersetzen</span>
+            </Button>
             <button
               type="button"
               onClick={() => handleUrlChange('')}
-              className="p-2.5 bg-red-600 text-white hover:bg-red-700 rounded-xl shadow-lg transition-transform active:scale-95 cursor-pointer"
+              className={cx(iconButtonDangerClass, 'h-8 w-8')}
               title="Bild entfernen"
+              aria-label="Bild entfernen"
             >
-              <X size={16} />
+              <Trash2 size={16} strokeWidth={1.75} />
             </button>
           </div>
         </div>
       ) : (
-        <div className="flex flex-col gap-2 max-w-md">
+        <div className="flex max-w-md flex-col gap-2">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={handleFileChange}
+            disabled={isUploading}
+          />
           <div
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
             onDrop={handleDrop}
             onClick={() => fileInputRef.current?.click()}
-            className={`
-              relative border-2 border-dashed rounded-2xl p-6 text-center cursor-pointer transition-all duration-200
-              ${isDragging
-                ? 'border-black bg-neutral-100 scale-[0.99]'
-                : 'border-black/15 bg-white hover:bg-neutral-50/50 hover:border-black/30'
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault()
+                fileInputRef.current?.click()
               }
-            `}
+            }}
+            role="button"
+            tabIndex={0}
+            aria-busy={isUploading}
+            className={cx(
+              'flex cursor-pointer flex-col items-center justify-center gap-1 rounded-[10px] border-2 border-dashed px-4 py-5 text-center outline-none transition-colors duration-150 focus-visible:border-[var(--admin-accent,#F18652)] focus-visible:shadow-[0_0_0_3px_var(--admin-ring,rgba(241,134,82,.22))]',
+              isDragging
+                ? 'border-[var(--admin-accent,#F18652)] bg-[color-mix(in_srgb,var(--admin-accent,#F18652)_8%,white)]'
+                : 'border-[#E2E8F0] bg-white hover:border-[#CBD5E1] hover:bg-[#FAFAFC]'
+            )}
           >
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={handleFileChange}
-              disabled={isUploading}
-            />
-
-            <div className="flex flex-col items-center justify-center gap-2">
-              <div className="w-10 h-10 rounded-xl bg-neutral-100 flex items-center justify-center text-neutral-600 shadow-xs">
-                {isUploading ? (
-                  <Loader2 className="animate-spin" size={20} />
-                ) : (
-                  <UploadCloud size={20} />
-                )}
-              </div>
-              <div>
-                <p className="text-xs font-bold text-neutral-800">
-                  {isUploading ? 'Wird hochgeladen...' : 'Klicken oder Bild hierher ziehen'}
-                </p>
-                <p className="text-[11px] text-neutral-400 mt-0.5">PNG, JPG, WEBP, SVG</p>
-              </div>
-            </div>
+            <span className="mb-1 flex h-9 w-9 items-center justify-center rounded-lg bg-[#F1F5F9] text-[#64748B]">
+              {isUploading ? (
+                <Loader2 className="animate-spin" size={18} />
+              ) : (
+                <UploadCloud size={18} strokeWidth={1.75} />
+              )}
+            </span>
+            <b className="text-[14px] font-medium text-[#0F172A]">
+              {isUploading ? 'Wird hochgeladen …' : 'Bild hierher ziehen oder klicken'}
+            </b>
+            <span className="text-[12.5px] text-[#64748B]">PNG, JPG, WEBP oder SVG · höchstens 5 MB</span>
           </div>
 
-          <button
-            type="button"
-            onClick={() => setIsLibraryOpen(true)}
-            className="flex items-center justify-center gap-2 w-full py-2 bg-neutral-100 hover:bg-neutral-200 text-neutral-700 rounded-xl text-xs font-bold transition-colors cursor-pointer border border-black/5"
-          >
-            <ImageIcon size={14} />
+          <Button variant="secondary" size="sm" onClick={() => setIsLibraryOpen(true)} className="w-full">
+            <ImageIcon size={14} strokeWidth={1.75} />
             <span>Aus Mediathek wählen</span>
-          </button>
+          </Button>
         </div>
       )}
 
       {error && (
-        <p className="text-xs font-medium text-red-500 mt-1">{error}</p>
+        <p role="alert" className="text-[12.5px] text-[#B91C1C]">{error}</p>
       )}
 
       <MediaLibraryModal

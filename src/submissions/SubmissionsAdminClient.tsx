@@ -4,50 +4,55 @@
 // Imports auf core-cms-interne relative Pfade umgestellt; generische mailto-Betreffzeile
 // (kein hartcodierter Firmenname mehr).
 
-import { useState, useTransition, useEffect } from 'react'
+import { useState, useTransition, useEffect, useCallback, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import { Submission } from '../supabase/types'
 import { createClient } from '../supabase/client'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
+import { Trash2, Mail, ChevronDown, X, Inbox } from 'lucide-react'
 import {
-  Search,
-  Trash2,
-  Mail,
-  Clock,
-  Check,
-  Globe,
-  ExternalLink,
-  ChevronDown,
-  X
-} from 'lucide-react'
+  Badge,
+  Button,
+  ConfirmDialog,
+  EmptyState,
+  Menu,
+  SearchInput,
+  Segmented,
+  Select,
+  TableCard,
+  buttonClass,
+  cx,
+  iconButtonClass,
+  iconButtonDangerClass,
+  tableClass,
+  tdClass,
+  thClass,
+  trClass,
+} from '../ui'
 
 interface SubmissionsAdminClientProps {
   initialSubmissions: Submission[]
 }
 
 const STATUS_OPTIONS = [
-  {
-    value: 'Neu',
-    label: 'Neu',
-    dotClass: 'bg-red-500',
-    badgeClass: 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100/80',
-    activeClass: 'bg-red-600 text-white shadow-sm'
-  },
-  {
-    value: 'In Bearbeitung',
-    label: 'In Bearbeitung',
-    dotClass: 'bg-amber-500',
-    badgeClass: 'bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100/80',
-    activeClass: 'bg-amber-600 text-white shadow-sm'
-  },
-  {
-    value: 'Erledigt',
-    label: 'Erledigt',
-    dotClass: 'bg-emerald-500',
-    badgeClass: 'bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100/80',
-    activeClass: 'bg-emerald-600 text-white shadow-sm'
-  }
+  { value: 'Neu', label: 'Neu', tone: 'red' },
+  { value: 'In Bearbeitung', label: 'In Bearbeitung', tone: 'amber' },
+  { value: 'Erledigt', label: 'Erledigt', tone: 'green' },
 ] as const
+
+type StatusValue = (typeof STATUS_OPTIONS)[number]['value']
+
+// Formular ohne Zusatz, z. B. „Kontakt“ aus „Kontakt · Richard Prinz“
+const baseType = (type: string) => type.split(" · ")[0].trim() || type
+
+const formatDate = (iso: string) =>
+  new Date(iso).toLocaleDateString('de-DE', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
 
 export default function SubmissionsAdminClient({ initialSubmissions }: SubmissionsAdminClientProps) {
   const [submissions, setSubmissions] = useState<Submission[]>(initialSubmissions)
@@ -56,7 +61,8 @@ export default function SubmissionsAdminClient({ initialSubmissions }: Submissio
   const [statusFilter, setStatusFilter] = useState('all')
   const [isPending, startTransition] = useTransition()
   const [activeSubmission, setActiveSubmission] = useState<Submission | null>(null)
-  const [openStatusDropdownId, setOpenStatusDropdownId] = useState<string | null>(null)
+  // Eintrag, dessen Löschen gerade bestätigt werden soll
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null)
 
   const router = useRouter()
   const supabase = createClient()
@@ -65,24 +71,27 @@ export default function SubmissionsAdminClient({ initialSubmissions }: Submissio
     setSubmissions(initialSubmissions)
   }, [initialSubmissions])
 
-  // Close dropdown on outside click
-  useEffect(() => {
-    const handleClickOutside = () => setOpenStatusDropdownId(null)
-    window.addEventListener('click', handleClickOutside)
-    return () => window.removeEventListener('click', handleClickOutside)
-  }, [])
-
-  // Close slide-over on ESC key
+  // Detailansicht mit ESC schließen (nicht, solange der Löschdialog offen ist)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setActiveSubmission(null)
+      if (e.key !== 'Escape') return
+      if (!deleteTarget) setActiveSubmission(null)
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [])
+  }, [deleteTarget])
+
+  // Vorhandene Formulare mit Anzahl, für den Filter
+  const formTypes = Object.entries(
+    submissions.reduce<Record<string, number>>((acc, s) => {
+      const t = baseType(s.type)
+      acc[t] = (acc[t] ?? 0) + 1
+      return acc
+    }, {}),
+  ).sort((a, b) => a[0].localeCompare(b[0], "de"))
 
   const filteredSubmissions = submissions.filter((s) => {
-    const matchesType = typeFilter === 'all' || s.type === typeFilter
+    const matchesType = typeFilter === 'all' || baseType(s.type) === typeFilter
     const matchesStatus = statusFilter === 'all' || s.status === statusFilter
     const q = searchQuery.toLowerCase().trim()
     const matchesSearch = q === '' ||
@@ -101,7 +110,6 @@ export default function SubmissionsAdminClient({ initialSubmissions }: Submissio
     if (activeSubmission?.id === id) {
       setActiveSubmission((prev) => (prev ? { ...prev, status: newStatus } : null))
     }
-    setOpenStatusDropdownId(null)
 
     startTransition(async () => {
       const { error } = await supabase
@@ -139,9 +147,15 @@ export default function SubmissionsAdminClient({ initialSubmissions }: Submissio
     })
   }
 
-  // Löschen
-  const handleDelete = async (id: string, name: string) => {
-    if (!confirm(`Eintrag von „${name}“ wirklich löschen?`)) return
+  // Löschen: erst Bestätigungsdialog öffnen
+  const handleDelete = (id: string, name: string) => {
+    setDeleteTarget({ id, name })
+  }
+
+  const confirmDelete = () => {
+    if (!deleteTarget) return
+    const { id } = deleteTarget
+    setDeleteTarget(null)
 
     setSubmissions((prev) => prev.filter((s) => s.id !== id))
     if (activeSubmission?.id === id) setActiveSubmission(null)
@@ -161,392 +175,347 @@ export default function SubmissionsAdminClient({ initialSubmissions }: Submissio
     })
   }
 
+  const cancelDelete = useCallback(() => setDeleteTarget(null), [])
+
   const getStatusObj = (status: string) => {
     return STATUS_OPTIONS.find((s) => s.value === status) || STATUS_OPTIONS[0]
   }
 
-  return (
-    <div className="space-y-6">
+  // Zeile per Tastatur öffnen
+  const onRowKeyDown = (e: ReactKeyboardEvent, sub: Submission) => {
+    if (e.target !== e.currentTarget) return
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault()
+      openSubmission(sub)
+    }
+  }
 
-      {/* Action Bar */}
-      <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 bg-white p-4 sm:p-5 rounded-3xl border border-black/5 shadow-sm">
+  const mailtoHref = (sub: Submission) =>
+    `mailto:${sub.email}?subject=Re: ${encodeURIComponent(sub.subject || 'Ihre Anfrage')}`
 
-        {/* Search */}
-        <div className="relative flex-1 max-w-md">
-          <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-400" />
-          <input
-            type="text"
-            placeholder="Absender, E-Mail, Firma, Herkunft oder Text suchen..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 bg-neutral-50 border border-black/10 rounded-2xl text-xs font-medium text-black focus:outline-none focus:ring-2 focus:ring-green/30 focus:border-green transition-all"
-          />
-        </div>
-
-        {/* Filter */}
-        <div className="flex items-center gap-3">
-          <select
-            value={typeFilter}
-            onChange={(e) => setTypeFilter(e.target.value)}
-            className="px-3.5 py-2.5 bg-neutral-50 border border-black/10 rounded-2xl text-xs font-bold text-neutral-700 focus:outline-none focus:border-green cursor-pointer"
-          >
-            <option value="all">Alle Formulare ({submissions.length})</option>
-            <option value="Kontakt">Kontaktformular</option>
-            <option value="Ausstellungsstück">Ausstellungsstücke</option>
-            <option value="Anfrage">Allgemeine Anfrage</option>
-          </select>
-
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="px-3.5 py-2.5 bg-neutral-50 border border-black/10 rounded-2xl text-xs font-bold text-neutral-700 focus:outline-none focus:border-green cursor-pointer"
-          >
-            <option value="all">Alle Status</option>
-            <option value="Neu">● Neu</option>
-            <option value="In Bearbeitung">◐ In Bearbeitung</option>
-            <option value="Erledigt">✓ Erledigt</option>
-          </select>
-        </div>
-
+  const toolbar = (
+    <>
+      <SearchInput
+        placeholder="Absender, E-Mail, Firma, Herkunft oder Text suchen"
+        aria-label="Anfragen durchsuchen"
+        value={searchQuery}
+        onChange={(e) => setSearchQuery(e.target.value)}
+      />
+      <Select
+        aria-label="Formular"
+        value={typeFilter}
+        onChange={(e) => setTypeFilter(e.target.value)}
+        className="w-full sm:w-auto sm:min-w-[200px]"
+      >
+        <option value="all">Alle Formulare ({submissions.length})</option>
+        {formTypes.map(([type, count]) => (
+          <option key={type} value={type}>
+            {type} ({count})
+          </option>
+        ))}
+      </Select>
+      <div className="max-w-full overflow-x-auto">
+        <Segmented
+          label="Status"
+          value={statusFilter}
+          onChange={setStatusFilter}
+          options={[{ value: 'all', label: 'Alle' }, ...STATUS_OPTIONS.map((o) => ({ value: o.value as string, label: o.label }))]}
+        />
       </div>
+    </>
+  )
 
-      {/* Submissions Table */}
-      <div className="bg-white rounded-3xl border border-black/5 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse text-xs">
-            <thead>
-              <tr className="border-b border-black/5 bg-neutral-50/70 text-neutral-400 font-bold uppercase tracking-wider text-[10px]">
-                <th className="px-5 py-3.5">Datum & Uhrzeit</th>
-                <th className="px-4 py-3.5">Typ / Herkunft</th>
-                <th className="px-4 py-3.5">Absender</th>
-                <th className="px-4 py-3.5">Betreff & Vorschau</th>
-                <th className="px-4 py-3.5 text-center">Status</th>
-                <th className="px-5 py-3.5 text-right">Aktionen</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-black/5 font-medium">
-              {filteredSubmissions.length === 0 ? (
+  const empty = (
+    <EmptyState
+      icon={<Inbox size={20} aria-hidden="true" />}
+      title={submissions.length === 0 ? 'Keine Formulareingänge vorhanden.' : 'Keine passenden Anfragen gefunden.'}
+      description={submissions.length === 0 ? undefined : 'Suche oder Filter anpassen.'}
+    />
+  )
+
+  return (
+    <>
+      <TableCard toolbar={toolbar}>
+        {filteredSubmissions.length === 0 ? (
+          empty
+        ) : (
+          <>
+            {/* Ab Tablet: Tabelle */}
+            <table className={cx(tableClass, 'hidden xl:table')}>
+              <thead>
                 <tr>
-                  <td colSpan={6} className="text-center py-12 text-neutral-400">
-                    Keine Formulareingänge vorhanden.
-                  </td>
+                  <th scope="col" className={thClass}>Absender</th>
+                  <th scope="col" className={thClass}>Anliegen</th>
+                  <th scope="col" className={thClass}>Formular</th>
+                  <th scope="col" className={thClass}>Eingang</th>
+                  <th scope="col" className={thClass}>Status</th>
+                  <th scope="col" className={cx(thClass, 'w-12')}><span className="sr-only">Aktionen</span></th>
                 </tr>
-              ) : (
-                filteredSubmissions.map((sub) => {
+              </thead>
+              <tbody>
+                {filteredSubmissions.map((sub) => {
                   const currentStatusObj = getStatusObj(sub.status)
-                  const isDropdownOpen = openStatusDropdownId === sub.id
                   const isSelected = activeSubmission?.id === sub.id
 
                   return (
                     <tr
                       key={sub.id}
+                      tabIndex={0}
                       onClick={() => openSubmission(sub)}
-                      className={`transition-colors cursor-pointer ${
-                        isSelected
-                          ? 'bg-green/5 border-l-4 border-l-green'
-                          : 'hover:bg-neutral-50/80'
-                      }`}
+                      onKeyDown={(e) => onRowKeyDown(e, sub)}
+                      className={cx(
+                        trClass,
+                        'cursor-pointer outline-none focus-visible:bg-[#F1F5F9]',
+                        isSelected && 'bg-[#FAFAFC]',
+                      )}
                     >
-                      {/* Date */}
-                      <td className="px-5 py-3.5 whitespace-nowrap text-neutral-500 font-mono text-[11px]">
-                        {new Date(sub.created_at).toLocaleDateString('de-DE', {
-                          day: '2-digit',
-                          month: '2-digit',
-                          year: 'numeric',
-                          hour: '2-digit',
-                          minute: '2-digit'
-                        })}
+                      {/* Absender */}
+                      <td className={tdClass}>
+                        <span className={cx('block max-w-[200px] truncate', sub.status === 'Neu' ? 'font-semibold' : 'font-medium')}>{sub.name}</span>
+                        <span className="block max-w-[200px] truncate text-[13px] text-[#64748B]">{sub.email}</span>
+                        {sub.phone && <span className="block text-[12.5px] text-[#94A3B8]">{sub.phone}</span>}
                       </td>
 
-                      {/* Type Badge & Source */}
-                      <td className="px-4 py-3.5 whitespace-nowrap">
-                        <div className="space-y-1">
-                          <span className="text-[10px] font-extrabold px-2.5 py-1 rounded-full border inline-block bg-neutral-100 text-neutral-800 border-neutral-200">
-                            {sub.type}
+                      {/* Betreff & Vorschau */}
+                      <td className={tdClass}>
+                        <span className="block max-w-[230px] truncate">{sub.subject || 'Kein Betreff'}</span>
+                        <span className="block max-w-[230px] truncate text-[13px] text-[#64748B]">{sub.message || '–'}</span>
+                      </td>
+
+                      {/* Formular & Herkunft */}
+                      <td className={cx(tdClass, 'text-[13px] text-[#64748B]')}>
+                        <span className="block max-w-[150px] truncate" title={sub.type}>{sub.type}</span>
+                        {sub.source_page && (
+                          <span className="block max-w-[160px] truncate text-[12.5px] text-[#94A3B8]" title={sub.source_page}>
+                            {sub.source_page.split('(')[0].trim()}
                           </span>
-                          {sub.source_page && (
-                            <span className="text-[10px] text-neutral-400 block truncate max-w-[160px]" title={sub.source_page}>
-                              {sub.source_page.split('(')[0].trim()}
-                            </span>
+                        )}
+                      </td>
+
+                      {/* Datum */}
+                      <td className={cx(tdClass, 'whitespace-nowrap text-[13px] tabular-nums text-[#64748B]')}>
+                        {formatDate(sub.created_at)}
+                      </td>
+
+                      {/* Status mit Auswahlmenü */}
+                      <td className={cx(tdClass, 'whitespace-nowrap')} onClick={(e) => e.stopPropagation()}>
+                        <Menu
+                          label={`Status: ${currentStatusObj.label} – ändern`}
+                          width={180}
+                          trigger={(open) => (
+                            <Badge tone={currentStatusObj.tone} dot>
+                              {currentStatusObj.label}
+                              <ChevronDown size={12} aria-hidden="true" className={cx('opacity-60 transition-transform', open && 'rotate-180')} />
+                            </Badge>
                           )}
-                        </div>
+                          items={STATUS_OPTIONS.map((opt) => ({
+                            label: <Badge tone={opt.tone} dot>{opt.label}</Badge>,
+                            checked: sub.status === opt.value,
+                            onSelect: () => updateStatus(sub.id, opt.value),
+                          }))}
+                        />
                       </td>
 
-                      {/* Sender */}
-                      <td className="px-4 py-3.5 max-w-xs">
-                        <div className="font-extrabold text-black">{sub.name}</div>
-                        <div className="text-[11px] text-neutral-500 font-mono mt-0.5">{sub.email}</div>
-                        {sub.phone && <div className="text-[10px] text-neutral-400 mt-0.5">{sub.phone}</div>}
-                      </td>
-
-                      {/* Subject & Preview */}
-                      <td className="px-4 py-3.5 max-w-sm">
-                        <div className="font-bold text-neutral-800 truncate">
-                          {sub.subject || 'Kein Betreff'}
-                        </div>
-                        <div className="text-neutral-500 text-[11px] truncate mt-0.5 font-normal">
-                          {sub.message || '–'}
-                        </div>
-                      </td>
-
-                      {/* Interactive Status Pill Button */}
-                      <td className="px-4 py-3.5 text-center whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-                        <div className="relative inline-block text-left">
-                          <button
-                            type="button"
-                            onClick={() => setOpenStatusDropdownId(isDropdownOpen ? null : sub.id)}
-                            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-[11px] font-extrabold transition-all duration-150 cursor-pointer shadow-xs ${currentStatusObj.badgeClass}`}
-                          >
-                            <span className={`w-2 h-2 rounded-full shrink-0 ${currentStatusObj.dotClass}`} />
-                            <span>{currentStatusObj.label}</span>
-                            <ChevronDown size={12} className={`shrink-0 opacity-60 transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`} />
-                          </button>
-
-                          {/* Floating Dropdown Menu */}
-                          {isDropdownOpen && (
-                            <div className="absolute right-0 sm:left-1/2 sm:-translate-x-1/2 mt-1.5 w-40 bg-white rounded-2xl shadow-xl border border-black/10 py-1.5 z-30 animate-in fade-in text-left">
-                              {STATUS_OPTIONS.map((opt) => (
-                                <button
-                                  key={opt.value}
-                                  type="button"
-                                  onClick={() => updateStatus(sub.id, opt.value)}
-                                  className={`w-full px-3.5 py-2 text-xs font-bold flex items-center justify-between transition-colors cursor-pointer ${
-                                    sub.status === opt.value
-                                      ? 'bg-neutral-100 text-black'
-                                      : 'text-neutral-600 hover:bg-neutral-50'
-                                  }`}
-                                >
-                                  <div className="flex items-center gap-2">
-                                    <span className={`w-2 h-2 rounded-full ${opt.dotClass}`} />
-                                    <span>{opt.label}</span>
-                                  </div>
-                                  {sub.status === opt.value && <Check size={13} className="text-green" />}
-                                </button>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      </td>
-
-                      {/* Actions */}
-                      <td className="px-5 py-3.5 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                      {/* Aktionen */}
+                      <td className={cx(tdClass, 'text-right')} onClick={(e) => e.stopPropagation()}>
                         <button
+                          type="button"
                           onClick={() => handleDelete(sub.id, sub.name)}
-                          className="p-2 rounded-xl text-red-500 hover:bg-red-50 hover:text-red-700 transition-colors cursor-pointer"
+                          className={iconButtonDangerClass}
+                          aria-label={`Anfrage von ${sub.name} löschen`}
                           title="Löschen"
                         >
-                          <Trash2 size={15} />
+                          <Trash2 size={16} aria-hidden="true" />
                         </button>
                       </td>
-
                     </tr>
                   )
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+                })}
+              </tbody>
+            </table>
 
-      {/* Slide-over Drawer for full message details */}
+            {/* Handy: Liste */}
+            <ul className="divide-y divide-[#F1F5F9] xl:hidden">
+              {filteredSubmissions.map((sub) => {
+                const st = getStatusObj(sub.status)
+                return (
+                  <li key={sub.id}>
+                    <button
+                      type="button"
+                      onClick={() => openSubmission(sub)}
+                      className="flex w-full cursor-pointer flex-col gap-1 px-4 py-3 text-left outline-none hover:bg-[#FAFAFC] focus-visible:bg-[#F1F5F9]"
+                    >
+                      <span className="flex items-center gap-2">
+                        <span className={cx('min-w-0 flex-1 truncate text-[14px] text-[#0F172A]', sub.status === 'Neu' ? 'font-semibold' : 'font-medium')}>
+                          {sub.name}
+                        </span>
+                        <Badge tone={st.tone} dot>{st.label}</Badge>
+                      </span>
+                      <span className="truncate text-[14px] text-[#0F172A]">{sub.subject || 'Kein Betreff'}</span>
+                      <span className="truncate text-[13px] text-[#64748B]">{sub.message || '–'}</span>
+                      <span className="text-[12.5px] tabular-nums text-[#94A3B8]">
+                        {sub.type} · {formatDate(sub.created_at)}
+                      </span>
+                    </button>
+                  </li>
+                )
+              })}
+            </ul>
+          </>
+        )}
+      </TableCard>
+
+      {/* Detailansicht (Seitenleiste rechts) */}
       {activeSubmission && (
-        <div className="fixed inset-0 z-50 overflow-hidden">
-
-          {/* Backdrop */}
+        <div className="fixed inset-0 z-50">
           <div
             onClick={() => setActiveSubmission(null)}
-            className="absolute inset-0 bg-black/40 backdrop-blur-xs transition-opacity cursor-pointer animate-in fade-in"
+            className="absolute inset-0 bg-[rgba(15,23,42,.28)]"
+            aria-hidden="true"
           />
 
-          <div className="fixed inset-y-0 right-0 max-w-full flex pl-10">
-            <div className="w-screen max-w-xl bg-white shadow-2xl border-l border-black/10 flex flex-col animate-in slide-in-from-right duration-300">
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="submission-title"
+            className="absolute inset-y-0 right-0 flex w-full max-w-[520px] flex-col border-l border-[#E2E8F0] bg-white shadow-[-12px_0_40px_rgba(15,23,42,.08)]"
+          >
+            {/* Kopf */}
+            <div className="flex items-center gap-3 border-b border-[#F1F5F9] px-4 py-4 sm:px-6">
+              <Badge>{activeSubmission.type}</Badge>
+              <span className="mr-auto truncate text-[13px] tabular-nums text-[#64748B]">
+                {new Date(activeSubmission.created_at).toLocaleString('de-DE')}
+              </span>
+              <button
+                type="button"
+                onClick={() => handleDelete(activeSubmission.id, activeSubmission.name)}
+                className={iconButtonDangerClass}
+                aria-label="Anfrage löschen"
+                title="Anfrage löschen"
+              >
+                <Trash2 size={16} aria-hidden="true" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveSubmission(null)}
+                className={iconButtonClass}
+                aria-label="Schließen (Esc)"
+                title="Schließen (Esc)"
+                autoFocus
+              >
+                <X size={18} aria-hidden="true" />
+              </button>
+            </div>
 
-              {/* Drawer Top Header */}
-              <div className="px-6 sm:px-8 py-5 border-b border-black/5 flex items-center justify-between bg-neutral-50/80">
-                <div className="flex items-center gap-2.5">
-                  <span className="text-xs font-extrabold px-3 py-1 rounded-full bg-green/10 text-green">
-                    {activeSubmission.type}
-                  </span>
-                  <span className="text-xs text-neutral-400 font-mono flex items-center gap-1.5">
-                    <Clock size={13} />
-                    {new Date(activeSubmission.created_at).toLocaleString('de-DE')}
-                  </span>
-                </div>
+            {/* Inhalt */}
+            <div className="flex flex-1 flex-col gap-7 overflow-y-auto px-4 py-6 sm:px-6">
+              {/* Betreff & Herkunft */}
+              <div>
+                <h2 id="submission-title" className="text-[18px] font-semibold leading-snug tracking-[-0.01em] text-[#0F172A]">
+                  {activeSubmission.subject || `${activeSubmission.type}-Anfrage`}
+                </h2>
+                <p className="mt-1 break-words text-[13px] text-[#64748B]">
+                  <span className="sr-only">Herkunft: </span>
+                  {activeSubmission.source_page || 'Kontaktseite (/kontakt)'}
+                  {activeSubmission.source_url && <> · {activeSubmission.source_url}</>}
+                </p>
+              </div>
 
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => handleDelete(activeSubmission.id, activeSubmission.name)}
-                    className="p-2 rounded-xl text-red-500 hover:bg-red-50 transition-all cursor-pointer"
-                    title="Anfrage löschen"
-                  >
-                    <Trash2 size={16} />
-                  </button>
-                  <button
-                    onClick={() => setActiveSubmission(null)}
-                    className="p-2 rounded-xl text-neutral-400 hover:text-black hover:bg-neutral-200/80 transition-all cursor-pointer"
-                    title="Schließen (ESC)"
-                  >
-                    <X size={18} />
-                  </button>
+              {/* Bearbeitungsstatus */}
+              <div className="flex flex-col gap-1.5">
+                <span className="text-[13px] font-medium text-[#334155]">Status</span>
+                <div className="max-w-full overflow-x-auto">
+                  <Segmented
+                    label="Bearbeitungsstatus"
+                    value={activeSubmission.status as StatusValue}
+                    onChange={(v) => updateStatus(activeSubmission.id, v)}
+                    options={STATUS_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
+                  />
                 </div>
               </div>
 
-              {/* Drawer Body */}
-              <div className="flex-1 overflow-y-auto p-6 sm:p-8 space-y-6">
+              {/* Kontaktdaten */}
+              <dl className="m-0 grid grid-cols-1 gap-x-4 gap-y-1 text-[14px] sm:grid-cols-[120px_minmax(0,1fr)] sm:gap-y-2">
+                <dt className="text-[13px] text-[#64748B]">Name</dt>
+                <dd className="m-0 mb-2 text-[#0F172A] sm:mb-0">{activeSubmission.name}</dd>
 
-                {/* Betreff */}
-                <div className="space-y-1 pb-4 border-b border-black/5">
-                  <span className="text-[10px] font-black uppercase tracking-widest text-green block">
-                    Betreff / Anliegen
-                  </span>
-                  <h3 className="text-xl sm:text-2xl font-extrabold text-black tracking-tight leading-tight">
-                    {activeSubmission.subject || `${activeSubmission.type}-Anfrage`}
-                  </h3>
-                </div>
+                <dt className="text-[13px] text-[#64748B]">E-Mail</dt>
+                <dd className="m-0 mb-2 break-all sm:mb-0">
+                  <a href={mailtoHref(activeSubmission)} className="text-[#0F172A] underline decoration-[#CBD5E1] underline-offset-2 hover:decoration-current">
+                    {activeSubmission.email}
+                  </a>
+                </dd>
 
-                {/* Quellseite */}
-                <div className="p-4 bg-neutral-50 rounded-2xl border border-black/5 space-y-1.5">
-                  <div className="flex items-center gap-2 text-neutral-400 text-[10px] font-bold uppercase tracking-wider">
-                    <Globe size={13} className="text-green" />
-                    <span>Herkunft</span>
-                  </div>
-                  <div className="text-xs font-extrabold text-black">
-                    {activeSubmission.source_page || 'Kontaktseite (/kontakt)'}
-                  </div>
-                  {activeSubmission.source_url && (
-                    <div className="text-[11px] text-neutral-500 font-mono">
-                      Pfad: {activeSubmission.source_url}
-                    </div>
-                  )}
-                </div>
-
-                {/* Kontaktdaten */}
-                <div className="space-y-3">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 block">
-                    Kontaktdaten des Absenders
-                  </span>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 p-5 bg-white rounded-2xl border border-black/10 shadow-xs text-xs">
-
-                    <div>
-                      <span className="text-neutral-400 block font-bold text-[10px] uppercase">Name</span>
-                      <span className="font-extrabold text-black text-sm mt-0.5 block">{activeSubmission.name}</span>
-                    </div>
-
-                    <div>
-                      <span className="text-neutral-400 block font-bold text-[10px] uppercase">E-Mail-Adresse</span>
-                      <a
-                        href={`mailto:${activeSubmission.email}?subject=Re: ${encodeURIComponent(activeSubmission.subject || 'Ihre Anfrage')}`}
-                        className="font-bold text-green hover:underline flex items-center gap-1 mt-0.5"
-                      >
-                        <span>{activeSubmission.email}</span>
-                        <ExternalLink size={12} />
+                {activeSubmission.phone && (
+                  <>
+                    <dt className="text-[13px] text-[#64748B]">Telefon</dt>
+                    <dd className="m-0 mb-2 sm:mb-0">
+                      <a href={`tel:${activeSubmission.phone}`} className="text-[#0F172A] underline decoration-[#CBD5E1] underline-offset-2 hover:decoration-current">
+                        {activeSubmission.phone}
                       </a>
-                    </div>
-
-                    {activeSubmission.phone && (
-                      <div>
-                        <span className="text-neutral-400 block font-bold text-[10px] uppercase">Telefon</span>
-                        <a href={`tel:${activeSubmission.phone}`} className="font-bold text-neutral-800 hover:text-green mt-0.5 block">
-                          {activeSubmission.phone}
-                        </a>
-                      </div>
-                    )}
-
-                    {activeSubmission.company && (
-                      <div>
-                        <span className="text-neutral-400 block font-bold text-[10px] uppercase">Firma</span>
-                        <span className="font-bold text-neutral-800 mt-0.5 block">{activeSubmission.company}</span>
-                      </div>
-                    )}
-
-                  </div>
-                </div>
-
-                {/* Nachricht */}
-                <div className="space-y-2">
-                  <span className="text-[10px] font-bold uppercase text-neutral-400 tracking-wider block">
-                    Nachricht
-                  </span>
-                  <div className="p-5 bg-neutral-50/70 rounded-2xl border border-black/10 text-xs text-neutral-800 leading-relaxed whitespace-pre-wrap font-normal">
-                    {activeSubmission.message || <span className="text-neutral-400 italic">Keine zusätzliche Nachricht übermittelt.</span>}
-                  </div>
-                </div>
-
-                {/* Dynamische Zusatz- / Formulardaten (z. B. Projektdaten, Checkboxen, Sonderfelder) */}
-                {activeSubmission.metadata && Object.keys(activeSubmission.metadata).length > 0 && (
-                  <div className="space-y-2">
-                    <span className="text-[10px] font-bold uppercase text-neutral-400 tracking-wider block">
-                      Zusätzliche Formular- & Projektdaten
-                    </span>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-4 bg-neutral-50 rounded-2xl border border-black/5 text-xs">
-                      {Object.entries(activeSubmission.metadata).map(([key, val]) => (
-                        <div key={key} className="space-y-0.5">
-                          <span className="text-neutral-400 block font-bold text-[10px] uppercase">
-                            {key.replace(/_/g, ' ')}
-                          </span>
-                          <span className="font-bold text-black text-xs block">
-                            {typeof val === 'object' ? JSON.stringify(val) : String(val)}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
+                    </dd>
+                  </>
                 )}
 
-                {/* Status festlegen */}
-                <div className="p-5 bg-white rounded-2xl border border-black/10 shadow-xs space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <span className="text-xs font-extrabold text-black block">Bearbeitungsstatus</span>
-                      <span className="text-[11px] text-neutral-500 font-normal">Aktueller Stand dieser Anfrage:</span>
-                    </div>
-                  </div>
+                {activeSubmission.company && (
+                  <>
+                    <dt className="text-[13px] text-[#64748B]">Firma</dt>
+                    <dd className="m-0 mb-2 text-[#0F172A] sm:mb-0">{activeSubmission.company}</dd>
+                  </>
+                )}
+              </dl>
 
-                  <div className="grid grid-cols-3 gap-2 p-1 bg-neutral-100 rounded-xl">
-                    {STATUS_OPTIONS.map((st) => (
-                      <button
-                        key={st.value}
-                        type="button"
-                        onClick={() => updateStatus(activeSubmission.id, st.value)}
-                        className={`py-2 rounded-lg text-xs font-extrabold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                          activeSubmission.status === st.value
-                            ? `${st.activeClass}`
-                            : 'text-neutral-600 hover:text-black hover:bg-white/60'
-                        }`}
-                      >
-                        <span className={`w-1.5 h-1.5 rounded-full ${activeSubmission.status === st.value ? 'bg-white' : st.dotClass}`} />
-                        <span>{st.label}</span>
-                      </button>
+              {/* Nachricht */}
+              <div className="flex flex-col gap-2">
+                <span className="text-[13px] font-medium text-[#334155]">Nachricht</span>
+                {activeSubmission.message ? (
+                  <p className="whitespace-pre-wrap break-words text-[14px] leading-relaxed text-[#1E293B]">{activeSubmission.message}</p>
+                ) : (
+                  <p className="text-[14px] italic text-[#94A3B8]">Keine zusätzliche Nachricht übermittelt.</p>
+                )}
+              </div>
+
+              {/* Dynamische Zusatzdaten (z. B. Projektdaten, Checkboxen, Sonderfelder) */}
+              {activeSubmission.metadata && Object.keys(activeSubmission.metadata).length > 0 && (
+                <div className="flex flex-col gap-2">
+                  <span className="text-[13px] font-medium text-[#334155]">Zusätzliche Formular- &amp; Projektdaten</span>
+                  <dl className="m-0 grid grid-cols-1 gap-x-4 gap-y-1 rounded-lg bg-[#FAFAFC] px-4 py-3.5 text-[14px] sm:grid-cols-[120px_minmax(0,1fr)] sm:gap-y-2">
+                    {Object.entries(activeSubmission.metadata).map(([key, val]) => (
+                      <div key={key} className="contents">
+                        <dt className="text-[13px] capitalize text-[#64748B]">{key.replace(/_/g, ' ')}</dt>
+                        <dd className="m-0 mb-2 break-words text-[#0F172A] sm:mb-0">
+                          {typeof val === 'object' ? JSON.stringify(val) : String(val)}
+                        </dd>
+                      </div>
                     ))}
-                  </div>
+                  </dl>
                 </div>
-
-              </div>
-
-              {/* Drawer Footer */}
-              <div className="p-5 sm:p-6 border-t border-black/5 bg-neutral-50/80 flex items-center justify-between gap-3">
-                <a
-                  href={`mailto:${activeSubmission.email}?subject=Re: ${encodeURIComponent(activeSubmission.subject || 'Ihre Anfrage')}`}
-                  className="flex-1 py-3 px-4 rounded-xl bg-green hover:bg-[#007a31] text-white font-extrabold text-xs flex items-center justify-center gap-2 shadow-sm transition-all cursor-pointer"
-                >
-                  <Mail size={15} />
-                  <span>Per E-Mail antworten</span>
-                </a>
-                <button
-                  type="button"
-                  onClick={() => setActiveSubmission(null)}
-                  className="py-3 px-5 rounded-xl bg-white border border-black/10 text-neutral-700 hover:bg-neutral-100 font-bold text-xs transition-all cursor-pointer"
-                >
-                  Schließen
-                </button>
-              </div>
-
+              )}
             </div>
-          </div>
 
+            {/* Fuß */}
+            <div className="flex items-center justify-end gap-2 border-t border-[#F1F5F9] bg-[#FAFAFC] px-4 py-3.5 sm:px-6">
+              <Button variant="ghost" onClick={() => setActiveSubmission(null)}>
+                Schließen
+              </Button>
+              <a href={mailtoHref(activeSubmission)} className={buttonClass('primary', 'md', 'flex-1 sm:flex-none')}>
+                <Mail size={16} aria-hidden="true" />
+                Per E-Mail antworten
+              </a>
+            </div>
+          </section>
         </div>
       )}
 
-    </div>
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        title="Anfrage löschen?"
+        pending={isPending}
+        onConfirm={confirmDelete}
+        onCancel={cancelDelete}
+      >
+        Eintrag von „{deleteTarget?.name}“ wirklich löschen?
+      </ConfirmDialog>
+    </>
   )
 }

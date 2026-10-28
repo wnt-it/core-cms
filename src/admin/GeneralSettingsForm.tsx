@@ -13,16 +13,9 @@ import { useState, useEffect } from 'react'
 import { SiteSettings } from '../supabase/types'
 import MediaLibraryModal from '../media/MediaLibraryModal'
 import { saveGeneralSettings } from './settings-actions'
-import {
-  Globe,
-  Image as ImageIcon,
-  Trash2,
-  Save,
-  Sparkles,
-  Mail,
-  Loader2
-} from 'lucide-react'
+import { Image as ImageIcon, Trash2, Save, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
+import { Button, Card, Field, FieldGrid, Input, SaveBar, Section, Textarea, cx, hintClass, iconButtonDangerClass } from '../ui'
 
 export interface GeneralSettingsFormProps {
   settings: Partial<SiteSettings> | null | undefined
@@ -86,224 +79,121 @@ export default function GeneralSettingsForm({ settings, refreshSettings, default
   }
 
   return (
-    <div className="bg-white rounded-2xl border border-black/10 shadow-sm p-6 sm:p-8 space-y-8 max-w-4xl">
-
-      {/* Header */}
-      <div className="flex items-center justify-between border-b border-black/5 pb-4">
-        <div>
-          <h2 className="font-extrabold text-xl text-black flex items-center gap-2">
-            <Globe className="text-primary" size={22} />
-            <span>Website-Stammdaten & Branding</span>
-          </h2>
-          <p className="text-xs text-neutral-500 mt-0.5">
-            Zentraler Name, Slogan, Logo, Favicon und globale Kontaktdaten.
-          </p>
-        </div>
-        <span className="text-[10px] font-bold uppercase tracking-wider px-3 py-1 bg-neutral-100 text-neutral-600 rounded-full border border-black/5">
-          Live-Stammdaten
-        </span>
-      </div>
-
-      <form onSubmit={handleSave} className="space-y-8 text-xs">
-
-        {/* 1. BRANDING & IDENTITÄT */}
-        <div className="space-y-4">
-          <h3 className="font-bold text-sm text-black border-b border-black/5 pb-2 flex items-center gap-2">
-            <Sparkles size={16} className="text-primary" />
-            <span>1. Markenauftritt & Name</span>
-          </h3>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <label className="font-bold text-neutral-700">Websitename / Unternehmen *</label>
-              <input
+    <>
+      <form onSubmit={handleSave} className="flex flex-col">
+        <Section
+          title="Markenauftritt & Name"
+          description="Name und Beschreibung erscheinen im Browser-Tab, in Suchergebnissen und im Fußbereich."
+        >
+          <FieldGrid>
+            <Field label="Websitename / Unternehmen">
+              <Input
                 type="text"
                 required
                 value={formData.site_name || ''}
                 onChange={(e) => setFormData({ ...formData, site_name: e.target.value })}
                 placeholder="z.B. Firmenname"
-                className="w-full px-3.5 py-2.5 rounded-xl border border-black/10 focus:outline-none focus:border-primary font-semibold text-black"
               />
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="font-bold text-neutral-700">Slogan / Untertitel</label>
-              <input
+            </Field>
+            <Field label="Slogan / Untertitel" optional>
+              <Input
                 type="text"
                 value={formData.site_tagline || ''}
                 onChange={(e) => setFormData({ ...formData, site_tagline: e.target.value })}
                 placeholder="z.B. exklusive mode & accessoires"
-                className="w-full px-3.5 py-2.5 rounded-xl border border-black/10 focus:outline-none focus:border-primary"
               />
-            </div>
-          </div>
-
-          <div className="space-y-1.5">
-            <label className="font-bold text-neutral-700">Kurzbeschreibung (Meta-Description / Footer)</label>
-            <textarea
+            </Field>
+          </FieldGrid>
+          <Field label="Kurzbeschreibung" hint="Für Suchmaschinen (Meta-Description) und den Seitenfuß. Ein bis zwei Sätze.">
+            <Textarea
               rows={3}
               value={formData.site_description || ''}
               onChange={(e) => setFormData({ ...formData, site_description: e.target.value })}
               placeholder="Allgemeine Beschreibung für Suchmaschinen und den Seitenfuß..."
-              className="w-full px-3.5 py-2.5 rounded-xl border border-black/10 focus:outline-none focus:border-primary leading-relaxed font-sans text-xs"
             />
-          </div>
-        </div>
+          </Field>
+        </Section>
 
-        {/* 2. LOGO & FAVICON AUS MEDIATHEK */}
-        <div className="space-y-4 pt-2">
-          <h3 className="font-bold text-sm text-black border-b border-black/5 pb-2 flex items-center gap-2">
-            <ImageIcon size={16} className="text-primary" />
-            <span>2. Logo & Favicon</span>
-          </h3>
+        <Section title="Logo & Favicon" description="Bilder kommen aus der Mediathek." bare>
+          <Card padded={false}>
+            <ImageRow
+              title="Hauptlogo"
+              hint="Kopf- und Fußbereich (Header & Footer)."
+              emptyText="Standard-Logo aktiv (kein Bild hinterlegt)"
+              url={formData.logo_url}
+              previewAlt="Logo Vorschau"
+              previewClass="max-h-full max-w-full object-contain"
+              removeLabel="Logo entfernen"
+              onPick={() => {
+                setMediaTarget('logo')
+                setMediaModalOpen(true)
+              }}
+              onRemove={() => setFormData({ ...formData, logo_url: null })}
+            />
+            <ImageRow
+              title="Favicon"
+              hint="Symbol im Browser-Tab."
+              emptyText="Standard-Favicon aktiv"
+              url={formData.favicon_url}
+              previewAlt="Favicon Vorschau"
+              previewClass="h-8 w-8 object-contain"
+              removeLabel="Favicon entfernen"
+              onPick={() => {
+                setMediaTarget('favicon')
+                setMediaModalOpen(true)
+              }}
+              onRemove={() => setFormData({ ...formData, favicon_url: null })}
+              divider
+            />
+          </Card>
+        </Section>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-
-            {/* Logo Picker */}
-            <div className="p-4 rounded-2xl bg-neutral-50 border border-black/5 space-y-3">
-              <div className="flex items-center justify-between">
-                <label className="font-bold text-black">Hauptlogo (Header & Footer)</label>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMediaTarget('logo')
-                    setMediaModalOpen(true)
-                  }}
-                  className="px-3 py-1.5 bg-white hover:bg-neutral-100 text-black font-bold rounded-xl border border-black/10 shadow-xs flex items-center gap-1.5 transition-colors cursor-pointer"
-                >
-                  <ImageIcon size={13} />
-                  <span>Mediathek</span>
-                </button>
-              </div>
-
-              {formData.logo_url ? (
-                <div className="flex items-center gap-3">
-                  <div className="h-16 w-32 bg-white rounded-xl border border-black/10 p-2 flex items-center justify-center shadow-xs">
-                    <img src={formData.logo_url} alt="Logo Vorschau" className="max-h-full max-w-full object-contain" />
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setFormData({ ...formData, logo_url: null })}
-                    className="p-2 text-red-600 hover:bg-red-50 rounded-xl border border-red-200 transition-colors cursor-pointer"
-                    title="Logo entfernen"
-                  >
-                    <Trash2 size={15} />
-                  </button>
-                </div>
-              ) : (
-                <div className="h-16 rounded-xl border-2 border-dashed border-neutral-200 flex items-center justify-center text-neutral-400 text-[11px]">
-                  Standard-Logo aktiv (Kein Bild hinterlegt)
-                </div>
-              )}
-            </div>
-
-            {/* Favicon Picker */}
-            <div className="p-4 rounded-2xl bg-neutral-50 border border-black/5 space-y-3">
-              <div className="flex items-center justify-between">
-                <label className="font-bold text-black">Favicon (Browser-Tab Icon)</label>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMediaTarget('favicon')
-                    setMediaModalOpen(true)
-                  }}
-                  className="px-3 py-1.5 bg-white hover:bg-neutral-100 text-black font-bold rounded-xl border border-black/10 shadow-xs flex items-center gap-1.5 transition-colors cursor-pointer"
-                >
-                  <ImageIcon size={13} />
-                  <span>Mediathek</span>
-                </button>
-              </div>
-
-              {formData.favicon_url ? (
-                <div className="flex items-center gap-3">
-                  <div className="h-16 w-16 bg-white rounded-xl border border-black/10 p-2 flex items-center justify-center shadow-xs">
-                    <img src={formData.favicon_url} alt="Favicon Vorschau" className="w-8 h-8 object-contain" />
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setFormData({ ...formData, favicon_url: null })}
-                    className="p-2 text-red-600 hover:bg-red-50 rounded-xl border border-red-200 transition-colors cursor-pointer"
-                    title="Favicon entfernen"
-                  >
-                    <Trash2 size={15} />
-                  </button>
-                </div>
-              ) : (
-                <div className="h-16 rounded-xl border-2 border-dashed border-neutral-200 flex items-center justify-center text-neutral-400 text-[11px]">
-                  Standard-Favicon aktiv
-                </div>
-              )}
-            </div>
-
-          </div>
-        </div>
-
-        {/* 3. KONTAKT & STANDORT */}
-        <div className="space-y-4 pt-2">
-          <h3 className="font-bold text-sm text-black border-b border-black/5 pb-2 flex items-center gap-2">
-            <Mail size={16} className="text-primary" />
-            <span>3. Zentrale Kontakt- & Standortdaten</span>
-          </h3>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <label className="font-bold text-neutral-700">Offizielle Kontakt-E-Mail</label>
-              <input
+        <Section
+          title="Kontakt & Standort"
+          description="Zentrale Kontaktdaten, z. B. für Impressum, Fußbereich und Suchmaschinen."
+        >
+          <FieldGrid>
+            <Field label="Kontakt-E-Mail">
+              <Input
                 type="email"
                 value={formData.contact_email || ''}
                 onChange={(e) => setFormData({ ...formData, contact_email: e.target.value })}
                 placeholder="info@domain.de"
-                className="w-full px-3.5 py-2.5 rounded-xl border border-black/10 focus:outline-none focus:border-primary"
               />
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="font-bold text-neutral-700">Telefonnummer</label>
-              <input
+            </Field>
+            <Field label="Telefonnummer">
+              <Input
                 type="tel"
                 value={formData.contact_phone || ''}
                 onChange={(e) => setFormData({ ...formData, contact_phone: e.target.value })}
                 placeholder="+49 (0) ..."
-                className="w-full px-3.5 py-2.5 rounded-xl border border-black/10 focus:outline-none focus:border-primary"
               />
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="font-bold text-neutral-700">Straße & Hausnummer</label>
-              <input
+            </Field>
+            <Field label="Straße & Hausnummer">
+              <Input
                 type="text"
                 value={formData.address_street || ''}
                 onChange={(e) => setFormData({ ...formData, address_street: e.target.value })}
                 placeholder="z.B. Hauptstraße 1"
-                className="w-full px-3.5 py-2.5 rounded-xl border border-black/10 focus:outline-none focus:border-primary"
               />
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="font-bold text-neutral-700">Ort / Postleitzahl</label>
-              <input
+            </Field>
+            <Field label="PLZ & Ort">
+              <Input
                 type="text"
                 value={formData.address_city || ''}
                 onChange={(e) => setFormData({ ...formData, address_city: e.target.value })}
                 placeholder="z.B. Stadt"
-                className="w-full px-3.5 py-2.5 rounded-xl border border-black/10 focus:outline-none focus:border-primary"
               />
-            </div>
-          </div>
-        </div>
+            </Field>
+          </FieldGrid>
+        </Section>
 
-        {/* SUBMIT BUTTON */}
-        <div className="pt-4 border-t border-black/5 flex items-center justify-end">
-          <button
-            type="submit"
-            disabled={isSaving}
-            className="px-6 py-3 rounded-xl bg-primary hover:bg-primary/90 text-white font-bold text-xs shadow-sm transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
-          >
+        <SaveBar start={<p className={hintClass}>Änderungen sind nach dem Speichern sofort auf der Website sichtbar.</p>}>
+          <Button type="submit" variant="primary" disabled={isSaving}>
             {isSaving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
             <span>Stammdaten speichern</span>
-          </button>
-        </div>
-
+          </Button>
+        </SaveBar>
       </form>
 
       {/* Mediathek Modal */}
@@ -318,7 +208,59 @@ export default function GeneralSettingsForm({ settings, refreshSettings, default
           multiSelect={false}
         />
       )}
+    </>
+  )
+}
 
+// Eine Bildzeile (Vorschau, Text, Auswählen/Entfernen) im Abschnitt Logo & Favicon.
+function ImageRow({
+  title,
+  hint,
+  emptyText,
+  url,
+  previewAlt,
+  previewClass,
+  removeLabel,
+  onPick,
+  onRemove,
+  divider = false,
+}: {
+  title: string
+  hint: string
+  emptyText: string
+  url: string | null | undefined
+  previewAlt: string
+  previewClass: string
+  removeLabel: string
+  onPick: () => void
+  onRemove: () => void
+  divider?: boolean
+}) {
+  return (
+    <div className={cx('flex flex-wrap items-center gap-4 px-5 py-5 sm:px-6', divider && 'border-t border-[#F1F5F9]')}>
+      <div
+        className={cx(
+          'flex h-16 w-[120px] flex-none items-center justify-center rounded-[10px] bg-[#FAFAFC] p-2',
+          url ? 'border border-[#E2E8F0]' : 'border border-dashed border-[#CBD5E1] text-[#94A3B8]'
+        )}
+      >
+        {url ? <img src={url} alt={previewAlt} className={previewClass} /> : <ImageIcon size={20} aria-hidden="true" />}
+      </div>
+      <div className="min-w-0 flex-[1_1_200px]">
+        <p className="text-[14px] font-medium text-[#0F172A]">{title}</p>
+        <p className={hintClass}>{url ? hint : emptyText}</p>
+      </div>
+      <div className="flex items-center gap-1">
+        <Button size="sm" onClick={onPick}>
+          <ImageIcon size={14} aria-hidden="true" />
+          <span>{url ? 'Ersetzen' : 'Mediathek'}</span>
+        </Button>
+        {url && (
+          <button type="button" onClick={onRemove} className={iconButtonDangerClass} aria-label={removeLabel} title={removeLabel}>
+            <Trash2 size={16} aria-hidden="true" />
+          </button>
+        )}
+      </div>
     </div>
   )
 }

@@ -1,12 +1,11 @@
 // Gemeinsame Karten-Hülle für Login/Passwort-vergessen/Passwort-ändern.
 // Server Component: holt Logo + Site-Name serverseitig aus site_settings und
-// rendert sie über dem Formular. Farb-/Schrift-Branding kommt automatisch über
-// die Tailwind-Tokens `bg-primary`/`text-primary`/`font-display`/`font-sans`,
-// die jedes Kundenprojekt in seiner eigenen index.css via @theme definiert
-// (siehe core-cms/README.md) - core-cms muss die konkreten Werte nicht kennen.
+// rendert sie über der Karte. Die Seiten liegen außerhalb von AdminShell, deshalb
+// setzt die Hülle Akzent, Fokus-Ring, Schrift und Hintergrund selbst (wie AdminShell).
 
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { getAuthBranding } from "./branding";
+import { WNT_COLORS, cardClass, cx, hintClass } from "../ui/styles";
 
 export interface AuthCardShellProps {
   title: string;
@@ -15,33 +14,38 @@ export interface AuthCardShellProps {
   footer?: ReactNode;
 }
 
+const style = {
+  "--admin-accent": WNT_COLORS.accent,
+  "--admin-ring": `color-mix(in srgb, ${WNT_COLORS.accent} 22%, transparent)`,
+} as CSSProperties;
+
 export default async function AuthCardShell({ title, subtitle, children, footer }: AuthCardShellProps) {
   const { siteName, logoUrl } = await getAuthBranding();
 
   return (
-    <div className="min-h-screen w-full flex items-center justify-center bg-neutral-50 px-4 py-12">
-      <div className="w-full max-w-md bg-white rounded-3xl shadow-xl border border-black/10 p-8 sm:p-10">
+    <div
+      style={style}
+      className="flex min-h-dvh w-full flex-col items-center justify-center gap-7 bg-[#FAFAFC] px-4 py-10 font-[family-name:var(--font-admin,ui-sans-serif,system-ui,sans-serif)] text-[14px] font-normal leading-normal text-[#0F172A] antialiased [&_:where(h1,h2,h3,h4,h5,h6)]:[font-family:inherit]!"
+    >
+      {logoUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={logoUrl} alt={siteName} className="h-10 w-auto max-w-[240px] object-contain" />
+      ) : (
+        <span className="text-[18px] font-semibold tracking-[-0.01em] text-[#0F172A]">{siteName}</span>
+      )}
 
-        <div className="flex flex-col items-center text-center mb-8">
-          {logoUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={logoUrl} alt={siteName} className="h-10 w-auto object-contain mb-6" />
-          ) : (
-            <span className="font-display font-bold text-lg text-black mb-6">{siteName}</span>
-          )}
-          <h1 className="font-display text-2xl font-bold text-black tracking-tight mb-2">
-            {title}
-          </h1>
-          {subtitle && (
-            <p className="font-sans text-sm text-neutral-500 leading-relaxed">{subtitle}</p>
-          )}
+      <div className={cx(cardClass, "w-full max-w-[380px]")}>
+        <div className="flex flex-col gap-[18px] p-6">
+          <div>
+            <h1 className="text-[20px] font-semibold leading-tight tracking-[-0.01em] text-[#0F172A]">{title}</h1>
+            {subtitle && <p className={cx(hintClass, "mt-1 text-[13px]")}>{subtitle}</p>}
+          </div>
+          {children}
         </div>
-
-        {children}
-
-        {footer && <div className="mt-6 text-center">{footer}</div>}
-
       </div>
+
+      {footer && <div className="flex flex-col items-center gap-2 text-center text-[13px]">{footer}</div>}
+      <p className={hintClass}>Betreut von WNT-IT</p>
     </div>
   );
 }

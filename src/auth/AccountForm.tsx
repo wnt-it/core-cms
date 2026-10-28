@@ -4,12 +4,15 @@
 // Passwort ändern. Nutzt dieselben Server Actions (updateOwnEmail/updateOwnPassword),
 // die auch für den "Passwort vergessen"-Callback zuständig sind (siehe login-actions.ts),
 // verlangt hier aber zusätzlich das aktuelle Passwort zur Bestätigung.
+// Zwei unabhängige Formulare, daher je Abschnitt eine Karte mit eigener Fußzeile statt SaveBar.
 
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import { updateOwnEmail, updateOwnPassword } from './login-actions'
-import { Mail, KeyRound, Save, Eye, EyeOff, Loader2 } from 'lucide-react'
+import { Eye, EyeOff, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { PASSWORD_RULES_HINT } from './auth-errors'
+import { Button, CardFooter, Field, FieldGrid, Input, Section } from '../ui/components'
+import { cardClass, cx, hintClass, iconButtonClass, labelClass } from '../ui/styles'
 
 export interface AccountFormProps {
   currentEmail: string
@@ -17,7 +20,7 @@ export interface AccountFormProps {
 
 export default function AccountForm({ currentEmail }: AccountFormProps) {
   return (
-    <div className="space-y-6 max-w-2xl">
+    <div>
       <EmailSection currentEmail={currentEmail} />
       <PasswordSection />
     </div>
@@ -52,62 +55,49 @@ function EmailSection({ currentEmail }: { currentEmail: string }) {
   }
 
   return (
-    <div className="bg-white rounded-2xl border border-black/10 shadow-sm p-6 sm:p-8 space-y-6">
-      <div className="flex items-center justify-between border-b border-black/5 pb-4">
-        <div>
-          <h2 className="font-extrabold text-xl text-black flex items-center gap-2">
-            <Mail className="text-primary" size={22} />
-            <span>E-Mail-Adresse</span>
-          </h2>
-          <p className="text-xs text-neutral-500 mt-0.5">
-            Aktuell angemeldet als <span className="font-semibold text-black">{currentEmail}</span>
-          </p>
-        </div>
-      </div>
-
-      <form onSubmit={handleSubmit} className="space-y-4 text-xs">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="space-y-1.5">
-            <label className="font-bold text-neutral-700">Neue E-Mail-Adresse</label>
-            <input
-              type="email"
-              required
-              value={newEmail}
-              onChange={(e) => setNewEmail(e.target.value)}
-              placeholder="neue@adresse.de"
-              className="w-full px-3.5 py-2.5 rounded-xl border border-black/10 focus:outline-none focus:border-primary font-medium"
-            />
+    <Section
+      bare
+      title="E-Mail-Adresse"
+      description="Mit dieser Adresse melden Sie sich an. Aus Sicherheitsgründen wird zuerst ein Bestätigungslink an die neue Adresse geschickt."
+    >
+      <form onSubmit={handleSubmit} className={cx(cardClass, 'min-w-0')}>
+        <div className="flex flex-col gap-5 p-5 sm:p-6">
+          <div className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-0.5 rounded-lg bg-[#FAFAFC] px-3.5 py-3">
+            <span className="text-[13px] text-[#64748B]">Aktuell angemeldet als</span>
+            <span className="min-w-0 break-all text-[14px] font-medium text-[#0F172A]">{currentEmail}</span>
           </div>
-          <div className="space-y-1.5">
-            <label className="font-bold text-neutral-700">Aktuelles Passwort zur Bestätigung</label>
-            <input
-              type="password"
-              required
-              value={currentPassword}
-              onChange={(e) => setCurrentPassword(e.target.value)}
-              placeholder="••••••••"
-              className="w-full px-3.5 py-2.5 rounded-xl border border-black/10 focus:outline-none focus:border-primary font-medium"
-            />
-          </div>
+          <FieldGrid>
+            <Field label="Neue E-Mail-Adresse">
+              <Input
+                type="email"
+                required
+                autoComplete="email"
+                value={newEmail}
+                onChange={(e) => setNewEmail(e.target.value)}
+                placeholder="neue@adresse.de"
+              />
+            </Field>
+            <Field label="Aktuelles Passwort zur Bestätigung">
+              <Input
+                type="password"
+                required
+                autoComplete="current-password"
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+                placeholder="••••••••"
+              />
+            </Field>
+          </FieldGrid>
         </div>
-
-        <p className="text-neutral-400">
-          Aus Sicherheitsgründen wird zuerst ein Bestätigungslink an die neue Adresse geschickt — die
-          Änderung wird erst nach dem Klick auf diesen Link wirksam.
-        </p>
-
-        <div className="pt-2 flex justify-end">
-          <button
-            type="submit"
-            disabled={isSaving}
-            className="px-6 py-3 rounded-xl bg-black hover:bg-neutral-800 text-white font-bold text-xs shadow-sm transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
-          >
-            {isSaving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-            <span>Bestätigungslink senden</span>
-          </button>
-        </div>
+        <CardFooter>
+          <p className={cx(hintClass, 'mr-auto')}>Die Änderung wird erst nach dem Klick auf den Link wirksam.</p>
+          <Button type="submit" variant="secondary" disabled={isSaving}>
+            {isSaving && <Loader2 size={16} className="animate-spin" aria-hidden="true" />}
+            Bestätigungslink senden
+          </Button>
+        </CardFooter>
       </form>
-    </div>
+    </Section>
   )
 }
 
@@ -141,77 +131,92 @@ function PasswordSection() {
   }
 
   return (
-    <div className="bg-white rounded-2xl border border-black/10 shadow-sm p-6 sm:p-8 space-y-6">
-      <div className="border-b border-black/5 pb-4">
-        <h2 className="font-extrabold text-xl text-black flex items-center gap-2">
-          <KeyRound className="text-primary" size={22} />
-          <span>Passwort ändern</span>
-        </h2>
-        <p className="text-xs text-neutral-500 mt-0.5">
-          Passwort vergessen? Melden Sie sich ab und nutzen Sie stattdessen den Link
-          "Passwort vergessen?" auf der Login-Seite.
-        </p>
-      </div>
-
-      <form onSubmit={handleSubmit} className="space-y-4 text-xs">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="space-y-1.5">
-            <label className="font-bold text-neutral-700">Aktuelles Passwort</label>
-            <div className="relative">
-              <input
-                type={showCurrent ? 'text' : 'password'}
-                required
-                value={currentPassword}
-                onChange={(e) => setCurrentPassword(e.target.value)}
-                placeholder="••••••••"
-                className="w-full px-3.5 py-2.5 rounded-xl border border-black/10 focus:outline-none focus:border-primary font-medium pr-10"
-              />
-              <button
-                type="button"
-                onClick={() => setShowCurrent(!showCurrent)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-black transition-colors p-1 cursor-pointer"
-                aria-label={showCurrent ? 'Passwort verbergen' : 'Passwort anzeigen'}
-              >
-                {showCurrent ? <EyeOff size={16} /> : <Eye size={16} />}
-              </button>
-            </div>
-          </div>
-          <div className="space-y-1.5">
-            <label className="font-bold text-neutral-700">Neues Passwort</label>
-            <div className="relative">
-              <input
-                type={showNew ? 'text' : 'password'}
-                required
-                minLength={10}
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                placeholder="••••••••"
-                className="w-full px-3.5 py-2.5 rounded-xl border border-black/10 focus:outline-none focus:border-primary font-medium pr-10"
-              />
-              <button
-                type="button"
-                onClick={() => setShowNew(!showNew)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-black transition-colors p-1 cursor-pointer"
-                aria-label={showNew ? 'Passwort verbergen' : 'Passwort anzeigen'}
-              >
-                {showNew ? <EyeOff size={16} /> : <Eye size={16} />}
-              </button>
-            </div>
-            <p className="text-neutral-400">{PASSWORD_RULES_HINT}</p>
-          </div>
+    <Section
+      bare
+      title="Passwort"
+      description={<>Passwort vergessen? Melden Sie sich ab und nutzen Sie stattdessen den Link „Passwort vergessen?“ auf der Login-Seite.</>}
+    >
+      <form onSubmit={handleSubmit} className={cx(cardClass, 'min-w-0')}>
+        <div className="p-5 sm:p-6">
+          <FieldGrid>
+            <PasswordField
+              label="Aktuelles Passwort"
+              value={currentPassword}
+              onChange={setCurrentPassword}
+              visible={showCurrent}
+              onToggle={() => setShowCurrent(!showCurrent)}
+              autoComplete="current-password"
+            />
+            <PasswordField
+              label="Neues Passwort"
+              value={newPassword}
+              onChange={setNewPassword}
+              visible={showNew}
+              onToggle={() => setShowNew(!showNew)}
+              autoComplete="new-password"
+              minLength={10}
+              hint={PASSWORD_RULES_HINT}
+            />
+          </FieldGrid>
         </div>
-
-        <div className="pt-2 flex justify-end">
-          <button
-            type="submit"
-            disabled={isSaving}
-            className="px-6 py-3 rounded-xl bg-black hover:bg-neutral-800 text-white font-bold text-xs shadow-sm transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
-          >
-            {isSaving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-            <span>Passwort speichern</span>
-          </button>
-        </div>
+        <CardFooter>
+          <Button type="submit" variant="primary" disabled={isSaving}>
+            {isSaving && <Loader2 size={16} className="animate-spin" aria-hidden="true" />}
+            Passwort speichern
+          </Button>
+        </CardFooter>
       </form>
+    </Section>
+  )
+}
+
+/** Passwortfeld mit Auge zum Ein-/Ausblenden. Kein <label> drumherum, weil der Knopf darin liegt. */
+function PasswordField({
+  label,
+  value,
+  onChange,
+  visible,
+  onToggle,
+  autoComplete,
+  minLength,
+  hint,
+}: {
+  label: string
+  value: string
+  onChange: (v: string) => void
+  visible: boolean
+  onToggle: () => void
+  autoComplete: string
+  minLength?: number
+  hint?: string
+}) {
+  const id = useId()
+  return (
+    <div className="flex min-w-0 flex-col gap-1.5">
+      <label htmlFor={id} className={labelClass}>{label}</label>
+      <span className="relative flex">
+        <Input
+          id={id}
+          type={visible ? 'text' : 'password'}
+          required
+          minLength={minLength}
+          autoComplete={autoComplete}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="••••••••"
+          aria-describedby={hint ? `${id}-hint` : undefined}
+          className="pr-11"
+        />
+        <button
+          type="button"
+          onClick={onToggle}
+          className={cx(iconButtonClass, 'absolute right-0.5 top-0.5 h-9 w-9')}
+          aria-label={visible ? 'Passwort verbergen' : 'Passwort anzeigen'}
+        >
+          {visible ? <EyeOff size={16} /> : <Eye size={16} />}
+        </button>
+      </span>
+      {hint && <span id={`${id}-hint`} className={hintClass}>{hint}</span>}
     </div>
   )
 }
