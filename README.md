@@ -2,9 +2,10 @@
 
 Zentrales, versioniertes CMS-Core-Package für WNT-IT Next.js/Supabase-Projekte.
 
-Ersetzt das bisherige Datei-Kopier-Skript `scripts/sync-core.ps1`: statt Core-Dateien
-1:1 in jedes Projekt zu kopieren, installiert jedes Projekt dieses Package als
-versionierte Dependency (`package.json`) und importiert daraus.
+Einzige zentrale Stelle für den Core: Projekte mit Admin/Backend installieren dieses Package
+als versionierte Dependency (`package.json`) und binden die Teile per Re-Export ein.
+Das frühere Datei-Kopier-Skript `scripts/sync-core.ps1` und das Repo `template` gibt es
+nicht mehr (entfernt am 2026-10-19). Projekte ohne Admin/Backend brauchen keinen Core.
 
 ## Scope
 
@@ -246,6 +247,57 @@ return <>{popup && <SitePopup {...popup} />} …</>;
 Kein Cookie, nur `sessionStorage` im Browser. Für automatische Tests blendet
 `sessionStorage.setItem("site-popup-gesehen", "*")` das Pop-up aus.
 
+## Rechtstexte bearbeiten (ab v0.12.0)
+
+Datenschutzerklärung u. Ä. im Admin bearbeiten: Überschriften mit ihren Texten als aufklappbare Gruppen,
+Nummern (1. / 1.1 / 1.1.1) automatisch nach der Stelle, Inhaltsverzeichnis aus den Überschriften 1 und 2,
+Verweise („siehe 2.5 …“) wandern bei Änderungen mit, Hinweis auf offene Platzhalter `[● …]`.
+
+1. **Datenbank:** einmal pro Projekt `sql/0.12.0_legal_documents.sql` ausführen (Tabelle `legal_documents`).
+   Ohne Migration gilt die Vorlage des Projekts, die Website läuft weiter.
+2. **Admin-Seite** (eigene Route, weil die Vorlage vom Projekt kommt), z. B. `app/admin/(dashboard)/datenschutz/page.tsx`,
+   plus ein Menüpunkt in der Navigation des Projekts:
+
+```tsx
+import { LegalDocumentPage } from "core-cms/src/legal";
+export default function Page() {
+  return <LegalDocumentPage slug="datenschutz" label="Datenschutzerklärung" publicPath="/datenschutz"
+    template={{ title, version, blocks }} />; // Vorlage: Liste { t: "h1"|"h2"|"h3"|"p"|"li", text, ref? }
+}
+```
+
+3. **Website:** Text lesen und Verweise einsetzen, dann selbst rendern (Gestaltung bleibt im Projekt;
+   `groupPolicyBlocks`, `policyToc`, `policyAnchor` helfen dabei):
+
+```tsx
+import { getLegalDocument, resolvePolicyRefs } from "core-cms/src/legal";
+const doc = await getLegalDocument("datenschutz", template);
+const blocks = resolvePolicyRefs(doc.blocks);
+```
+
+Für schlichte Texte ohne Nummern, Inhaltsverzeichnis und Verweise `numbered={false}` und ggf. `showVersion={false}` setzen; `slug` ist frei wählbar.
+
+**Impressum als Formular:** Das Impressum ist kein freier Text, sondern ein festes Formular mit den Pflichtangaben nach
+§ 5 DDG (je Abschnitt mit Gesetzesstelle; Abschnitte, die nicht zutreffen, als „Nicht anwendbar“ markierbar, Vorschau,
+Prüfung der Pflichtfelder). Es nutzt dieselbe Tabelle (Spalte `data`). Einbindung:
+
+```tsx
+// Admin: app/admin/(dashboard)/impressum/page.tsx
+import { ImpressumPage } from "core-cms/src/legal";
+export default async function Page() {
+  return <ImpressumPage slug="impressum" publicPath="/impressum"
+    template={{ anbieter: { na: false, v: { name: "…", street: "…" } }, register: { na: true, v: {} } }} />; // Vorbelegung, Fehlendes wird leer ergänzt
+}
+
+// Website: app/impressum/page.tsx
+import { getImpressum, impressumToBlocks } from "core-cms/src/legal";
+const doc = await getImpressum("impressum", template);
+const blocks = impressumToBlocks(doc.data); // Absätze und Überschriften, selbst rendern
+```
+
+Überschriften, auf die verwiesen wird, tragen `ref: "kennung"`; im Text steht `{{ref:kennung}}`
+(im Editor über „Verweis einfügen“). Platzhalter-Format `[● …]`; ein Verweis ohne Ziel erscheint als „[● Verweis fehlt]“.
+
 ## Mehrfachbearbeitung (ab v0.10.0)
 
 In jeder Verwaltungsliste mehrere Einträge auswählen und ein Feld für alle ändern oder sie
@@ -314,10 +366,10 @@ Siehe Kommentare in den jeweiligen `src/*/index.ts`-Dateien für den Stand pro M
 | Phase | Modul | Status |
 |---|---|---|
 | 0 | Repo-Grundgerüst | ✅ erledigt |
-| 1 | Supabase-Client + Typen | offen |
-| 2 | Auth | offen |
-| 3 | Media Library + Site-Settings | offen |
-| 4 | Submissions + E-Mail-Adapter (Resend/SMTP) | offen |
-| 5 | Pilotprojekt migrieren | offen |
-| 6 | Restliche Projekte migrieren | offen |
-| 7 | sync-core.ps1 abschalten | offen |
+| 1 | Supabase-Client + Typen | ✅ erledigt |
+| 2 | Auth (Login, Passwort vergessen/ändern, Account) | ✅ erledigt |
+| 3 | Media Library + Site-Settings | ✅ erledigt |
+| 4 | Submissions + E-Mail-Adapter (Resend/SMTP) | ✅ erledigt |
+| 5 | Pilotprojekt migrieren (richardprinz) | ✅ erledigt |
+| 6 | Restliche Projekte migrieren | ✅ alb-naturenergie (v0.8.0), veee (v0.6.0, Update offen) |
+| 7 | sync-core.ps1 abschalten | ✅ erledigt (Skript und `template` entfernt, 2026-10-19) |

@@ -17,6 +17,14 @@ export interface ChangelogEntry {
 /** Neueste Version zuerst. */
 export const CORE_CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.12.0",
+    date: "2026-11-04",
+    changes: [
+      { type: "feature", text: "Neue Seite zum Bearbeiten von Rechtstexten, z. B. der Datenschutzerklärung, dazu das Impressum als Formular mit den Pflichtangaben nach § 5 DDG (Abschnitte mit Gesetzesstelle, „Nicht anwendbar“ wählbar): Überschriften mit ihren Texten als aufklappbare Gruppen, automatisches Inhaltsverzeichnis, Nummerierung automatisch nach der Stelle im Text, Verweise („siehe 2.5 …“), die beim Verschieben mitwandern, und ein Hinweis auf offene Platzhalter. Braucht einmal die Datenbank-Erweiterung sql/0.12.0_legal_documents.sql." },
+    ],
+    releaseNotes: "Neu: src/legal (LegalDocumentPage, getLegalDocument, resolvePolicyRefs, saveLegalDocument) und Tabelle legal_documents. Migration: sql/0.12.0_legal_documents.sql. Einbindung im Projekt: eigene Admin-Route mit LegalDocumentPage und Vorlage, öffentliche Seite liest mit getLegalDocument und setzt Verweise mit resolvePolicyRefs ein. Siehe README „Rechtstexte bearbeiten“.",
+  },
+  {
     version: "0.11.1",
     date: "2026-11-04",
     changes: [

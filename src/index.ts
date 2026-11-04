@@ -7,3 +7,4 @@ export * from "./submissions";
 export * from "./ui";
 export * from "./popup";
 export * from "./bulk";
+export * from "./legal";
