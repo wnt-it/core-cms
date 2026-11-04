@@ -26,6 +26,8 @@ export interface GalleryFieldProps {
   name?: string
   bucket?: string
   folder?: string
+  /** Mediathek-Ordner für Uploads, falls er anders heißt als `folder` (z. B. „Erneuerbare Energien“). */
+  libraryFolder?: string
   /** Höchstens so viele Bilder (Standard: unbegrenzt). */
   max?: number
   imageOptimization?: ImageOptimizationOptions
@@ -42,6 +44,7 @@ export default function GalleryField({
   name,
   bucket = 'images',
   folder = 'uploads',
+  libraryFolder,
   max,
   imageOptimization,
 }: GalleryFieldProps) {
@@ -88,7 +91,7 @@ export default function GalleryField({
       const supabase = createClient()
       for (const file of prepared) {
         try {
-          add([await uploadToLibrary(supabase, file, { bucket, folder })])
+          add([await uploadToLibrary(supabase, file, { bucket, folder, libraryFolder })])
         } catch (err: any) {
           console.error('Upload Error:', err)
           setError(err.message || 'Fehler beim Hochladen')
