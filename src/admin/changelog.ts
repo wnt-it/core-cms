@@ -1,7 +1,7 @@
-// Single Source of Truth für die Core-Version und den Changelog, der im Admin
-// unter /admin/version angezeigt wird. Beim Release VOR dem Tag pflegen:
-// CORE_VERSION erhöhen, neuen Eintrag ganz oben in CORE_CHANGELOG ergänzen
-// und die Version in package.json angleichen.
+// Einzige Quelle für die Core-Version und den Changelog unter /admin/version.
+// Für einen Release nur oben in CORE_CHANGELOG einen neuen Eintrag ergänzen und
+// `npm run release` ausführen: Das Skript liest Version und Release-Notes von hier,
+// setzt package.json und legt Tag und GitHub-Release an.
 
 export type ChangeType = "feature" | "fix" | "security" | "docs";
 
@@ -10,9 +10,9 @@ export interface ChangelogEntry {
   /** ISO-Datum (YYYY-MM-DD) */
   date: string;
   changes: { type: ChangeType; text: string }[];
+  /** Nur für die GitHub-Release-Notes, nicht im Admin: z. B. Breaking Changes mit Migration. */
+  releaseNotes?: string;
 }
-
-export const CORE_VERSION = "0.11.1";
 
 /** Neueste Version zuerst. */
 export const CORE_CHANGELOG: ChangelogEntry[] = [
@@ -152,3 +152,6 @@ export const CORE_CHANGELOG: ChangelogEntry[] = [
     ],
   },
 ];
+
+/** Aktuelle Version: immer der oberste Eintrag, kann also nicht abweichen. */
+export const CORE_VERSION = CORE_CHANGELOG[0].version;
