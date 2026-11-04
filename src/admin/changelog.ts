@@ -12,10 +12,27 @@ export interface ChangelogEntry {
   changes: { type: ChangeType; text: string }[];
 }
 
-export const CORE_VERSION = "0.10.0";
+export const CORE_VERSION = "0.11.1";
 
 /** Neueste Version zuerst. */
 export const CORE_CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "0.11.1",
+    date: "2026-11-04",
+    changes: [
+      { type: "fix", text: "Die Seite „Core-Version“ im Admin zeigt den richtigen Stand an." },
+    ],
+  },
+  {
+    version: "0.11.0",
+    date: "2026-11-04",
+    changes: [
+      { type: "fix", text: "Anfrage-Mails: „Antworten“ geht jetzt an den Besucher, der das Formular abgeschickt hat, statt an die eigene Absender-Adresse." },
+      { type: "fix", text: "Anfrage-Mails: Der gewählte Betreff steht jetzt auch in der Tabelle mit den Angaben." },
+      { type: "fix", text: "Bilder aus Upload-Feldern landen im passenden Mediathek-Ordner statt oben unter „Alle Medien“. Fehlt der Ordner, wird er angelegt." },
+      { type: "feature", text: "Bildfeld: Die Vorschau kann das ganze Bild zeigen, zum Beispiel für Logos." },
+    ],
+  },
   {
     version: "0.10.0",
     date: "2026-10-28",
