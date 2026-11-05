@@ -279,7 +279,7 @@ export { LegalRoute as default, generateLegalMetadata as generateMetadata, gener
 export const dynamicParams = false; // nur /datenschutz und /impressum
 ```
 
-   Eigene Gestaltung (Rahmen, Linkfarbe) und Vorlagen für die Zeit vor dem ersten Speichern, in einer eigenen Route-Datei:
+   Das Aussehen der Seiten gibt der Core vor (einheitlich, keine Optionen pro Projekt). Nur Vorlagen für die Zeit vor dem ersten Speichern kann das Projekt in einer eigenen Route-Datei mitgeben:
 
 ```tsx
 import { renderLegalPage, generateLegalMetadata, generateLegalStaticParams } from "core-cms/src/legal";
@@ -287,7 +287,7 @@ export const generateMetadata = generateLegalMetadata;
 export const generateStaticParams = generateLegalStaticParams;
 export const dynamicParams = false;
 export default function Page(props: { params: Promise<{ legal?: string | string[] }> }) {
-  return renderLegalPage(props, { Wrapper: MeinRahmen, linkClassName: "…", templates: { datenschutz: { title, version, blocks }, impressum: { anbieter: { na: false, v: { name: "…" } } } } });
+  return renderLegalPage(props, { templates: { datenschutz: { title, version, blocks }, impressum: { anbieter: { na: false, v: { name: "…" } } } } });
 }
 ```
 

@@ -5,7 +5,7 @@
 export { default as LegalDocumentPage } from "./LegalDocumentPage";
 export { default as ImpressumPage } from "./ImpressumPage";
 export { LegalRoute, renderLegalPage, generateLegalMetadata, generateLegalStaticParams, LEGAL_PUBLIC_PAGES } from "./LegalRoute";
-export type { LegalPublicPage, LegalRouteOptions, LegalWrapperProps } from "./LegalRoute";
+export type { LegalPublicPage, LegalRouteOptions } from "./LegalRoute";
 export { getImpressum } from "./get-impressum";
 export type { ImpressumDocument } from "./get-impressum";
 export { saveImpressum } from "./impressum-actions";

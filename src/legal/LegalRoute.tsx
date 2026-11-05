@@ -3,10 +3,10 @@
 //   export { LegalRoute as default, generateLegalMetadata as generateMetadata, generateLegalStaticParams as generateStaticParams } from "core-cms/src/legal";
 //   export const dynamicParams = false;
 // Danach kommen Texte, Nummerierung, Inhaltsverzeichnis, Verweise und das Impressum automatisch aus dem Core
-// (gepflegt im Admin unter „Datenschutzerklärung“ und „Impressum“). Gestaltung: Standard hier, anpassbar über LegalRouteOptions
-// (nur in einer eigenen Route-Datei, nicht beim Re-Export).
+// (gepflegt im Admin unter „Datenschutzerklärung“ und „Impressum“). Das Aussehen gibt der Core vor, einheitlich für alle Projekte;
+// es gibt keine Gestaltungs-Optionen pro Projekt.
 
-import { Fragment, type ComponentType, type ReactNode } from "react";
+import { Fragment, type ReactNode } from "react";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { getImpressum } from "./get-impressum";
@@ -39,7 +39,7 @@ export const LEGAL_PUBLIC_PAGES: LegalPublicPage[] = [
   { path: IMPRESSUM_SLUG, slug: IMPRESSUM_SLUG, title: "Impressum", description: "Pflichtangaben nach § 5 DDG.", numbered: false },
 ];
 
-export interface LegalWrapperProps {
+interface LegalWrapperProps {
   title: string;
   /** Fassung (Datum), nur bei Texten mit Fassung. */
   version?: string;
@@ -47,10 +47,6 @@ export interface LegalWrapperProps {
 }
 
 export interface LegalRouteOptions {
-  /** Rahmen der Seite (Abstände, Überschrift) im Stil des Projekts. Standard: schlichter Rahmen. */
-  Wrapper?: ComponentType<LegalWrapperProps>;
-  /** Klassen für Links im Text. */
-  linkClassName?: string;
   /** Texte, die gelten, solange in der Datenbank noch nichts steht (z. B. vor der Migration). Ohne Eintrag: Seite nicht gefunden. */
   templates?: { datenschutz?: LegalDocumentContent; impressum?: unknown };
 }
@@ -116,11 +112,11 @@ function Inline({ text, linkClassName }: { text: string; linkClassName?: string 
 }
 
 const DefaultWrapper = ({ title, version, children }: LegalWrapperProps) => (
-  <main className="mx-auto w-full max-w-3xl px-4 py-12 sm:py-16">
+  <section className="mx-auto w-full max-w-3xl px-4 py-12 sm:py-16">
     <h1 className="mb-2 text-3xl font-semibold">{title}</h1>
     {version && <p className="mb-8 opacity-70">Fassung {version}</p>}
     <div className={version ? "" : "mt-8"}>{children}</div>
-  </main>
+  </section>
 );
 
 function Blocks({ blocks, toc, linkClassName }: { blocks: PolicyBlock[]; toc: boolean; linkClassName?: string }) {
@@ -175,14 +171,14 @@ function Blocks({ blocks, toc, linkClassName }: { blocks: PolicyBlock[]; toc: bo
 export async function renderLegalPage(props: RouteParams, options: LegalRouteOptions = {}) {
   const page = await pageFor(props);
   if (!page) notFound();
-  const Wrapper = options.Wrapper ?? DefaultWrapper;
+  const Wrapper = DefaultWrapper;
 
   if (!page.numbered) {
     const doc = await getImpressum(page.slug, options.templates?.impressum);
     if (!doc.fromDatabase && options.templates?.impressum === undefined) notFound();
     return (
       <Wrapper title={page.title}>
-        <Blocks blocks={impressumToBlocks(doc.data)} toc={false} linkClassName={options.linkClassName} />
+        <Blocks blocks={impressumToBlocks(doc.data)} toc={false}  />
       </Wrapper>
     );
   }
@@ -194,7 +190,7 @@ export async function renderLegalPage(props: RouteParams, options: LegalRouteOpt
   const blocks = resolvePolicyRefs(renumberPolicyBlocks(doc.blocks));
   return (
     <Wrapper title={doc.title || page.title} version={doc.version || undefined}>
-      <Blocks blocks={blocks} toc linkClassName={options.linkClassName} />
+      <Blocks blocks={blocks} toc  />
     </Wrapper>
   );
 }
