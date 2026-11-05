@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "../supabase/server";
 import { dbErrorMessage } from "../auth/auth-errors";
-import { impressumToBlocks, missingImpressumFields, normalizeImpressum, type ImpressumData } from "./impressum";
+import { IMPRESSUM_SLUG, impressumToBlocks, missingImpressumFields, normalizeImpressum, type ImpressumData } from "./impressum";
 
 const SLUG = /^[a-z0-9][a-z0-9-]{0,39}$/;
 const MAX_VALUE = 4000;
@@ -19,7 +19,7 @@ export async function saveImpressum(input: {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { success: false, error: "Nicht angemeldet." };
 
-  if (!SLUG.test(input.slug)) return { success: false, error: "Ungültige Dokumentkennung." };
+  if (!SLUG.test(input.slug) || input.slug !== IMPRESSUM_SLUG) return { success: false, error: "Ungültige Dokumentkennung." };
   // Nur bekannte Abschnitte und Felder übernehmen, Werte kürzen
   const data = normalizeImpressum(input.data);
   for (const s of Object.values(data)) for (const k of Object.keys(s.v)) s.v[k] = s.v[k].trim().slice(0, MAX_VALUE);
@@ -34,7 +34,6 @@ export async function saveImpressum(input: {
     blocks: impressumToBlocks(data),
     data,
     updated_at: new Date().toISOString(),
-    updated_by: user.email ?? null,
   });
 
   if (error) {

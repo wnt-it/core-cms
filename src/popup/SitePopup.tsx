@@ -7,25 +7,76 @@
 // {popup && <SitePopup {...popup} />}
 
 import Image from 'next/image'
+import { usePathname } from 'next/navigation'
 import { useEffect, useRef, useState } from 'react'
 import { X } from 'lucide-react'
+import { FREQUENCY_MS, popupAllowedOnPath, popupInWindow, type PopupFrequency, type PopupPages } from './options'
 
 const STORAGE_KEY = 'site-popup-gesehen'
 
-export default function SitePopup({ imageUrl, alt }: { imageUrl: string; alt: string }) {
+export interface SitePopupProps {
+  imageUrl: string
+  alt: string
+  /** Erster und letzter Tag (JJJJ-MM-TT), leer = offen. */
+  from?: string
+  until?: string
+  /** session: einmal pro Besuch (Standard), always: bei jedem Öffnen der Website, day/week: höchstens einmal pro Tag bzw. Woche. */
+  frequency?: PopupFrequency
+  /** Sekunden bis zum Erscheinen (0 = sofort). */
+  delaySeconds?: number
+  /** Auf welchen Seiten es erscheinen darf. */
+  pages?: PopupPages
+  paths?: string[]
+}
+
+/** Schon gesehen? day/week merken sich das im Browser (localStorage, nur Zeitpunkt und Bild), session nur für den Besuch. */
+function alreadySeen(imageUrl: string, frequency: PopupFrequency): boolean {
+  try {
+    if (frequency === 'always') return false
+    if (frequency === 'session') {
+      const seen = sessionStorage.getItem(STORAGE_KEY)
+      return seen === imageUrl || seen === '*'
+    }
+    if (sessionStorage.getItem(STORAGE_KEY) === '*') return true // Tests: blendet es immer aus
+    const raw = localStorage.getItem(STORAGE_KEY)
+    if (!raw) return false
+    const sep = raw.lastIndexOf('|')
+    const url = raw.slice(0, sep)
+    const at = Number(raw.slice(sep + 1))
+    return url === imageUrl && Number.isFinite(at) && Date.now() - at < FREQUENCY_MS[frequency]
+  } catch {
+    return false // Speicher nicht verfügbar: Pop-up trotzdem anzeigen
+  }
+}
+
+function markSeen(imageUrl: string, frequency: PopupFrequency) {
+  try {
+    if (frequency === 'always') return
+    if (frequency === 'session') sessionStorage.setItem(STORAGE_KEY, imageUrl)
+    else localStorage.setItem(STORAGE_KEY, `${imageUrl}|${Date.now()}`)
+  } catch {
+    /* ignorieren */
+  }
+}
+
+export default function SitePopup({ imageUrl, alt, from = '', until = '', frequency = 'session', delaySeconds = 0, pages = 'all', paths = [] }: SitePopupProps) {
   const [visible, setVisible] = useState(false)
+  const pathname = usePathname() ?? '/'
+  // Im Verwaltungsbereich nie anzeigen (das Pop-up ist für Besucher der Website)
+  const inAdmin = pathname.startsWith('/admin')
+  const closed = useRef(false) // bei „immer“: pro Seitenaufruf nur einmal, auch beim Wechsel zwischen Seiten
   const closeRef = useRef<HTMLButtonElement>(null)
   const opener = useRef<HTMLElement | null>(null)
+  const pathsKey = paths.join('|')
 
   useEffect(() => {
-    try {
-      const seen = sessionStorage.getItem(STORAGE_KEY)
-      if (seen === imageUrl || seen === '*') return
-    } catch {
-      // sessionStorage nicht verfügbar: Pop-up trotzdem anzeigen
-    }
-    setVisible(true)
-  }, [imageUrl])
+    if (inAdmin || closed.current) return
+    if (!popupInWindow(from, until)) return
+    if (!popupAllowedOnPath(pathname, pages, pathsKey ? pathsKey.split('|') : [])) return
+    if (alreadySeen(imageUrl, frequency)) return
+    const timer = window.setTimeout(() => setVisible(true), Math.max(0, delaySeconds) * 1000)
+    return () => window.clearTimeout(timer)
+  }, [imageUrl, inAdmin, pathname, from, until, frequency, delaySeconds, pages, pathsKey])
 
   useEffect(() => {
     if (!visible) return
@@ -46,15 +97,12 @@ export default function SitePopup({ imageUrl, alt }: { imageUrl: string; alt: st
 
   function close() {
     setVisible(false)
+    closed.current = true
     opener.current?.focus?.()
-    try {
-      sessionStorage.setItem(STORAGE_KEY, imageUrl)
-    } catch {
-      /* ignorieren */
-    }
+    markSeen(imageUrl, frequency)
   }
 
-  if (!visible) return null
+  if (!visible || inAdmin) return null
 
   return (
     <div

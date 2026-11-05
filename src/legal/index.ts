@@ -4,10 +4,12 @@
 
 export { default as LegalDocumentPage } from "./LegalDocumentPage";
 export { default as ImpressumPage } from "./ImpressumPage";
+export { LegalRoute, renderLegalPage, generateLegalMetadata, generateLegalStaticParams, LEGAL_PUBLIC_PAGES } from "./LegalRoute";
+export type { LegalPublicPage, LegalRouteOptions, LegalWrapperProps } from "./LegalRoute";
 export { getImpressum } from "./get-impressum";
 export type { ImpressumDocument } from "./get-impressum";
 export { saveImpressum } from "./impressum-actions";
-export { IMPRESSUM_SECTIONS, impressumToBlocks, missingImpressumFields, normalizeImpressum, DDG_5_URL } from "./impressum";
+export { IMPRESSUM_SLUG, IMPRESSUM_SECTIONS, impressumToBlocks, missingImpressumFields, normalizeImpressum, DDG_5_URL } from "./impressum";
 export type { ImpressumData, ImpressumField, ImpressumSection } from "./impressum";
 export { getLegalDocument } from "./get-legal-document";
 export { saveLegalDocument } from "./actions";
@@ -27,3 +29,4 @@ export {
   PLACEHOLDER_SOURCE,
 } from "./policy";
 export type { LegalDocument, LegalDocumentContent, PolicyBlock, PolicyBlockType, PolicyGroup } from "./policy";
+export * from "./templates";

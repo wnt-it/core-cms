@@ -4,6 +4,7 @@
 // Das Projekt bindet SitePopup dort ein, wo es erscheinen soll.
 
 export { default as SitePopup } from "./SitePopup";
+export { default as SitePopupHost } from "./SitePopupHost";
 export { getSitePopup, getSitePopupSettings } from "./get-site-popup";
 export type { SitePopupData, SitePopupSettings } from "./get-site-popup";
 export { savePopupSettings } from "./actions";

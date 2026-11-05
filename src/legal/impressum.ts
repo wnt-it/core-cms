@@ -4,6 +4,9 @@
 
 import type { PolicyBlock } from "./policy";
 
+/** Feste Kennung des Impressums in legal_documents. Es hat eigene Spalten (data) und darf nie als freier Text gespeichert werden. */
+export const IMPRESSUM_SLUG = "impressum";
+
 /** Gesetzestext: https://www.gesetze-im-internet.de/ddg/__5.html */
 export const DDG_5_URL = "https://www.gesetze-im-internet.de/ddg/__5.html";
 
@@ -161,6 +164,18 @@ export const IMPRESSUM_SECTIONS: ImpressumSection[] = [
       { id: "text", label: "Hinweistext", type: "textarea", required: true, placeholder: "Wir sind nicht bereit und nicht verpflichtet, an Streitbeilegungsverfahren vor einer Verbraucherschlichtungsstelle teilzunehmen." },
     ],
     render: (v) => withHeading("Verbraucherstreitbeilegung:", lines(v.text)),
+  },
+  {
+    id: "hinweise",
+    title: "Weitere Hinweise",
+    law: "freiwillig, keine gesetzliche Pflichtangabe",
+    description: "Optionale Texte unter dem Impressum, z. B. Haftung für Links und Urheberrecht. Beide Felder sind frei und können einzeln leer bleiben.",
+    naByDefault: true,
+    fields: [
+      { id: "links", label: "Haftung für Links", type: "textarea" },
+      { id: "copyright", label: "Urheberrecht", type: "textarea" },
+    ],
+    render: (v) => [...withHeading("Haftung für Links", lines(v.links)), ...withHeading("Urheberrecht", lines(v.copyright))],
   },
 ];
 

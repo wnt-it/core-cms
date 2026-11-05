@@ -10,16 +10,21 @@ create table if not exists public.legal_documents (
   blocks jsonb not null default '[]'::jsonb,
   -- Nur für das Impressum als Formular (Angaben je Abschnitt und Feld); blocks enthält dann den daraus erzeugten Text
   data jsonb,
-  updated_at timestamptz not null default now(),
-  updated_by text
+  updated_at timestamptz not null default now()
 );
 
 -- Falls die Tabelle schon ohne Spalte „data“ angelegt wurde:
 alter table public.legal_documents add column if not exists data jsonb;
 
+-- Falls eine frühere Fassung dieser Datei schon ausgeführt wurde: Die E-Mail-Adresse des Bearbeiters wird nicht mehr
+-- gespeichert (die Spalte wäre sonst über die öffentliche Schnittstelle lesbar).
+alter table public.legal_documents drop column if exists updated_by;
+
 -- Rechte auf Tabellenebene: Neuere Supabase-Projekte vergeben sie nicht mehr automatisch.
 -- Ohne diese Zeilen scheitert das Speichern und die Website sieht den gespeicherten Text nicht.
-grant select on public.legal_documents to anon;
+-- Öffentlich lesbar sind nur die Inhalte (diese Spalten), nichts darüber hinaus.
+revoke all on public.legal_documents from anon;
+grant select (slug, title, version, blocks, data, updated_at) on public.legal_documents to anon;
 grant select, insert, update, delete on public.legal_documents to authenticated;
 
 alter table public.legal_documents enable row level security;

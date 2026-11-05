@@ -247,16 +247,56 @@ return <>{popup && <SitePopup {...popup} />} …</>;
 Kein Cookie, nur `sessionStorage` im Browser. Für automatische Tests blendet
 `sessionStorage.setItem("site-popup-gesehen", "*")` das Pop-up aus.
 
+**Für die ganze Website (ab v0.12.0, empfohlen):** `<SitePopupHost />` einmal im Root-Layout der öffentlichen Seiten
+(`import { SitePopupHost } from "core-cms/src/popup"`), dann überall und ohne Seiten-Code. Einzelne `SitePopup`-Einbindungen
+auf Seiten dann entfernen, sonst erscheint es doppelt. Zeitraum, Häufigkeit, Verzögerung und Seiten stellt der Kunde unter
+`/admin/popup` ein; dafür einmal `sql/0.12.0_site_popup_options.sql` ausführen (ohne sie gilt das bisherige Verhalten). „Einmal pro Tag/Woche“
+speichert Bild und Zeitpunkt im `localStorage` des Besuchers (nur „pro Besuch“ nutzt `sessionStorage`). Das gilt als technisch notwendig, braucht
+keine Einwilligung, sollte aber in der Datenschutzerklärung stehen, z. B.: „Zum Merken, dass ein Hinweisfenster (Pop-up) bereits angezeigt wurde, nutzen
+wir den Session Storage bzw. Local Storage Ihres Browsers; gespeichert werden nur die Adresse des Hinweisbildes und der Zeitpunkt, es erfolgt keine Übermittlung.“ Bei mehreren Root-Layouts (z. B. zwei Abteilungen) in jedes öffentliche Layout.
+
 ## Rechtstexte bearbeiten (ab v0.12.0)
 
 Datenschutzerklärung u. Ä. im Admin bearbeiten: Überschriften mit ihren Texten als aufklappbare Gruppen,
 Nummern (1. / 1.1 / 1.1.1) automatisch nach der Stelle, Inhaltsverzeichnis aus den Überschriften 1 und 2,
 Verweise („siehe 2.5 …“) wandern bei Änderungen mit, Hinweis auf offene Platzhalter `[● …]`.
 
-1. **Datenbank:** einmal pro Projekt `sql/0.12.0_legal_documents.sql` ausführen (Tabelle `legal_documents`).
-   Ohne Migration gilt die Vorlage des Projekts, die Website läuft weiter.
-2. **Admin-Seite** (eigene Route, weil die Vorlage vom Projekt kommt), z. B. `app/admin/(dashboard)/datenschutz/page.tsx`,
-   plus ein Menüpunkt in der Navigation des Projekts:
+**Datenschutz-Vorlage für alle Projekte:** Den Text der Datenschutzerklärung liefert der Core als Vorlage aus Bausteinen
+(`src/legal/templates/datenschutz.ts`). Im Admin unter „Datenschutzerklärung“ trägt das Projekt Firma, Kontakt und die
+zuzuschaltenden Bausteine (Karten, Videos, Terminbuchung, Newsletter, Zufriedenheitsanalyse, KI-Agent) ein und erzeugt daraus
+den Text. Bei einer neuen Vorlagenversion zeigt der Admin „Neue Vorlage verfügbar“ mit der Liste der Änderungen.
+Ablauf, Regelwerk und die Übersicht, welches Projekt auf welcher Vorlagenversion steht: [docs/RECHTSTEXTE.md](docs/RECHTSTEXTE.md).
+
+**Standard (empfohlen): alles kommt aus dem Core.**
+
+1. **Datenbank:** einmal pro Projekt `sql/0.12.0_legal_documents.sql` ausführen (Tabelle `legal_documents`, nur die Inhalte
+   sind öffentlich lesbar, keine E-Mail-Adresse des Bearbeiters). Die Datei kann gefahrlos erneut ausgeführt werden.
+   Ohne Migration und ohne Vorlage im Projekt liefert die Seite „nicht gefunden“.
+2. **Website:** einmalig eine Route anlegen, z. B. `app/[legal]/page.tsx` (in der Route-Gruppe mit dem passenden Layout):
+
+```tsx
+export { LegalRoute as default, generateLegalMetadata as generateMetadata, generateLegalStaticParams as generateStaticParams } from "core-cms/src/legal";
+export const dynamicParams = false; // nur /datenschutz und /impressum
+```
+
+   Eigene Gestaltung (Rahmen, Linkfarbe) und Vorlagen für die Zeit vor dem ersten Speichern, in einer eigenen Route-Datei:
+
+```tsx
+import { renderLegalPage, generateLegalMetadata, generateLegalStaticParams } from "core-cms/src/legal";
+export const generateMetadata = generateLegalMetadata;
+export const generateStaticParams = generateLegalStaticParams;
+export const dynamicParams = false;
+export default function Page(props: { params: Promise<{ legal?: string | string[] }> }) {
+  return renderLegalPage(props, { Wrapper: MeinRahmen, linkClassName: "…", templates: { datenschutz: { title, version, blocks }, impressum: { anbieter: { na: false, v: { name: "…" } } } } });
+}
+```
+
+3. **Admin:** „Datenschutzerklärung“ und „Impressum“ erscheinen über `coreAdminPages` (Menü und Catch-all) automatisch.
+   Die Kennungen sind fest: `datenschutz` (Text) und `impressum` (Formular, eigene Spalte `data`). Das Impressum kann nicht über
+   den Text-Editor gespeichert werden, damit sich beide Wege nie überschreiben.
+
+**Alternativ: eigene Admin-Seite mit Vorlage** (eigene Route, hat Vorrang vor dem Catch-all), z. B. `app/admin/(dashboard)/datenschutz/page.tsx`,
+plus ein Menüpunkt in der Navigation des Projekts:
 
 ```tsx
 import { LegalDocumentPage } from "core-cms/src/legal";
@@ -266,8 +306,8 @@ export default function Page() {
 }
 ```
 
-3. **Website:** Text lesen und Verweise einsetzen, dann selbst rendern (Gestaltung bleibt im Projekt;
-   `groupPolicyBlocks`, `policyToc`, `policyAnchor` helfen dabei):
+**Website komplett selbst gestalten:** Text lesen und Verweise einsetzen, dann selbst rendern
+(`groupPolicyBlocks`, `policyToc`, `policyAnchor` helfen dabei):
 
 ```tsx
 import { getLegalDocument, resolvePolicyRefs } from "core-cms/src/legal";
@@ -275,7 +315,7 @@ const doc = await getLegalDocument("datenschutz", template);
 const blocks = resolvePolicyRefs(doc.blocks);
 ```
 
-Für schlichte Texte ohne Nummern, Inhaltsverzeichnis und Verweise `numbered={false}` und ggf. `showVersion={false}` setzen; `slug` ist frei wählbar.
+Für schlichte Texte ohne Nummern, Inhaltsverzeichnis und Verweise `numbered={false}` und ggf. `showVersion={false}` setzen; `slug` ist frei wählbar, nur „impressum“ ist für das Impressum-Formular reserviert.
 
 **Impressum als Formular:** Das Impressum ist kein freier Text, sondern ein festes Formular mit den Pflichtangaben nach
 § 5 DDG (je Abschnitt mit Gesetzesstelle; Abschnitte, die nicht zutreffen, als „Nicht anwendbar“ markierbar, Vorschau,

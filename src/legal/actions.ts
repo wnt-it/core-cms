@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "../supabase/server";
 import { dbErrorMessage } from "../auth/auth-errors";
+import { IMPRESSUM_SLUG } from "./impressum";
 import { POLICY_LIMITS, isPolicyBlock, renumberPolicyBlocks, type PolicyBlock } from "./policy";
 
 const SLUG = /^[a-z0-9][a-z0-9-]{0,39}$/;
@@ -23,6 +24,8 @@ export async function saveLegalDocument(input: {
   if (!user) return { success: false, error: "Nicht angemeldet." };
 
   if (!SLUG.test(input.slug)) return { success: false, error: "Ungültige Dokumentkennung." };
+  // Das Impressum hat sein eigenes Formular (und eigene Spalte), damit beide Wege nie dieselbe Zeile beschreiben
+  if (input.slug === IMPRESSUM_SLUG) return { success: false, error: "Das Impressum wird über sein eigenes Formular gespeichert." };
   const title = String(input.title ?? "").trim();
   const version = String(input.version ?? "").trim();
   if (!title) return { success: false, error: "Bitte einen Titel angeben." };
@@ -49,7 +52,6 @@ export async function saveLegalDocument(input: {
     version,
     blocks,
     updated_at: new Date().toISOString(),
-    updated_by: user.email ?? null,
   });
 
   if (error) {
