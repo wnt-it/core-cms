@@ -11,8 +11,8 @@ alle Projekte bekommen ihn mit dem nächsten Versionsupdate.
 | Version und Änderungsliste der Vorlage | dieselbe Datei: `DATENSCHUTZ_TEMPLATE_VERSION`, `DATENSCHUTZ_TEMPLATE_CHANGES` | Bei jeder inhaltlichen Änderung erhöhen und beschreiben. |
 | Impressum (Pflichtangaben nach § 5 DDG als Formular) | `src/legal/impressum.ts` | Felder und Gesetzesstellen sind für alle gleich, das Projekt gibt nur die Angaben ein. |
 | Editor, Einstellungen der Vorlage im Admin | `src/legal/LegalDocumentForm.tsx`, `src/legal/templates/TemplatePanel.tsx` | Erscheint automatisch unter „Datenschutzerklärung“ bzw. „Impressum“. |
-| Einstellungen je Projekt | Datenbank, Tabelle `legal_documents`, Zeile `datenschutz-vorlage` | Firma, Kontakt, zugeschaltete Bausteine, Stand der Vorlage. |
-| Text je Projekt | Datenbank, Tabelle `legal_documents`, Zeile `datenschutz` (Sicherung: `datenschutz-sicherung`) | Nach dem ersten Speichern gilt dieser Text, nicht mehr die Vorlage im Code. |
+| Einstellungen je Projekt | Datenbank, Tabelle `legal_documents`, Zeile `datenschutz-einstellungen` | Firma, Kontakt, zugeschaltete Bausteine, Stand der Vorlage. |
+| Text je Projekt | Datenbank, Tabelle `legal_documents`, Zeile `datenschutz` (Sicherungen früherer Texte: `datenschutz-sicherung-<Datum>-<Uhrzeit>`, die letzten 10, im Admin wiederherstellbar) | Nach dem ersten Speichern gilt dieser Text, nicht mehr die Vorlage im Code. |
 | Offene Fragen und Prüfpunkte je Kunde | im jeweiligen Projekt, z. B. `docs/DATENSCHUTZ_OFFENE_FRAGEN.md` | Kundenspezifisch, gehört nicht in den Core. |
 
 ## Aufbau der Datenschutz-Vorlage

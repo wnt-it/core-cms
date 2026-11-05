@@ -10,10 +10,14 @@
 import { renumberPolicyBlocks, type LegalDocumentContent, type PolicyBlock } from "../policy";
 
 /** Version der Vorlage (Datum). Bei JEDER inhaltlichen Änderung erhöhen und unten in DATENSCHUTZ_TEMPLATE_CHANGES beschreiben. */
-export const DATENSCHUTZ_TEMPLATE_VERSION = "2026-11-05";
+export const DATENSCHUTZ_TEMPLATE_VERSION = "2026-11-05.2";
 
 /** Was sich in der Vorlage geändert hat (neueste zuerst), in einfacher Sprache. Wird im Admin bei einer neuen Vorlage angezeigt. */
 export const DATENSCHUTZ_TEMPLATE_CHANGES: { version: string; text: string }[] = [
+  {
+    version: "2026-11-05.2",
+    text: "Neuer fester Absatz im Abschnitt „Cookies und Einwilligungsmanagement“: Das Pop-up speichert Bild-Adresse und Zeitpunkt im Session Storage bzw. Local Storage des Browsers (technisch notwendig, keine Einwilligung).",
+  },
   {
     version: "2026-11-05",
     text: "Erste Fassung der Core-Vorlage (nach dem Regelwerk 04.11.2026). Hosting und Betrieb durch den Auftragsverarbeiter mit Vercel und Supabase (Drittländer USA und Singapur, Standardvertragsklauseln und DPF), Versand über Microsoft 365, zuschaltbare Bausteine für Karten, Videos, Terminbuchung, Newsletter, Zufriedenheitsanalyse und KI-Agent.",
@@ -197,6 +201,7 @@ const cookies: PolicyBlock[] = [
   {"t":"p","text":"Cookies und vergleichbare Speicherungen helfen uns, zuvor von Ihnen gewählte Einstellungen (z.B. Ihre Auswahl im Cookie-Banner) bei einem erneuten Besuch zu berücksichtigen%embedFunktionenTeil%."},
   {"t":"p","text":"Technisch notwendige Speicherungen erfolgen auf Grundlage von Art. 6 Abs. 1 lit. f) DSGVO (= berechtigtes Interesse) und § 25 Abs. 2 Nr. 2 TDDDG. Unser berechtigtes Interesse liegt darin, den Betrieb unserer Webseiten und die von Ihnen ausdrücklich gewünschten Funktionen zu ermöglichen. Technisch nicht notwendige Speicherungen und Zugriffe, insbesondere durch Dienste von Drittanbietern, erfolgen nur mit Ihrer Einwilligung gemäß Art. 6 Abs. 1 lit. a) DSGVO (= Einwilligung) und § 25 Abs. 1 TDDDG. Wir setzen keine Dienste zur Reichweitenmessung oder zu Werbezwecken ein."},
   {"t":"p","text":"Ihre Auswahl im Cookie-Banner sowie Ihre Freigaben für eingebettete Inhalte speichern wir im Local Storage Ihres Browsers (Eintrag „%consentKey%“), damit wir sie bei Ihrem nächsten Besuch berücksichtigen können. Rechtsgrundlage ist § 25 Abs. 2 Nr. 2 TDDDG sowie Art. 6 Abs. 1 lit. c) DSGVO in Verbindung mit Art. 7 Abs. 1 DSGVO (Nachweis der Einwilligung). Ihre Auswahl bleibt gespeichert, bis Sie sie über die Cookie-Einstellungen ändern oder die Daten Ihres Browsers löschen. Die Auswahl wird nicht an uns übertragen."},
+  {"t":"p","text":"Wenn wir auf unseren Webseiten ein Hinweisfenster (Pop-up) anzeigen, speichern wir im Session Storage bzw. Local Storage Ihres Browsers die Adresse des angezeigten Bildes und gegebenenfalls den Zeitpunkt der letzten Anzeige, damit das Hinweisfenster nicht bei jedem Seitenaufruf erneut erscheint. Rechtsgrundlage ist § 25 Abs. 2 Nr. 2 TDDDG sowie Art. 6 Abs. 1 lit. f) DSGVO. Die Angaben werden nicht an uns übertragen. Sie bleiben gespeichert, bis das Hinweisfenster wieder angezeigt wird oder Sie die Daten Ihres Browsers löschen."},
   {"t":"p","text":"Sie können Ihre Einwilligung jederzeit mit Wirkung für die Zukunft über die „Cookie-Einstellungen“ am Ende jeder Seite widerrufen. Die Rechtmäßigkeit der bis zum Widerruf erfolgten Verarbeitung bleibt unberührt."},
   {"t":"p","text":"Sofern Sie nicht möchten, dass Cookies auf Ihrem Gerät gespeichert werden, können Sie Ihren Browser so einstellen, dass er Sie über die Platzierung von Cookies benachrichtigt oder diese nicht akzeptiert. Weitere Informationen finden Sie in der Onlinehilfe Ihres Browsers. Wenn Sie durch uns eingesetzte Cookies blockieren, können Sie möglicherweise einzelne Funktionen unserer Webseiten nicht oder nur eingeschränkt verwenden."},
   {"t":"p","text":"Eine Übermittlung von Daten in Drittländer findet durch die in diesem Abschnitt beschriebene Speicherung nicht statt."},

@@ -1,11 +1,16 @@
 // Liest, welche Einstellungen und Version der Datenschutz-Vorlage ein Projekt verwendet (Server).
-// Gespeichert in legal_documents, Zeile „datenschutz-vorlage“ (Spalte data: { version, config, appliedAt }).
+// Gespeichert in legal_documents, Zeile „datenschutz-einstellungen“ (Spalte data: { version, config, appliedAt }).
+// Der Vorlagentext selbst liegt im Code (datenschutz.ts), nicht in der Datenbank.
 
 import { supabase } from "../../supabase/browser-singleton";
+import { createClient } from "../../supabase/server";
 import { DEFAULT_DATENSCHUTZ_CONFIG, normalizeDatenschutzConfig, type DatenschutzConfig } from "./datenschutz";
 
-export const VORLAGE_SLUG = "datenschutz-vorlage";
+export const EINSTELLUNGEN_SLUG = "datenschutz-einstellungen";
+/** Sicherungen des bisherigen Textes: „datenschutz-sicherung-JJJJMMTT-HHMMSS“ (ältere Fassung: nur „datenschutz-sicherung“). */
 export const SICHERUNG_SLUG = "datenschutz-sicherung";
+/** So viele Sicherungen bleiben erhalten, ältere werden gelöscht. */
+export const MAX_SICHERUNGEN = 10;
 
 export interface DatenschutzVorlageStand {
   /** Version der Vorlage, aus der der Text zuletzt erzeugt wurde; null: noch nie aus der Vorlage erzeugt */
@@ -44,7 +49,8 @@ async function defaultsFromSettings(): Promise<Partial<DatenschutzConfig>> {
 /** @param vorgabe Startwerte des Projekts (gelten, solange noch keine Einstellungen gespeichert sind; überschreiben die Vorschläge aus den Website-Einstellungen) */
 export async function getDatenschutzVorlage(vorgabe?: Partial<DatenschutzConfig>): Promise<DatenschutzVorlageStand> {
   try {
-    const { data } = await supabase.from("legal_documents").select("data").eq("slug", VORLAGE_SLUG).maybeSingle();
+    // Nur im Admin: die Einstellungen sind öffentlich nicht lesbar
+    const { data } = await (await createClient()).from("legal_documents").select("data").eq("slug", EINSTELLUNGEN_SLUG).maybeSingle();
     const d = data?.data as { version?: unknown; config?: unknown; appliedAt?: unknown } | null | undefined;
     if (d && d.config) {
       return {
@@ -58,4 +64,29 @@ export async function getDatenschutzVorlage(vorgabe?: Partial<DatenschutzConfig>
     console.error("[getDatenschutzVorlage] unexpected error:", err);
   }
   return { version: null, appliedAt: null, config: normalizeDatenschutzConfig({ ...DEFAULT_DATENSCHUTZ_CONFIG, ...(await defaultsFromSettings()), ...vorgabe, module: { ...DEFAULT_DATENSCHUTZ_CONFIG.module, ...(vorgabe?.module ?? {}) } }), gespeichert: false };
+}
+
+export interface DatenschutzSicherung {
+  slug: string;
+  title: string;
+  version: string;
+  /** Zeitpunkt der Sicherung (ISO) */
+  savedAt: string;
+}
+
+/** Vorhandene Sicherungen, neueste zuerst. Nur im Admin (angemeldet): Sicherungen sind öffentlich nicht lesbar. */
+export async function getDatenschutzSicherungen(): Promise<DatenschutzSicherung[]> {
+  try {
+    const supabaseAuth = await createClient();
+    const { data } = await supabaseAuth
+      .from("legal_documents")
+      .select("slug, title, version, updated_at")
+      .like("slug", `${SICHERUNG_SLUG}%`)
+      .order("updated_at", { ascending: false })
+      .limit(MAX_SICHERUNGEN + 5);
+    return (data ?? []).map((r) => ({ slug: r.slug, title: r.title || "Datenschutzerklärung", version: r.version || "", savedAt: r.updated_at }));
+  } catch (err) {
+    console.error("[getDatenschutzSicherungen] unexpected error:", err);
+    return [];
+  }
 }

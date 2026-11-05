@@ -29,9 +29,12 @@ grant select, insert, update, delete on public.legal_documents to authenticated;
 
 alter table public.legal_documents enable row level security;
 
+-- Öffentlich lesbar sind die Texte, nicht aber die Sicherungen früherer Fassungen und die Einstellungen der Datenschutz-Vorlage
+-- (nur im Admin sichtbar).
 drop policy if exists "Allow public read access for legal_documents" on public.legal_documents;
 create policy "Allow public read access for legal_documents"
-  on public.legal_documents for select to public using (true);
+  on public.legal_documents for select to public
+  using (slug not like 'datenschutz-sicherung%' and slug <> 'datenschutz-einstellungen');
 
 drop policy if exists "Allow auth management for legal_documents" on public.legal_documents;
 create policy "Allow auth management for legal_documents"

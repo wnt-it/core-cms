@@ -8,6 +8,6 @@ export {
   DEFAULT_DATENSCHUTZ_CONFIG,
 } from "./datenschutz";
 export type { DatenschutzConfig } from "./datenschutz";
-export { getDatenschutzVorlage } from "./vorlage";
-export type { DatenschutzVorlageStand } from "./vorlage";
-export { saveDatenschutzVorlage, applyDatenschutzVorlage } from "./actions";
+export { getDatenschutzVorlage, getDatenschutzSicherungen } from "./vorlage";
+export type { DatenschutzVorlageStand, DatenschutzSicherung } from "./vorlage";
+export { saveDatenschutzVorlage, applyDatenschutzVorlage, restoreDatenschutzSicherung } from "./actions";

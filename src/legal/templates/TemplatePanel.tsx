@@ -9,7 +9,8 @@ import { toast } from 'sonner'
 import { ChevronDown, ChevronRight, Loader2 } from 'lucide-react'
 import { Badge, Button, Card, Field, FieldGrid, Input, Note, Section, Select, SwitchRow, Textarea } from '../../ui/components'
 import { ConfirmDialog } from '../../ui/ConfirmDialog'
-import { applyDatenschutzVorlage, saveDatenschutzVorlage } from './actions'
+import { applyDatenschutzVorlage, restoreDatenschutzSicherung, saveDatenschutzVorlage } from './actions'
+import type { DatenschutzSicherung } from './vorlage'
 import {
   DATENSCHUTZ_MODULE_LABELS,
   DATENSCHUTZ_TEMPLATE_CHANGES,
@@ -22,6 +23,7 @@ export default function TemplatePanel({
   savedVersion,
   appliedAt,
   settingsSaved,
+  sicherungen = [],
   publicPath,
 }: {
   initial: DatenschutzConfig
@@ -30,6 +32,8 @@ export default function TemplatePanel({
   appliedAt: string | null
   /** false: die Werte sind Vorschläge aus den Website-Einstellungen */
   settingsSaved: boolean
+  /** Gesicherte frühere Texte, neueste zuerst */
+  sicherungen?: DatenschutzSicherung[]
   publicPath?: string
 }) {
   const router = useRouter()
@@ -38,6 +42,7 @@ export default function TemplatePanel({
   const [version, setVersion] = useState<string | null>(savedVersion)
   const [open, setOpen] = useState(!settingsSaved || (savedVersion !== null && savedVersion !== DATENSCHUTZ_TEMPLATE_VERSION))
   const [confirm, setConfirm] = useState(false)
+  const [restore, setRestore] = useState<DatenschutzSicherung | null>(null)
   const [pending, start] = useTransition()
 
   const outdated = version !== null && version !== DATENSCHUTZ_TEMPLATE_VERSION
@@ -68,10 +73,25 @@ export default function TemplatePanel({
       if (!res.success) return void toast.error(res.error)
       setSaved(config)
       setVersion(DATENSCHUTZ_TEMPLATE_VERSION)
-      toast.success('Text aus der Vorlage erzeugt und gespeichert. Der bisherige Text liegt als Sicherung in der Datenbank.')
+      toast.success('Text aus der Vorlage erzeugt und gespeichert. Der bisherige Text liegt unter „Sicherungen“ bereit.')
       // Der Editor darunter zeigt den neuen Text nach dem Neuladen
       window.location.reload()
     })
+
+  const doRestore = () => {
+    const target = restore
+    if (!target) return
+    start(async () => {
+      setRestore(null)
+      const res = await restoreDatenschutzSicherung({ slug: target.slug, publicPath })
+      if (!res.success) return void toast.error(res.error)
+      toast.success('Sicherung wiederhergestellt. Der Text davor liegt jetzt selbst als Sicherung bereit.')
+      // Der Editor darunter zeigt den wiederhergestellten Text nach dem Neuladen
+      window.location.reload()
+    })
+  }
+
+  const fmt = (iso: string) => new Date(iso).toLocaleString('de-DE', { dateStyle: 'medium', timeStyle: 'short' })
 
   return (
     <Section
@@ -191,8 +211,43 @@ export default function TemplatePanel({
         )}
       </Card>
 
+      <div className="mt-3">
+        <Card padded={false}>
+          <div className="p-4">
+            <h3 className="text-[14px] font-semibold text-[#0F172A]">Sicherungen</h3>
+            <p className="mt-1 text-[12.5px] text-[#64748B]">
+              Vor jedem „Text aus Vorlage erzeugen“ und jeder Wiederherstellung wird der bisherige Text hier abgelegt (die letzten 10). Nur im Admin sichtbar, nicht auf der Website.
+            </p>
+          </div>
+          {sicherungen.length === 0 ? (
+            <p className="border-t border-[#F1F5F9] p-4 text-[13px] text-[#64748B]">Noch keine Sicherung vorhanden.</p>
+          ) : (
+            <ul className="divide-y divide-[#F1F5F9] border-t border-[#F1F5F9]">
+              {sicherungen.map((s) => (
+                <li key={s.slug} className="flex flex-wrap items-center gap-3 px-4 py-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[13.5px] font-medium text-[#0F172A]">Text vom Stand {fmt(s.savedAt)}</p>
+                    <p className="truncate text-[12.5px] text-[#64748B]">
+                      {s.title}
+                      {s.version ? `, Fassung ${s.version}` : ''}
+                    </p>
+                  </div>
+                  <Button variant="ghost" onClick={() => setRestore(s)} disabled={pending}>
+                    Wiederherstellen
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+      </div>
+
+      <ConfirmDialog open={restore !== null} title="Sicherung wiederherstellen?" confirmLabel="Wiederherstellen" onConfirm={doRestore} onCancel={() => setRestore(null)} pending={pending} danger={false}>
+        Die Datenschutzerklärung wird durch den Text vom Stand {restore ? fmt(restore.savedAt) : ''} ersetzt und sofort gespeichert, also auch auf der Website sichtbar. Der jetzige Text wird vorher selbst als Sicherung abgelegt.
+      </ConfirmDialog>
+
       <ConfirmDialog open={confirm} title="Text aus der Vorlage erzeugen?" confirmLabel="Erzeugen und speichern" onConfirm={apply} onCancel={() => setConfirm(false)} pending={pending} danger={false}>
-        Die Datenschutzerklärung wird komplett durch die Vorlage (Version {DATENSCHUTZ_TEMPLATE_VERSION}) mit den Angaben oben ersetzt und sofort gespeichert, also auch auf der Website sichtbar. Eigene Änderungen im Text gehen verloren. Der bisherige Text wird vorher als Sicherung in der Datenbank abgelegt.
+        Die Datenschutzerklärung wird komplett durch die Vorlage (Version {DATENSCHUTZ_TEMPLATE_VERSION}) mit den Angaben oben ersetzt und sofort gespeichert, also auch auf der Website sichtbar. Eigene Änderungen im Text gehen verloren. Der bisherige Text wird vorher als Sicherung abgelegt und lässt sich unter „Sicherungen“ wiederherstellen.
       </ConfirmDialog>
     </Section>
   )
