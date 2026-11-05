@@ -40,7 +40,7 @@ export async function saveLegalDocument(input: {
   }
   // Leere Abschnitte nicht speichern, Überschriften nach ihrer Stelle neu nummerieren
   const trimmed = input.blocks
-    .map((b) => (b.ref && b.t.startsWith("h") ? { t: b.t, text: b.text.trim(), ref: b.ref } : { t: b.t, text: b.text.trim() }))
+    .map((b) => ({ t: b.t, text: b.text.trim(), ...(b.ref && b.t.startsWith("h") ? { ref: b.ref } : {}), ...(b.fest ? { fest: true } : {}) }))
     .filter((b) => b.text);
   const blocks = input.numbered === false ? trimmed : renumberPolicyBlocks(trimmed);
   const refs = blocks.flatMap((b) => (b.ref ? [b.ref] : []));

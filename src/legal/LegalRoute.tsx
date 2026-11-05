@@ -70,7 +70,7 @@ export async function generateLegalMetadata(props: RouteParams): Promise<Metadat
   return { title: page.title, description: page.description, alternates: { canonical: `/${page.path}` } };
 }
 
-const SAFE_HREF = /^(https?:\/\/|mailto:|tel:|\/)/i;
+const SAFE_HREF = /^(https?:\/\/|mailto:|tel:|\/(?![\/\\]))/i;
 // [Text](Adresse), https://…, **fett** und Platzhalter [● …] (gelb markiert, bis sie gefüllt sind)
 const TOKEN = /(\[[^\]]+\]\([^)\s]+\)|https?:\/\/[^\s]+?(?=[.,;)]?(?:\s|$))|\*\*[^*]+\*\*|\[●[^\]]*\])/g;
 

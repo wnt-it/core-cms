@@ -12,4 +12,7 @@ Noch keine Einträge.
 
 ## Features
 
-Noch keine Einträge.
+- [ ] **Datenschutz-Vorlage: zuschaltbare Bausteine** (alb-naturenergie, 05.11.2026)
+  Karten, Videos, Terminbuchung, Newsletter und Zufriedenheitsanalyse wieder als Schalter in die Vorlage holen, allgemein formuliert mit Platzhaltern für den Anbieter. Später fertige Texte je Anbieter (YouTube, Vimeo, Bookings, Calendly). Entwürfe: `docs/DATENSCHUTZ_BAUSTEINE_SPAETER.md`. Bis dahin trägt der Kunde sie im Admin als eigenen Abschnitt ein.
+- [ ] **Datenschutz-Vorlage: Abgleich einzelner Absätze** (alb-naturenergie, 05.11.2026)
+  Für anpassbare Bausteine: Dreiwege-Abgleich (Stand beim letzten Holen, Text im Admin, neue Vorlage). Unveränderte Absätze aktualisieren, vom Kunden geänderte behalten, bei Änderung auf beiden Seiten wortweise zeigen, was sich geändert hat, und fragen. Erst nötig, wenn es die zuschaltbaren Bausteine gibt. Heute werden nur die festen Abschnitte ersetzt.

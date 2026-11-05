@@ -4,7 +4,9 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "../../supabase/server";
 import { dbErrorMessage } from "../../auth/auth-errors";
 import { renumberPolicyBlocks, toPolicyBlocks } from "../policy";
-import { DATENSCHUTZ_TEMPLATE_VERSION, buildDatenschutz, normalizeDatenschutzConfig, type DatenschutzConfig } from "./datenschutz";
+import { buildDatenschutz, normalizeDatenschutzConfig, type DatenschutzConfig } from "./datenschutz";
+import { getDatenschutzVorlageText } from "./vorlage-remote";
+import { mergeDatenschutz, vorschauDatenschutz } from "./merge";
 import { EINSTELLUNGEN_SLUG, MAX_SICHERUNGEN, SICHERUNG_SLUG } from "./vorlage";
 
 type Db = Awaited<ReturnType<typeof createClient>>;
@@ -66,12 +68,14 @@ export async function saveDatenschutzVorlage(input: { config: DatenschutzConfig;
   const { supabase, user } = await requireUser();
   if (!user) return { success: false as const, error: "Nicht angemeldet." };
   const config = normalizeDatenschutzConfig(input.config);
+  // Zeitpunkt des letzten Holens bleibt erhalten, hier ändern sich nur die Angaben
+  const { data: existing } = await supabase.from("legal_documents").select("data").eq("slug", EINSTELLUNGEN_SLUG).maybeSingle();
   const { error } = await supabase.from("legal_documents").upsert({
     slug: EINSTELLUNGEN_SLUG,
     title: "Einstellungen der Datenschutz-Vorlage",
     version: "",
     blocks: [],
-    data: { version: input.version, config, appliedAt: null },
+    data: { ...(existing?.data && typeof existing.data === "object" ? existing.data : {}), version: input.version, config },
     updated_at: new Date().toISOString(),
   });
   if (error) return dbError(error, "save template settings");
@@ -79,16 +83,35 @@ export async function saveDatenschutzVorlage(input: { config: DatenschutzConfig;
   return { success: true as const };
 }
 
+/** Zeigt, was „Text aus Vorlage holen“ ändern würde, ohne etwas zu speichern. */
+export async function previewDatenschutzVorlage(input: { config: DatenschutzConfig }) {
+  const { supabase, user } = await requireUser();
+  if (!user) return { success: false as const, error: "Nicht angemeldet." };
+  const { data: current, error } = await supabase.from("legal_documents").select("blocks").eq("slug", "datenschutz").maybeSingle();
+  if (error) return dbError(error, "read current text");
+  const vorlage = await getDatenschutzVorlageText();
+  const doc = buildDatenschutz(normalizeDatenschutzConfig(input.config), vorlage);
+  return { success: true as const, vorlageVersion: vorlage.version, vorschau: vorschauDatenschutz(toPolicyBlocks(current?.blocks), doc.blocks) };
+}
+
 /**
- * Erzeugt den Text aus der aktuellen Vorlage und den Einstellungen und speichert ihn als Datenschutzerklärung.
- * Der bisherige Text wird vorher als Sicherung abgelegt (legal_documents, Zeilen „datenschutz-sicherung-…“, die letzten 10).
+ * Ersetzt im Text die Abschnitte der Vorlage und speichert ihn als Datenschutzerklärung.
+ * Alle anderen Abschnitte bleiben erhalten (siehe merge.ts). Der bisherige Text wird vorher als Sicherung abgelegt
+ * (legal_documents, Zeilen „datenschutz-sicherung-…“, die letzten 10).
  */
-export async function applyDatenschutzVorlage(input: { config: DatenschutzConfig; publicPath?: string }) {
+export async function applyDatenschutzVorlage(input: { config: DatenschutzConfig; vorlageVersion: string; publicPath?: string }) {
   const { supabase, user } = await requireUser();
   if (!user) return { success: false as const, error: "Nicht angemeldet." };
   const config = normalizeDatenschutzConfig(input.config);
-  const doc = buildDatenschutz(config);
-  const blocks = renumberPolicyBlocks(doc.blocks);
+  const vorlage = await getDatenschutzVorlageText();
+  // Übernommen wird nur die Fassung, die in der Vorschau zu sehen war
+  if (vorlage.version !== input.vorlageVersion) {
+    return { success: false as const, error: "Die Vorlage wurde gerade aktualisiert. Bitte die Vorschau neu laden." };
+  }
+  const doc = buildDatenschutz(config, vorlage);
+  const { data: current, error: readError } = await supabase.from("legal_documents").select("blocks").eq("slug", "datenschutz").maybeSingle();
+  if (readError) return dbError(readError, "read current text");
+  const blocks = renumberPolicyBlocks(mergeDatenschutz(toPolicyBlocks(current?.blocks), doc.blocks));
   const now = new Date().toISOString();
 
   // 1) Sicherung des bisherigen Textes
@@ -111,7 +134,7 @@ export async function applyDatenschutzVorlage(input: { config: DatenschutzConfig
     title: "Einstellungen der Datenschutz-Vorlage",
     version: "",
     blocks: [],
-    data: { version: DATENSCHUTZ_TEMPLATE_VERSION, config, appliedAt: now },
+    data: { version: vorlage.version, config, appliedAt: now },
     updated_at: now,
   });
   if (metaError) return dbError(metaError, "save template state");

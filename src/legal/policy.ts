@@ -10,6 +10,8 @@ export interface PolicyBlock {
   text: string;
   /** Nur Überschriften: feste Kennung, auf die Verweise im Text zeigen ({{ref:kennung}}). Bleibt beim Umnummerieren gleich. */
   ref?: string;
+  /** Fester Abschnitt aus der Vorlage: im Editor gesperrt, wird nur über die Vorlage im Core geändert. */
+  fest?: boolean;
 }
 
 /** Erlaubte Kennung eines Verweisziels (Kleinbuchstaben und Ziffern). */
@@ -52,13 +54,14 @@ export function isPolicyBlock(value: unknown): value is PolicyBlock {
   if (!value || typeof value !== "object") return false;
   const v = value as Record<string, unknown>;
   const refOk = v.ref === undefined || v.ref === null || (typeof v.ref === "string" && REF_ID_PATTERN.test(v.ref));
+  if (v.fest !== undefined && typeof v.fest !== "boolean") return false;
   return typeof v.text === "string" && typeof v.t === "string" && (POLICY_BLOCK_TYPES as string[]).includes(v.t) && refOk;
 }
 
-/** Übernimmt nur gültige Blöcke (Typ, Text, ggf. Kennung), alles andere wird verworfen. */
+/** Übernimmt nur gültige Blöcke (Typ, Text, ggf. Kennung und Sperre), alles andere wird verworfen. */
 export function toPolicyBlocks(value: unknown): PolicyBlock[] {
   return Array.isArray(value)
-    ? value.filter(isPolicyBlock).map((b) => (b.ref ? { t: b.t, text: b.text, ref: b.ref } : { t: b.t, text: b.text }))
+    ? value.filter(isPolicyBlock).map((b) => ({ t: b.t, text: b.text, ...(b.ref ? { ref: b.ref } : {}), ...(b.fest ? { fest: true } : {}) }))
     : [];
 }
 

@@ -10,6 +10,7 @@ import type { LegalDocumentContent } from './policy'
 import TemplatePanel from './templates/TemplatePanel'
 import { buildDatenschutz, type DatenschutzConfig } from './templates/datenschutz'
 import { getDatenschutzSicherungen, getDatenschutzVorlage } from './templates/vorlage'
+import { getDatenschutzVorlageText } from './templates/vorlage-remote'
 
 export default async function LegalDocumentPage({
   slug,
@@ -40,7 +41,8 @@ export default async function LegalDocumentPage({
   // Datenschutzerklärung: Vorlage und Einstellungen kommen aus dem Core (legal/templates), sofern das Projekt keine eigene Vorlage übergibt
   const vorlage = slug === 'datenschutz' ? await getDatenschutzVorlage(vorlageDefaults) : null
   const sicherungen = vorlage && !template ? await getDatenschutzSicherungen() : []
-  const effectiveTemplate = template ?? (vorlage ? buildDatenschutz(vorlage.config) : { title: label, version: '', blocks: [] })
+  const vorlageText = vorlage && !template ? await getDatenschutzVorlageText() : undefined
+  const effectiveTemplate = template ?? (vorlage ? buildDatenschutz(vorlage.config, vorlageText) : { title: label, version: '', blocks: [] })
   const doc = await getLegalDocument(slug, effectiveTemplate)
   return (
     <>
@@ -57,12 +59,14 @@ export default async function LegalDocumentPage({
           settingsSaved={vorlage.gespeichert}
           sicherungen={sicherungen}
           publicPath={publicPath}
+          vorlageVersion={vorlageText!.version}
+          vorlageChanges={vorlageText!.changes}
         />
       )}
       <LegalDocumentForm
         slug={slug}
         initial={{ title: doc.title, version: doc.version, blocks: doc.blocks }}
-        template={effectiveTemplate}
+        template={vorlage && !template ? undefined : effectiveTemplate}
         publicPath={publicPath}
         fromDatabase={doc.fromDatabase}
         numbered={numbered}

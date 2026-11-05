@@ -44,7 +44,7 @@ let nextId = 1
 // Im Editor stehen Überschriften ohne Nummer; die Nummer ergibt sich aus der Stelle in der Liste und wird beim Speichern (und in der Anzeige) gesetzt.
 const withIds = (blocks: PolicyBlock[], strip = true): Row[] =>
   blocks.map((b) => ({ ...b, text: strip && b.t.startsWith('h') ? stripHeadingNumber(b.text) : b.text, id: nextId++ }))
-const plain = (rows: Row[]): PolicyBlock[] => rows.map(({ t, text, ref }) => (ref ? { t, text, ref } : { t, text }))
+const plain = (rows: Row[]): PolicyBlock[] => rows.map(({ t, text, ref, fest }) => ({ t, text, ...(ref ? { ref } : {}), ...(fest ? { fest: true } : {}) }))
 /** Stand wie gespeichert: Überschriften mit Nummer. */
 const numbered = (rows: Row[], on = true): PolicyBlock[] => (on ? renumberPolicyBlocks(plain(rows)) : plain(rows))
 const clean = (blocks: PolicyBlock[]) => blocks.map((b) => ({ ...b, text: b.text.trim() })).filter((b) => b.text)
@@ -536,6 +536,8 @@ export default function LegalDocumentForm({
             const isOpen = open.has(key) || filter === 'open'
             const ph = (g.head ? countPlaceholders([g.head]) : 0) + countPlaceholders(g.items)
             const gi = groups.indexOf(g)
+            // Feste Abschnitte aus der Vorlage: nur lesen, geändert wird nur die Vorlage im Core
+            const locked = g.head ? !!g.head.fest : g.items.length > 0 && g.items.every((r) => r.fest)
             return (
               <div key={key} className={cx('min-w-0', g.head ? groupIndent[g.head.t] : '')}>
                 <Card padded={false}>
@@ -553,7 +555,7 @@ export default function LegalDocumentForm({
                     {g.head ? (
                       <>
                         <div className="w-full shrink-0 sm:w-[140px]">
-                          <Select value={g.head.t} onChange={(e) => update(g.head!.id, { t: e.target.value as PolicyBlockType })} aria-label="Ebene der Überschrift">
+                          <Select value={g.head.t} disabled={locked} onChange={(e) => update(g.head!.id, { t: e.target.value as PolicyBlockType })} aria-label="Ebene der Überschrift">
                             {HEAD_TYPES.map((t) => (
                               <option key={t} value={t}>
                                 {POLICY_TYPE_LABELS[t]}
@@ -565,6 +567,7 @@ export default function LegalDocumentForm({
                         {/* Mehrzeilig, damit lange Überschriften komplett lesbar sind */}
                         <AutoTextarea
                           value={g.head.text}
+                          readOnly={locked}
                           onChange={(e) => update(g.head!.id, { text: e.target.value.replace(/\n/g, ' ') })}
                           onKeyDown={(e) => e.key === 'Enter' && e.preventDefault()}
                           aria-label="Überschrift"
@@ -579,12 +582,13 @@ export default function LegalDocumentForm({
                       </button>
                     )}
                     <div className="flex shrink-0 items-center gap-1.5">
+                      {locked && <Badge>Vorgabe</Badge>}
                       {ph > 0 && <Badge tone="amber">{ph} offen</Badge>}
                       <button type="button" onClick={() => toggle(key)} className="text-[12.5px] text-[#64748B] hover:text-[#0F172A] sm:hidden">
                         {isOpen ? 'Zuklappen' : 'Aufklappen'}
                       </button>
                     </div>
-                    {g.head && (
+                    {g.head && !locked && (
                       <div className="flex shrink-0 items-center gap-0.5">
                         <button type="button" className={iconButtonClass} onClick={() => moveGroup(g, -1)} disabled={prevSibling(groups, gi) < 0} aria-label="Gruppe nach oben">
                           <ArrowUp size={16} />
@@ -604,14 +608,15 @@ export default function LegalDocumentForm({
                   {/* Inhalt der Gruppe */}
                   {isOpen && (
                     <div className="flex flex-col gap-2 border-t border-[#F1F5F9] p-3 sm:pl-14">
-                      {g.items.length === 0 && <p className="text-[13px] text-[#64748B]">Noch kein Text unter dieser Überschrift.</p>}
+                      {locked && <p className="text-[12.5px] text-[#64748B]">Dieser Abschnitt ist für alle Websites gleich und wird von WNT-IT vorgegeben. Er lässt sich hier nicht ändern. Angaben wie die Firma stehen oben bei den Einstellungen der Vorlage.</p>}
+                      {g.items.length === 0 && !locked && <p className="text-[13px] text-[#64748B]">Noch kein Text unter dieser Überschrift.</p>}
                       {elementsOf(g.items).map((el, k, all) => {
                         const text = elText(el)
                         const isList = el.kind === 'list'
                         return (
                           <div key={el.key} className="flex flex-col gap-2 sm:flex-row sm:items-start">
                             <div className="w-full shrink-0 sm:w-[130px]">
-                              <Select value={el.kind} onChange={(e) => changeKind(el, e.target.value as 'p' | 'list')} aria-label="Art des Textes">
+                              <Select value={el.kind} disabled={locked} onChange={(e) => changeKind(el, e.target.value as 'p' | 'list')} aria-label="Art des Textes">
                                 <option value="p">Absatz</option>
                                 <option value="list">Liste</option>
                               </Select>
@@ -619,6 +624,7 @@ export default function LegalDocumentForm({
                             <div className={cx('min-w-0 flex-1', isList && 'sm:ml-4')}>
                               <AutoTextarea
                                 value={elDisplay(el)}
+                                readOnly={locked}
                                 onChange={(e) => {
                                   if (!isList) return setElText(el, e.target.value)
                                   const node = e.target
@@ -634,16 +640,16 @@ export default function LegalDocumentForm({
                                   if (node) areas.current.set(el.key, node)
                                   else areas.current.delete(el.key)
                                 }}
-                                onFocus={() => setLastFocus(el.key)}
+                                onFocus={() => !locked && setLastFocus(el.key)}
                               />
-                              {isList && <p className="mt-1 text-[12.5px] text-[#64748B]">Jede Zeile mit „•“ ist ein Listenpunkt. Eine neue Zeile (Enter) ergibt einen neuen Punkt.</p>}
+                              {isList && !locked && <p className="mt-1 text-[12.5px] text-[#64748B]">Jede Zeile mit „•“ ist ein Listenpunkt. Eine neue Zeile (Enter) ergibt einen neuen Punkt.</p>}
                               {text.includes('{{ref:') && (
                                 <p className={cx('mt-1 text-[12.5px]', resolvePolicyText(text, targets).includes(MISSING_REF_TEXT) ? 'text-[#B91C1C]' : 'text-[#64748B]')}>
                                   Vorschau: {resolvePolicyText(text, targets)}
                                 </p>
                               )}
                             </div>
-                            <div className="flex shrink-0 items-center gap-0.5">
+                            {!locked && <div className="flex shrink-0 items-center gap-0.5">
                               <button type="button" className={iconButtonClass} onClick={() => moveEl(g, el, -1)} disabled={k === 0} aria-label="Nach oben">
                                 <ArrowUp size={16} />
                               </button>
@@ -656,17 +662,21 @@ export default function LegalDocumentForm({
                               <button type="button" className={iconButtonDangerClass} onClick={() => removeEl(el)} aria-label={isList ? 'Liste löschen' : 'Absatz löschen'}>
                                 <Trash2 size={16} />
                               </button>
-                            </div>
+                            </div>}
                           </div>
                         )
                       })}
                       <div className="flex flex-wrap gap-2 pt-1">
-                        <Button size="sm" variant="ghost" onClick={() => addItem(g, 'p')}>
-                          <Plus size={15} /> Absatz
-                        </Button>
-                        <Button size="sm" variant="ghost" onClick={() => addItem(g, 'li')}>
-                          <Plus size={15} /> Liste
-                        </Button>
+                        {!locked && (
+                          <>
+                            <Button size="sm" variant="ghost" onClick={() => addItem(g, 'p')}>
+                              <Plus size={15} /> Absatz
+                            </Button>
+                            <Button size="sm" variant="ghost" onClick={() => addItem(g, 'li')}>
+                              <Plus size={15} /> Liste
+                            </Button>
+                          </>
+                        )}
                         <span className="flex-1" />
                         <Button size="sm" variant="ghost" onClick={() => addGroupAfter(g)}>
                           <Plus size={15} /> Abschnitt darunter

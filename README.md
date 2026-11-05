@@ -220,12 +220,21 @@ Das Projekt liefert nur Logo und Menüpunkte.
 
 - **Gerüst:** `AdminShell` aus `core-cms/src/ui` (Seitenleiste „Inhalte“/„System“, Umschalter,
   Konto, Handy-Menü). Core-Seiten aus `coreAdminPages` erscheinen automatisch, `group: "content"`
-  unter „Inhalte“, sonst unter „System“.
+  unter „Inhalte“, sonst unter „System“, mit `inMenu: false` ohne Menüpunkt. Mein Konto öffnet sich über den Benutzer unten,
+  die Core-Version über die Versionsangabe darüber (mit Zahl, wenn neuere Versionen veröffentlicht sind).
 - **Bausteine:** `PageHeader`, `Section`, `Card`, `Field`, `Input`, `Select`, `SwitchRow`, `Button`,
   `SaveBar`, `Badge`, `Note`, `EmptyState`, `TableCard`, `ConfirmDialog` u. a. aus `core-cms/src/ui`.
 - **Schrift:** Das Projekt setzt die CSS-Variable `--font-admin` (z. B. Inter über `next/font`).
 - **Bildfelder:** `ImageUpload` (ein Bild) und `GalleryField` (mehrere Bilder, erstes = Hauptbild,
   Sortieren per Ziehen oder Pfeilen, optional `name` für ein verstecktes Feld mit JSON-Liste).
+
+## Daten-Export (ab v0.13.0)
+
+`ExportPanel` lädt Inhalte und Medien der Website als ZIP (`daten/<tabelle>.json`, `medien/<bucket>/<pfad>`, `LIES-MICH.txt`). Es hat keinen eigenen Menüpunkt, sondern kommt als Tab in die Einstellungen-Seite des Projekts (`import { ExportPanel } from "core-cms/src/export"`):
+
+- **Tabellen** werden aus der Schnittstellen-Beschreibung (OpenAPI, Service-Role-Schlüssel) ermittelt, neue Tabellen sind also beim nächsten Export dabei. Nie enthalten: `email_settings` und Tabellen, deren Name secret, token, credential, password oder smtp enthält (`src/export/discover.ts`).
+- **Medien**: alle Buckets, rekursiv. Die Dateien werden mit kurzlebigen Adressen direkt aus dem Browser geladen und dort gezippt (Chrome/Edge schreiben direkt in die Datei, andere Browser sammeln im Arbeitsspeicher, Grenze 1,5 GB).
+- Braucht `SUPABASE_SERVICE_ROLE_KEY`. Eine eigene Backup-Seite im Projekt (`.../admin/.../backup/page.tsx`) samt Menüeintrag löschen.
 
 ## Pop-up (ab v0.9.0)
 
@@ -234,7 +243,7 @@ Ein Bild als Hinweis beim Öffnen der Website (z. B. Aktionen, Betriebsferien), 
 1. **Datenbank:** einmal pro Projekt `sql/0.9.0_site_popup.sql` ausführen (Spalten `popup_enabled`,
    `popup_image_url`, `popup_image_alt` in `site_settings`). Ohne Migration bleibt das Pop-up aus,
    die Website läuft weiter.
-2. **Verwaltung:** `/admin/popup` erscheint automatisch über `coreAdminPages` unter „Inhalte“.
+2. **Verwaltung:** `/admin/popup` erscheint automatisch über `coreAdminPages` unter „System“.
 3. **Website:** dort einbinden, wo es erscheinen soll (liest ohne Cookies, Seite bleibt statisch):
 
 ```tsx
@@ -261,10 +270,11 @@ Datenschutzerklärung u. Ä. im Admin bearbeiten: Überschriften mit ihren Texte
 Nummern (1. / 1.1 / 1.1.1) automatisch nach der Stelle, Inhaltsverzeichnis aus den Überschriften 1 und 2,
 Verweise („siehe 2.5 …“) wandern bei Änderungen mit, Hinweis auf offene Platzhalter `[● …]`.
 
-**Datenschutz-Vorlage für alle Projekte:** Den Text der Datenschutzerklärung liefert der Core als Vorlage aus Bausteinen
-(`src/legal/templates/datenschutz.ts`). Im Admin unter „Datenschutzerklärung“ trägt das Projekt Firma, Kontakt und die
-zuzuschaltenden Bausteine (Karten, Videos, Terminbuchung, Newsletter, Zufriedenheitsanalyse, KI-Agent) ein und erzeugt daraus
-den Text. Bei einer neuen Vorlagenversion zeigt der Admin „Neue Vorlage verfügbar“ mit der Liste der Änderungen.
+**Datenschutz-Vorlage für alle Projekte:** Die Grundtexte der Datenschutzerklärung liefert der Core
+(`src/legal/templates/datenschutz.ts`): Allgemeines, Hosting, E-Mail, Cookies, Kontaktformular und Rechte. Diese Abschnitte
+sind im Editor gesperrt. Im Admin unter „Datenschutzerklärung“ trägt das Projekt Firma und Kontakt ein. „Text aus
+Vorlage holen“ zeigt zuerst wortweise die Änderungen und ersetzt nur diese Abschnitte, alles andere trägt das Projekt als eigenen Abschnitt ein und das bleibt erhalten.
+Bei einer neuen Vorlagenversion zeigt der Admin „Neue Vorlage verfügbar“ mit der Liste der Änderungen.
 Ablauf, Regelwerk und die Übersicht, welches Projekt auf welcher Vorlagenversion steht: [docs/RECHTSTEXTE.md](docs/RECHTSTEXTE.md).
 
 **Standard (empfohlen): alles kommt aus dem Core.**
@@ -291,12 +301,11 @@ export default function Page(props: { params: Promise<{ legal?: string | string[
 }
 ```
 
-3. **Admin:** „Datenschutzerklärung“ und „Impressum“ erscheinen über `coreAdminPages` (Menü und Catch-all) automatisch.
+3. **Admin:** „Datenschutzerklärung“ und „Impressum“ erscheinen über `coreAdminPages` (Menü und Catch-all) automatisch unter „System“. Nicht zusätzlich im Menü des Projekts eintragen, sonst stehen sie doppelt dort.
    Die Kennungen sind fest: `datenschutz` (Text) und `impressum` (Formular, eigene Spalte `data`). Das Impressum kann nicht über
    den Text-Editor gespeichert werden, damit sich beide Wege nie überschreiben.
 
-**Alternativ: eigene Admin-Seite mit Vorlage** (eigene Route, hat Vorrang vor dem Catch-all), z. B. `app/admin/(dashboard)/datenschutz/page.tsx`,
-plus ein Menüpunkt in der Navigation des Projekts:
+**Alternativ: eigene Admin-Seite mit Vorlage** (eigene Route, hat Vorrang vor dem Catch-all, der Menüpunkt kommt weiter aus dem Core), z. B. `app/admin/(dashboard)/datenschutz/page.tsx`:
 
 ```tsx
 import { LegalDocumentPage } from "core-cms/src/legal";

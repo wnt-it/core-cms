@@ -1,22 +1,40 @@
 'use client'
 
-// Einstellungen der Datenschutz-Vorlage im Admin: Firma, Kontakt, zuschaltbare Bausteine. Mit „Text aus Vorlage
-// erzeugen“ entsteht daraus die Datenschutzerklärung (die bisherige wird vorher gesichert).
+// Einstellungen der Datenschutz-Vorlage im Admin: Firma und Kontakt. „Text aus Vorlage holen“ zeigt zuerst, was sich an den
+// Abschnitten der Vorlage ändert; alle anderen bleiben (siehe merge.ts). Der bisherige Text wird vorher gesichert.
 
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { ChevronDown, ChevronRight, Loader2 } from 'lucide-react'
-import { Badge, Button, Card, Field, FieldGrid, Input, Note, Section, Select, SwitchRow, Textarea } from '../../ui/components'
+import { Badge, Button, Card, Field, FieldGrid, Input, Note, Section, Select, SwitchRow } from '../../ui/components'
 import { ConfirmDialog } from '../../ui/ConfirmDialog'
-import { applyDatenschutzVorlage, restoreDatenschutzSicherung, saveDatenschutzVorlage } from './actions'
+import { applyDatenschutzVorlage, previewDatenschutzVorlage, restoreDatenschutzSicherung, saveDatenschutzVorlage } from './actions'
 import type { DatenschutzSicherung } from './vorlage'
+import { wordDiff, type VorlageVorschau } from './merge'
+import { compareVorlageVersion } from './vorlage-text'
 import {
-  DATENSCHUTZ_MODULE_LABELS,
-  DATENSCHUTZ_TEMPLATE_CHANGES,
-  DATENSCHUTZ_TEMPLATE_VERSION,
+  DATENSCHUTZ_STANDARD_BAUSTEINE,
   type DatenschutzConfig,
 } from './datenschutz'
+import { BUNDESLAENDER, aufsichtText } from './aufsichtsbehoerden'
+
+/** Zeigt wortweise, was sich von alt zu neu ändert: Neues grün, Entferntes rot und durchgestrichen. */
+function DiffText({ alt, neu }: { alt: string; neu: string }) {
+  return (
+    <p className="whitespace-pre-line text-[13px] leading-relaxed text-[#334155]">
+      {wordDiff(alt, neu).map((part, i) =>
+        part.type === 'gleich' ? (
+          <span key={i}>{part.text}</span>
+        ) : part.type === 'neu' ? (
+          <ins key={i} className="rounded bg-[#DCFCE7] text-[#166534] no-underline">{part.text}</ins>
+        ) : (
+          <del key={i} className="rounded bg-[#FEE2E2] text-[#991B1B]">{part.text}</del>
+        ),
+      )}
+    </p>
+  )
+}
 
 export default function TemplatePanel({
   initial,
@@ -25,6 +43,8 @@ export default function TemplatePanel({
   settingsSaved,
   sicherungen = [],
   publicPath,
+  vorlageVersion,
+  vorlageChanges,
 }: {
   initial: DatenschutzConfig
   /** Version der Vorlage, aus der der Text zuletzt erzeugt wurde (null: noch nie) */
@@ -35,22 +55,28 @@ export default function TemplatePanel({
   /** Gesicherte frühere Texte, neueste zuerst */
   sicherungen?: DatenschutzSicherung[]
   publicPath?: string
+  /** Neueste Fassung der Vorlage (aus dem Repo oder mitgeliefert) */
+  vorlageVersion: string
+  vorlageChanges: { version: string; text: string }[]
 }) {
   const router = useRouter()
   const [config, setConfig] = useState<DatenschutzConfig>(initial)
   const [saved, setSaved] = useState<DatenschutzConfig>(initial)
   const [version, setVersion] = useState<string | null>(savedVersion)
-  const [open, setOpen] = useState(!settingsSaved || (savedVersion !== null && savedVersion !== DATENSCHUTZ_TEMPLATE_VERSION))
-  const [confirm, setConfirm] = useState(false)
+  const [open, setOpen] = useState(!settingsSaved || (savedVersion !== null && compareVorlageVersion(vorlageVersion, savedVersion) > 0))
+  const [vorschau, setVorschau] = useState<(VorlageVorschau & { version: string }) | null>(null)
   const [restore, setRestore] = useState<DatenschutzSicherung | null>(null)
   const [pending, start] = useTransition()
 
-  const outdated = version !== null && version !== DATENSCHUTZ_TEMPLATE_VERSION
-  const news = outdated ? DATENSCHUTZ_TEMPLATE_CHANGES.filter((c) => c.version > (version as string)) : []
+  const outdated = version !== null && compareVorlageVersion(vorlageVersion, version) > 0
+  const news = outdated ? vorlageChanges.filter((c) => compareVorlageVersion(c.version, version) > 0) : []
   const dirty = JSON.stringify(config) !== JSON.stringify(saved)
 
-  const set = <K extends keyof DatenschutzConfig>(key: K, value: DatenschutzConfig[K]) => setConfig((c) => ({ ...c, [key]: value }))
-  const setModule = (key: keyof DatenschutzConfig['module'], value: boolean) => setConfig((c) => ({ ...c, module: { ...c.module, [key]: value } }))
+  const set = <K extends keyof DatenschutzConfig>(key: K, value: DatenschutzConfig[K]) => {
+    setConfig((c) => ({ ...c, [key]: value }))
+    // Die Vorschau gehört zu den alten Angaben: Übernommen werden soll nur, was zu sehen war
+    setVorschau(null)
+  }
   const text = (key: keyof DatenschutzConfig, props: { label: string; hint?: string; optional?: boolean; placeholder?: string }) => (
     <Field label={props.label} hint={props.hint} optional={props.optional}>
       <Input value={config[key] as string} onChange={(e) => set(key, e.target.value as never)} placeholder={props.placeholder} maxLength={1000} />
@@ -66,14 +92,22 @@ export default function TemplatePanel({
       router.refresh()
     })
 
+  const loadVorschau = () =>
+    start(async () => {
+      const res = await previewDatenschutzVorlage({ config })
+      if (!res.success) return void toast.error(res.error)
+      setVorschau({ ...res.vorschau, version: res.vorlageVersion })
+    })
+
   const apply = () =>
     start(async () => {
-      setConfirm(false)
-      const res = await applyDatenschutzVorlage({ config, publicPath })
+      if (!vorschau) return
+      const res = await applyDatenschutzVorlage({ config, vorlageVersion: vorschau.version, publicPath })
       if (!res.success) return void toast.error(res.error)
+      setVorschau(null)
       setSaved(config)
-      setVersion(DATENSCHUTZ_TEMPLATE_VERSION)
-      toast.success('Text aus der Vorlage erzeugt und gespeichert. Der bisherige Text liegt unter „Sicherungen“ bereit.')
+      setVersion(vorschau.version)
+      toast.success('Vorlage übernommen und gespeichert. Der bisherige Text liegt unter „Sicherungen“ bereit.')
       // Der Editor darunter zeigt den neuen Text nach dem Neuladen
       window.location.reload()
     })
@@ -96,15 +130,9 @@ export default function TemplatePanel({
   return (
     <Section
       title="Vorlage"
-      description="Die Datenschutzerklärung entsteht aus der gemeinsamen Vorlage von WNT-IT. Hier stehen die Angaben dieser Website und die zuschaltbaren Bausteine."
+      description="Die Datenschutzerklärung entsteht aus der gemeinsamen Vorlage von WNT-IT. Hier stehen die Angaben dieser Website und die Bausteine."
       bare
     >
-      {/* Dauerhafter Hinweis, auch bei eingeklapptem Panel */}
-      <div className="mb-3">
-        <Note tone="warn">
-          <strong>Hinweis:</strong> „Text aus Vorlage erzeugen“ ersetzt immer den <strong>ganzen</strong> Text durch die Vorlage. Änderungen, die Sie im Editor am Text gemacht haben, gehen dabei verloren. Ein Abgleich einzelner Abschnitte ist nicht möglich. Der bisherige Text wird vorher gesichert. Bei neuen Vorlagenversionen deshalb Änderungen aus der Liste unten gezielt von Hand im Editor nachtragen, wenn der Text sonst stimmt.
-        </Note>
-      </div>
       <Card padded={false}>
         <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} className="flex w-full items-center gap-3 p-4 text-left">
           {open ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
@@ -116,7 +144,7 @@ export default function TemplatePanel({
           <div className="flex flex-col gap-6 border-t border-[#F1F5F9] p-5">
             {outdated && (
               <Note tone="warn">
-                <strong>Neue Vorlage vom {DATENSCHUTZ_TEMPLATE_VERSION}</strong>
+                <strong>Neue Vorlage vom {vorlageVersion}</strong>
                 {appliedAt ? ` (Ihr Text beruht auf der Vorlage vom ${version})` : ''}. Was sich geändert hat:
                 <ul className="mt-1 list-disc pl-5">
                   {news.map((c) => (
@@ -125,12 +153,12 @@ export default function TemplatePanel({
                     </li>
                   ))}
                 </ul>
-                „Text aus Vorlage erzeugen“ übernimmt die neue Vorlage komplett. Eigene Änderungen im Text gehen dabei verloren (der bisherige Text wird gesichert).
+                „Text aus Vorlage holen“ zeigt zuerst, was sich an den Abschnitten der Vorlage ändert. Alle anderen Abschnitte bleiben unverändert.
               </Note>
             )}
             {!version && (
               <Note tone="info">
-                Der vorhandene Text wurde noch nicht mit der Vorlage verknüpft. „Text aus Vorlage erzeugen“ ersetzt den ganzen Text durch die Vorlage mit den Angaben unten (der bisherige Text wird gesichert).
+                Der vorhandene Text wurde noch nicht mit der Vorlage abgeglichen. „Text aus Vorlage holen“ zeigt zuerst, was sich an den Abschnitten der Vorlage ändert. Alle anderen Abschnitte bleiben unverändert.
               </Note>
             )}
             {!settingsSaved && <Note tone="info">Die Angaben sind Vorschläge aus den Website-Einstellungen. Bitte prüfen und ergänzen.</Note>}
@@ -148,51 +176,43 @@ export default function TemplatePanel({
                 {text('telefon', { label: 'Telefon' })}
                 {text('email', { label: 'E-Mail-Adresse' })}
                 {text('datenschutzEmail', { label: 'E-Mail für Datenschutzanfragen', placeholder: 'datenschutz@…' })}
-                {text('datenschutzbeauftragter', { label: 'Datenschutzbeauftragter', optional: true, hint: 'Name und Anschrift, falls bestellt. Sonst bleibt ein Platzhalter im Text.' })}
+                {text('datenschutzbeauftragter', { label: 'Datenschutzbeauftragter', optional: true, hint: 'Name, falls bestellt. Sonst wird nur die Firma genannt.' })}
                 {text('domains', { label: 'Domains der Webseiten', hint: 'z. B. „muster.de und muster.com“.' })}
-                {text('bundesland', { label: 'Bundesland (Sitz)' })}
-              </FieldGrid>
-              <div className="mt-5">
-                <Field label="Zuständige Aufsichtsbehörde" hint="Mit Anschrift. Vorbelegt ist Baden-Württemberg, bei anderem Sitz anpassen.">
-                  <Textarea value={config.aufsicht} onChange={(e) => set('aufsicht', e.target.value)} maxLength={1000} style={{ minHeight: 64 }} />
+                <Field label="Bundesland (Sitz)" hint="Bestimmt die Aufsichtsbehörde im Text.">
+                  <Select value={config.bundesland} onChange={(e) => set('bundesland', e.target.value)}>
+                    <option value="">Bitte wählen</option>
+                    {BUNDESLAENDER.map((b) => (
+                      <option key={b} value={b}>{b}</option>
+                    ))}
+                  </Select>
                 </Field>
-              </div>
+              </FieldGrid>
+              {config.bundesland && (
+                <div className="mt-5">
+                  <Note tone="info">
+                    <strong>Aufsichtsbehörde im Text:</strong>
+                    <span className="mt-1 block whitespace-pre-line">{aufsichtText(config.bundesland)}</span>
+                  </Note>
+                </div>
+              )}
             </div>
 
             <div>
               <h3 className="mb-3 text-[14px] font-semibold text-[#0F172A]">Technik</h3>
               <FieldGrid>
-                <Field label="Standort der Datenbank" hint="Region des Supabase-Projekts.">
-                  <Select value={config.datenbankStandort} onChange={(e) => set('datenbankStandort', e.target.value as DatenschutzConfig['datenbankStandort'])}>
-                    <option value="irland">Irland (EU)</option>
-                    <option value="frankfurt">Frankfurt am Main (Deutschland)</option>
-                    <option value="sonstiger">Anderer Standort (Platzhalter)</option>
-                  </Select>
-                </Field>
-                <Field label="E-Mail-Versanddienst" hint="Dienst hinter den SMTP-Einstellungen.">
-                  <Select value={config.emailDienst} onChange={(e) => set('emailDienst', e.target.value as DatenschutzConfig['emailDienst'])}>
-                    <option value="microsoft365">Microsoft 365 (Exchange Online)</option>
-                    <option value="sonstiger">Anderer Dienst (Platzhalter)</option>
-                  </Select>
-                </Field>
                 {text('consentKey', { label: 'Name des Cookie-Eintrags', hint: 'Aus dem Cookie-Banner der Website, z. B. „ane_consent“.' })}
                 {text('verlinkt', { label: 'Verlinkte externe Seiten', hint: 'Satzteil, z. B. „zu unseren Profilen bei Instagram und LinkedIn“.' })}
               </FieldGrid>
             </div>
 
             <div>
-              <h3 className="mb-3 text-[14px] font-semibold text-[#0F172A]">Formulare</h3>
-              <FieldGrid>
-                {text('weitereFormulare', { label: 'Weitere Formulare', optional: true, hint: 'Neben dem Kontaktformular, z. B. „das Formular zur Mietverwaltung“.' })}
-                {text('weitereFormularDaten', { label: 'Zusätzliche Angaben in diesen Formularen', optional: true, hint: 'Satzteil, z. B. „beim Formular zur Mietverwaltung die Angaben zur Wohnung“.' })}
-              </FieldGrid>
-            </div>
-
-            <div>
-              <h3 className="mb-3 text-[14px] font-semibold text-[#0F172A]">Zuschaltbare Bausteine</h3>
+              <h3 className="mb-1 text-[14px] font-semibold text-[#0F172A]">Bausteine der Vorlage</h3>
+              <p className="mb-3 text-[12.5px] text-[#64748B]">Alles andere, z. B. Karten, Videos oder Newsletter, kommt unten im Editor als eigener Abschnitt in den Text und bleibt beim Holen der Vorlage erhalten.</p>
               <div className="flex flex-col gap-4">
-                {(Object.keys(DATENSCHUTZ_MODULE_LABELS) as (keyof DatenschutzConfig['module'])[]).map((k) => (
-                  <SwitchRow key={k} label={DATENSCHUTZ_MODULE_LABELS[k].label} hint={DATENSCHUTZ_MODULE_LABELS[k].hint} checked={config.module[k]} onChange={(e) => setModule(k, e.target.checked)} />
+                {DATENSCHUTZ_STANDARD_BAUSTEINE.map((b) => (
+                  <div key={b.label} className="opacity-60 [&_label]:cursor-not-allowed">
+                    <SwitchRow label={b.label} hint={`Immer enthalten. ${b.hint}`} checked disabled readOnly />
+                  </div>
                 ))}
               </div>
             </div>
@@ -202,11 +222,56 @@ export default function TemplatePanel({
                 {pending && <Loader2 size={15} className="animate-spin" />}
                 Einstellungen speichern
               </Button>
-              <Button variant="primary" onClick={() => setConfirm(true)} disabled={pending}>
-                Text aus Vorlage erzeugen
+              <Button variant="primary" onClick={loadVorschau} disabled={pending}>
+                Text aus Vorlage holen
               </Button>
-              <span className="text-[12.5px] text-[#64748B]">Vorlage {DATENSCHUTZ_TEMPLATE_VERSION}</span>
+              <span className="text-[12.5px] text-[#64748B]">Vorlage {vorlageVersion}</span>
             </div>
+
+            {vorschau && (
+              <div className="flex flex-col gap-4 border-t border-[#F1F5F9] pt-5">
+                <div>
+                  <h3 className="text-[14px] font-semibold text-[#0F172A]">Das ändert sich</h3>
+                  <p className="mt-1 text-[12.5px] text-[#64748B]">
+                    {vorschau.aenderungen.length === 0
+                      ? 'Die Abschnitte der Vorlage entsprechen bereits Ihrem Text.'
+                      : `${vorschau.aenderungen.length} ${vorschau.aenderungen.length === 1 ? 'Abschnitt ändert' : 'Abschnitte ändern'} sich. Neuer Text ist grün, entfernter rot und durchgestrichen.`}
+                  </p>
+                </div>
+                {vorschau.aenderungen.map((a) => (
+                  <div key={`${a.titel}-${a.neu ? 'neu' : 'weg'}`} className="rounded-lg border border-[#E2E8F0] p-4">
+                    <p className="text-[13.5px] font-medium text-[#0F172A]">{a.titel}</p>
+                    {a.frueher && <p className="text-[12.5px] text-[#64748B]">Bisher: {a.frueher}</p>}
+                    {!a.alt && <p className="text-[12.5px] text-[#64748B]">Neuer Abschnitt</p>}
+                    {!a.neu && <p className="text-[12.5px] text-[#64748B]">Abschnitt entfällt</p>}
+                    <div className="mt-2">
+                      <DiffText alt={a.alt} neu={a.neu} />
+                    </div>
+                  </div>
+                ))}
+                {vorschau.eigene.length > 0 && (
+                  <div>
+                    <p className="text-[13.5px] font-medium text-[#0F172A]">Diese eigenen Abschnitte bleiben unverändert</p>
+                    <ul className="mt-1 list-disc pl-5 text-[13px] text-[#334155]">
+                      {vorschau.eigene.map((t, i) => (
+                        <li key={i}>{t}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button variant="primary" onClick={apply} disabled={pending}>
+                    {pending && <Loader2 size={15} className="animate-spin" />}
+                    Übernehmen und speichern
+                  </Button>
+                  <Button variant="ghost" onClick={() => setVorschau(null)} disabled={pending}>
+                    Abbrechen
+                  </Button>
+                  <span className="text-[12.5px] text-[#64748B]">Der Text ist danach sofort auf der Website sichtbar. Der bisherige Text wird vorher gesichert.</span>
+                </div>
+              </div>
+            )}
+
           </div>
         )}
       </Card>
@@ -216,7 +281,7 @@ export default function TemplatePanel({
           <div className="p-4">
             <h3 className="text-[14px] font-semibold text-[#0F172A]">Sicherungen</h3>
             <p className="mt-1 text-[12.5px] text-[#64748B]">
-              Vor jedem „Text aus Vorlage erzeugen“ und jeder Wiederherstellung wird der bisherige Text hier abgelegt (die letzten 10). Nur im Admin sichtbar, nicht auf der Website.
+              Vor jedem „Text aus Vorlage holen“ und jeder Wiederherstellung wird der bisherige Text hier abgelegt (die letzten 10). Nur im Admin sichtbar, nicht auf der Website.
             </p>
           </div>
           {sicherungen.length === 0 ? (
@@ -246,9 +311,6 @@ export default function TemplatePanel({
         Die Datenschutzerklärung wird durch den Text vom Stand {restore ? fmt(restore.savedAt) : ''} ersetzt und sofort gespeichert, also auch auf der Website sichtbar. Der jetzige Text wird vorher selbst als Sicherung abgelegt.
       </ConfirmDialog>
 
-      <ConfirmDialog open={confirm} title="Text aus der Vorlage erzeugen?" confirmLabel="Erzeugen und speichern" onConfirm={apply} onCancel={() => setConfirm(false)} pending={pending} danger={false}>
-        Die Datenschutzerklärung wird komplett durch die Vorlage (Version {DATENSCHUTZ_TEMPLATE_VERSION}) mit den Angaben oben ersetzt und sofort gespeichert, also auch auf der Website sichtbar. Eigene Änderungen im Text gehen verloren. Der bisherige Text wird vorher als Sicherung abgelegt und lässt sich unter „Sicherungen“ wiederherstellen.
-      </ConfirmDialog>
     </Section>
   )
 }

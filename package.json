@@ -10,6 +10,7 @@
     "release": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/release.mjs"
   },
   "dependencies": {
+    "fflate": "^0.8.2",
     "lucide-react": "^0.475.0",
     "motion": "^12.38.0",
     "nodemailer": "^10.2.1",

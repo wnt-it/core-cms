@@ -17,6 +17,20 @@ export interface ChangelogEntry {
 /** Neueste Version zuerst. */
 export const CORE_CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.13.0",
+    date: "2026-11-05",
+    changes: [
+      { type: "feature", text: "Neuer Bereich „Daten-Export“ in den Einstellungen: lädt alle Inhalte und Medien der Website als eine ZIP-Datei herunter. Alle Tabellen der Datenbank werden automatisch erkannt, auch die, die ein Projekt selbst angelegt hat, ebenso alle Speicherbereiche mit ihren Dateien. Im Projekt muss nichts eingetragen werden. Einzelne Tabellen lassen sich zusätzlich als JSON laden, die Medien lassen sich abwählen." },
+      { type: "security", text: "Die Zugangsdaten für den E-Mail-Versand (und alle Tabellen mit Namen wie secret, token, password, smtp) sind nie im Export enthalten." },
+      { type: "feature", text: "Datenschutz-Vorlage auf die Grundtexte reduziert: Allgemeine Informationen, Hosting, E-Mail-Versand, Cookies, Kontaktformular und Rechte. Diese Abschnitte sind im Editor gesperrt. „Text aus Vorlage holen“ zeigt zuerst wortweise, was sich an ihnen ändert, und ersetzt nur sie, alle anderen Abschnitte bleiben erhalten. Karten, Videos, Terminbuchung, Newsletter und Ähnliches werden als eigener Abschnitt eingetragen." },
+      { type: "feature", text: "Neue Fassungen der Datenschutz-Vorlage kommen ohne Update der Website: Der Admin lädt den aktuellen Vorlagentext von WNT-IT und zeigt „Neue Vorlage verfügbar“. Übernommen wird er erst nach Prüfung mit „Text aus Vorlage holen“." },
+      { type: "feature", text: "Die Aufsichtsbehörde ergibt sich aus dem Bundesland (Auswahl)." },
+      { type: "fix", text: "Pop-up, Datenschutzerklärung und Impressum stehen im Menü jetzt unter „System“." },
+      { type: "feature", text: "Aufgeräumtes Menü: Mein Konto öffnet sich mit einem Klick auf den Benutzer unten links. Die Core-Version steht immer sichtbar darüber, ein Klick öffnet den Changelog, eine Zahl zeigt verfügbare Updates." },
+    ],
+    releaseNotes: "Neu: src/export (ExportPanel, Server Actions, automatische Tabellen- und Bucket-Erkennung), neue Abhängigkeit fflate. Braucht SUPABASE_SERVICE_ROLE_KEY im Projekt (ist bei den Projekten mit SMTP-Einstellungen schon gesetzt). **Migration:** Die Backup-Seite im Projekt (src/app/**/admin/**/backup/page.tsx) und ihren Menüeintrag löschen und in der Einstellungen-Seite des Projekts einen Tab mit <ExportPanel /> aus core-cms/src/export ergänzen. Ohne diesen Tab ist der Export nicht erreichbar.\n\n## Breaking\n\nDatenschutz-Vorlage: DatenschutzConfig.module, DATENSCHUTZ_MODULE_LABELS und die zuschaltbaren Bausteine entfallen. **Migration:** `module` aus der Konfiguration im Projekt entfernen. Beim ersten „Text aus Vorlage holen“ werden die Vorlagen-Abschnitte samt eigener Änderungen darin ersetzt (der alte Text wird gesichert); Inhalte, die bleiben sollen, vorher in eigene Abschnitte verschieben. Menü: Einträge für Datenschutzerklärung und Impressum aus der Projekt-Navigation entfernen, sie kommen aus coreAdminPages. Projekte ohne AdminShell (eigene Navigation aus coreAdminPages) behalten Konto und Core-Version als Menüpunkte, also dort nicht nach inMenu filtern.\n\n## Sicherheit\n\nDer Daten-Export liest mit dem Service-Role-Schlüssel alle Tabellen und Speicherbereiche, und jedes Konto ist Admin. **Vor dem Update je Supabase-Projekt prüfen, dass die öffentliche Registrierung aus ist** (Authentication, „Allow new users to sign up“). Projekte mit Content-Security-Policy brauchen https://api.github.com in connect-src, sonst fehlt nur die Update-Zahl im Menü.",
+  },
+  {
     version: "0.12.0",
     date: "2026-11-05",
     changes: [

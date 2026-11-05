@@ -38,9 +38,6 @@ export interface Submission {
   company?: string | null;
   subject?: string | null;
   message?: string | null;
-  project_type?: string | null;
-  amount?: string | null;
-  energy_type?: string | null;
   source_page?: string | null;
   source_url?: string | null;
   status: 'Neu' | 'In Bearbeitung' | 'Erledigt';

@@ -63,7 +63,7 @@ export async function getDatenschutzVorlage(vorgabe?: Partial<DatenschutzConfig>
   } catch (err) {
     console.error("[getDatenschutzVorlage] unexpected error:", err);
   }
-  return { version: null, appliedAt: null, config: normalizeDatenschutzConfig({ ...DEFAULT_DATENSCHUTZ_CONFIG, ...(await defaultsFromSettings()), ...vorgabe, module: { ...DEFAULT_DATENSCHUTZ_CONFIG.module, ...(vorgabe?.module ?? {}) } }), gespeichert: false };
+  return { version: null, appliedAt: null, config: normalizeDatenschutzConfig({ ...DEFAULT_DATENSCHUTZ_CONFIG, ...(await defaultsFromSettings()), ...vorgabe }), gespeichert: false };
 }
 
 export interface DatenschutzSicherung {
