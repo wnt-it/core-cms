@@ -64,7 +64,7 @@ Stand: 05.11.2026. Aktuelle Vorlagenversion: **2026-11-05.3**.
 
 | Projekt | core-cms | Datenschutz im Admin (Vorlage) | Stand der Vorlage im Projekt | Impressum-Formular | Bemerkung |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| alb-naturenergie | v0.12.0 (lokal, Abgleich noch nicht released) | ja, nach Release | Text in der Datenbank beruht auf der Fassung vom 04.11.2026 mit eigenen Änderungen, noch nicht mit der Vorlage abgeglichen. Das Mietverwaltungsformular braucht vor dem ersten Holen einen eigenen Abschnitt | ja, nach Release | Vercel-Region `fra1` per `vercel.json` und Projekteinstellung (nach Deployment prüfen) |
+| alb-naturenergie | v0.13.0 (lokal angehoben, noch nicht committet) | ja | Text in der Datenbank beruht auf der Fassung vom 04.11.2026 mit eigenen Änderungen, noch nicht mit der Vorlage abgeglichen. Das Mietverwaltungsformular braucht vor dem ersten Holen einen eigenen Abschnitt | ja | Vercel-Region `fra1` per `vercel.json` und Projekteinstellung (nach Deployment prüfen) |
 | richardprinz | v0.10.0 | noch nicht (eigener Text im Projekt) | – | noch nicht | Supabase-Region Frankfurt. Vor dem Einsatz der Vorlage Vercel-Region `fra1` setzen und prüfen (die Vorlage sagt „Frankfurt“) |
 | veee | v0.8.0 | noch nicht (eigener Text im Projekt) | – | noch nicht | Supabase-Region Irland. Vor dem Einsatz der Vorlage Vercel-Region `fra1` setzen und prüfen (die Vorlage sagt „Frankfurt“) |
 
