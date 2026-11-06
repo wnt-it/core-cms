@@ -1,7 +1,7 @@
-// Single Source of Truth für die Core-Version und den Changelog, der im Admin
-// unter /admin/version angezeigt wird. Beim Release VOR dem Tag pflegen:
-// CORE_VERSION erhöhen, neuen Eintrag ganz oben in CORE_CHANGELOG ergänzen
-// und die Version in package.json angleichen.
+// Einzige Quelle für die Core-Version und den Changelog unter /admin/version.
+// Für einen Release nur oben in CORE_CHANGELOG einen neuen Eintrag ergänzen und
+// `npm run release` ausführen: Das Skript liest Version und Release-Notes von hier,
+// setzt package.json und legt Tag und GitHub-Release an.
 
 export type ChangeType = "feature" | "fix" | "security" | "docs";
 
@@ -10,12 +10,56 @@ export interface ChangelogEntry {
   /** ISO-Datum (YYYY-MM-DD) */
   date: string;
   changes: { type: ChangeType; text: string }[];
+  /** Nur für die GitHub-Release-Notes, nicht im Admin: z. B. Breaking Changes mit Migration. */
+  releaseNotes?: string;
 }
-
-export const CORE_VERSION = "0.10.0";
 
 /** Neueste Version zuerst. */
 export const CORE_CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "0.13.0",
+    date: "2026-11-05",
+    changes: [
+      { type: "feature", text: "Neuer Bereich „Daten-Export“ in den Einstellungen: lädt alle Inhalte und Medien der Website als eine ZIP-Datei herunter. Alle Tabellen der Datenbank werden automatisch erkannt, auch die, die ein Projekt selbst angelegt hat, ebenso alle Speicherbereiche mit ihren Dateien. Im Projekt muss nichts eingetragen werden. Einzelne Tabellen lassen sich zusätzlich als JSON laden, die Medien lassen sich abwählen." },
+      { type: "security", text: "Die Zugangsdaten für den E-Mail-Versand (und alle Tabellen mit Namen wie secret, token, password, smtp) sind nie im Export enthalten." },
+      { type: "feature", text: "Datenschutz-Vorlage auf die Grundtexte reduziert: Allgemeine Informationen, Hosting, E-Mail-Versand, Cookies, Kontaktformular und Rechte. Diese Abschnitte sind im Editor gesperrt. „Text aus Vorlage holen“ zeigt zuerst wortweise, was sich an ihnen ändert, und ersetzt nur sie, alle anderen Abschnitte bleiben erhalten. Karten, Videos, Terminbuchung, Newsletter und Ähnliches werden als eigener Abschnitt eingetragen." },
+      { type: "feature", text: "Neue Fassungen der Datenschutz-Vorlage kommen ohne Update der Website: Der Admin lädt den aktuellen Vorlagentext von WNT-IT und zeigt „Neue Vorlage verfügbar“. Übernommen wird er erst nach Prüfung mit „Text aus Vorlage holen“." },
+      { type: "feature", text: "Die Aufsichtsbehörde ergibt sich aus dem Bundesland (Auswahl)." },
+      { type: "fix", text: "Pop-up, Datenschutzerklärung und Impressum stehen im Menü jetzt unter „System“." },
+      { type: "feature", text: "Aufgeräumtes Menü: Mein Konto öffnet sich mit einem Klick auf den Benutzer unten links. Die Core-Version steht immer sichtbar darüber, ein Klick öffnet den Changelog, eine Zahl zeigt verfügbare Updates." },
+    ],
+    releaseNotes: "Neu: src/export (ExportPanel, Server Actions, automatische Tabellen- und Bucket-Erkennung), neue Abhängigkeit fflate. Braucht SUPABASE_SERVICE_ROLE_KEY im Projekt (ist bei den Projekten mit SMTP-Einstellungen schon gesetzt). **Migration:** Die Backup-Seite im Projekt (src/app/**/admin/**/backup/page.tsx) und ihren Menüeintrag löschen und in der Einstellungen-Seite des Projekts einen Tab mit <ExportPanel /> aus core-cms/src/export ergänzen. Ohne diesen Tab ist der Export nicht erreichbar.\n\n## Breaking\n\nDatenschutz-Vorlage: DatenschutzConfig.module, DATENSCHUTZ_MODULE_LABELS und die zuschaltbaren Bausteine entfallen. **Migration:** `module` aus der Konfiguration im Projekt entfernen. Beim ersten „Text aus Vorlage holen“ werden die Vorlagen-Abschnitte samt eigener Änderungen darin ersetzt (der alte Text wird gesichert); Inhalte, die bleiben sollen, vorher in eigene Abschnitte verschieben. Menü: Einträge für Datenschutzerklärung und Impressum aus der Projekt-Navigation entfernen, sie kommen aus coreAdminPages. Projekte ohne AdminShell (eigene Navigation aus coreAdminPages) behalten Konto und Core-Version als Menüpunkte, also dort nicht nach inMenu filtern.\n\n## Sicherheit\n\nDer Daten-Export liest mit dem Service-Role-Schlüssel alle Tabellen und Speicherbereiche, und jedes Konto ist Admin. **Vor dem Update je Supabase-Projekt prüfen, dass die öffentliche Registrierung aus ist** (Authentication, „Allow new users to sign up“). Projekte mit Content-Security-Policy brauchen https://api.github.com in connect-src, sonst fehlt nur die Update-Zahl im Menü.",
+  },
+  {
+    version: "0.12.0",
+    date: "2026-11-05",
+    changes: [
+      { type: "feature", text: "Neue Seiten zum Bearbeiten der Rechtstexte im Admin: „Datenschutzerklärung“ als Text (Überschriften mit ihren Texten als aufklappbare Gruppen, automatisches Inhaltsverzeichnis, Nummerierung automatisch nach der Stelle im Text, Verweise „siehe 2.5 …“, die beim Verschieben mitwandern, Hinweis auf offene Platzhalter) und „Impressum“ als Formular mit den Pflichtangaben nach § 5 DDG (Abschnitte mit Gesetzesstelle, „Nicht anwendbar“ wählbar, dazu optional „Weitere Hinweise“ wie Haftung für Links und Urheberrecht). Das Impressum hat eine feste Kennung und wird nur über sein Formular gespeichert. Braucht einmal die Datenbank-Erweiterung sql/0.12.0_legal_documents.sql." },
+      { type: "feature", text: "Die Seiten /datenschutz und /impressum auf der Website kommen aus dem Core: Text, Nummern, Inhaltsverzeichnis und Verweise werden automatisch angezeigt, sobald das Projekt aktualisiert ist. Das Aussehen gibt der Core einheitlich vor." },
+      { type: "feature", text: "Datenschutzerklärung als gemeinsame Vorlage für alle Projekte: Im Admin Firma, Kontakt und die passenden Bausteine (Karten, Videos, Terminbuchung, Newsletter, Zufriedenheitsanalyse, KI-Agent) wählen und den Text daraus erzeugen. Bei einer neuen Vorlagenversion erscheint ein Hinweis mit den Änderungen. Vor dem Ersetzen wird der bisherige Text gesichert (die letzten 10 Sicherungen), und jede Sicherung lässt sich im Admin mit einem Klick wiederherstellen." },
+      { type: "feature", text: "Das Pop-up lässt sich einmal im Layout der Website einbinden (SitePopupHost) und erscheint dann auf der Seite, auf der Besucher einsteigen, statt nur auf einer einzelnen Seite. Im Admin erscheint es nie." },
+      { type: "feature", text: "Neue Pop-up-Einstellungen im Admin: Zeitraum (von/bis), Häufigkeit (einmal pro Besuch, bei jedem Öffnen, einmal pro Tag oder Woche), Verzögerung und Seiten (alle, nur Startseite oder bestimmte). Braucht einmal die Datenbank-Erweiterung sql/0.12.0_site_popup_options.sql." },
+      { type: "security", text: "Rechtstexte sind öffentlich nur mit ihren Inhalten lesbar, Sicherungen früherer Texte und die Einstellungen der Datenschutz-Vorlage nur im Admin. Die E-Mail-Adresse der Person, die zuletzt gespeichert hat, wird nicht gespeichert (bei bestehenden Tabellen entfernt die Datenbank-Erweiterung die Spalte)." },
+    ],
+    releaseNotes: "Neu: src/legal (Rechtstexte, Impressum-Formular, Datenschutz-Vorlage) und Tabelle legal_documents; Pop-up-Einstellungen und SitePopupHost. Datenbank, je einmal pro Projekt und erneut ausführbar: sql/0.12.0_legal_documents.sql und sql/0.12.0_site_popup_options.sql (Pop-up-Spalten, setzt sql/0.9.0_site_popup.sql voraus). Die öffentlichen Seiten /datenschutz und /impressum kommen aus dem Core: im Projekt einmalig eine Route app/[legal]/page.tsx mit den Re-Exports LegalRoute, generateLegalMetadata und generateLegalStaticParams anlegen (siehe README „Rechtstexte bearbeiten“). Das Pop-up: <SitePopupHost /> einmal in jedes öffentliche Root-Layout einbinden und bisherige SitePopup-Einbindungen auf einzelnen Seiten entfernen, sonst erscheint es doppelt. Die Admin-Seiten erscheinen über coreAdminPages automatisch.",
+  },
+  {
+    version: "0.11.1",
+    date: "2026-11-04",
+    changes: [
+      { type: "fix", text: "Die Seite „Core-Version“ im Admin zeigt den richtigen Stand an." },
+    ],
+  },
+  {
+    version: "0.11.0",
+    date: "2026-11-04",
+    changes: [
+      { type: "fix", text: "Anfrage-Mails: „Antworten“ geht jetzt an den Besucher, der das Formular abgeschickt hat, statt an die eigene Absender-Adresse." },
+      { type: "fix", text: "Anfrage-Mails: Der gewählte Betreff steht jetzt auch in der Tabelle mit den Angaben." },
+      { type: "fix", text: "Bilder aus Upload-Feldern landen im passenden Mediathek-Ordner statt oben unter „Alle Medien“. Fehlt der Ordner, wird er angelegt." },
+      { type: "feature", text: "Bildfeld: Die Vorschau kann das ganze Bild zeigen, zum Beispiel für Logos." },
+    ],
+  },
   {
     version: "0.10.0",
     date: "2026-10-28",
@@ -135,3 +179,6 @@ export const CORE_CHANGELOG: ChangelogEntry[] = [
     ],
   },
 ];
+
+/** Aktuelle Version: immer der oberste Eintrag, kann also nicht abweichen. */
+export const CORE_VERSION = CORE_CHANGELOG[0].version;

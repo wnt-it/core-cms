@@ -165,6 +165,7 @@ export async function submitContactForm(payload: ContactPayload, options: Submit
             <tr><td style="padding: 8px 0; border-bottom: 1px solid #f0f0f0; font-weight: bold; color: #666666;">E-Mail:</td><td style="padding: 8px 0; border-bottom: 1px solid #f0f0f0;"><a href="mailto:${esc(email)}" style="color: ${brandColor}; font-weight: bold;">${esc(email)}</a></td></tr>
             ${phone ? `<tr><td style="padding: 8px 0; border-bottom: 1px solid #f0f0f0; font-weight: bold; color: #666666;">Telefon:</td><td style="padding: 8px 0; border-bottom: 1px solid #f0f0f0;">${esc(phone)}</td></tr>` : ""}
             ${company ? `<tr><td style="padding: 8px 0; border-bottom: 1px solid #f0f0f0; font-weight: bold; color: #666666;">Firma:</td><td style="padding: 8px 0; border-bottom: 1px solid #f0f0f0;">${esc(company)}</td></tr>` : ""}
+            ${subject?.trim() ? `<tr><td style="padding: 8px 0; border-bottom: 1px solid #f0f0f0; font-weight: bold; color: #666666;">Betreff:</td><td style="padding: 8px 0; border-bottom: 1px solid #f0f0f0;">${esc(subject.trim())}</td></tr>` : ""}
           </table>
           ${message ? `
             <h4 style="color: #111111; margin-bottom: 8px; font-size: 14px;">Nachricht:</h4>
@@ -183,6 +184,7 @@ export async function submitContactForm(payload: ContactPayload, options: Submit
         html,
         fromName,
         fromEmail,
+        replyTo: { name: String(name).trim(), email: String(email).trim() },
       });
     }
   } catch (mailErr) {

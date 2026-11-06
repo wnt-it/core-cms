@@ -43,6 +43,7 @@ export class SmtpEmailProvider implements EmailProvider {
       to: message.to,
       subject: message.subject,
       html: message.html,
+      ...(message.replyTo ? { replyTo: { name: message.replyTo.name ?? "", address: message.replyTo.email } } : {}),
     });
   }
 }

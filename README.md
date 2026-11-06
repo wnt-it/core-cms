@@ -2,9 +2,10 @@
 
 Zentrales, versioniertes CMS-Core-Package für WNT-IT Next.js/Supabase-Projekte.
 
-Ersetzt das bisherige Datei-Kopier-Skript `scripts/sync-core.ps1`: statt Core-Dateien
-1:1 in jedes Projekt zu kopieren, installiert jedes Projekt dieses Package als
-versionierte Dependency (`package.json`) und importiert daraus.
+Einzige zentrale Stelle für den Core: Projekte mit Admin/Backend installieren dieses Package
+als versionierte Dependency (`package.json`) und binden die Teile per Re-Export ein.
+Das frühere Datei-Kopier-Skript `scripts/sync-core.ps1` und das Repo `template` gibt es
+nicht mehr (entfernt am 2026-10-19). Projekte ohne Admin/Backend brauchen keinen Core.
 
 ## Scope
 
@@ -219,12 +220,21 @@ Das Projekt liefert nur Logo und Menüpunkte.
 
 - **Gerüst:** `AdminShell` aus `core-cms/src/ui` (Seitenleiste „Inhalte“/„System“, Umschalter,
   Konto, Handy-Menü). Core-Seiten aus `coreAdminPages` erscheinen automatisch, `group: "content"`
-  unter „Inhalte“, sonst unter „System“.
+  unter „Inhalte“, sonst unter „System“, mit `inMenu: false` ohne Menüpunkt. Mein Konto öffnet sich über den Benutzer unten,
+  die Core-Version über die Versionsangabe darüber (mit Zahl, wenn neuere Versionen veröffentlicht sind).
 - **Bausteine:** `PageHeader`, `Section`, `Card`, `Field`, `Input`, `Select`, `SwitchRow`, `Button`,
   `SaveBar`, `Badge`, `Note`, `EmptyState`, `TableCard`, `ConfirmDialog` u. a. aus `core-cms/src/ui`.
 - **Schrift:** Das Projekt setzt die CSS-Variable `--font-admin` (z. B. Inter über `next/font`).
 - **Bildfelder:** `ImageUpload` (ein Bild) und `GalleryField` (mehrere Bilder, erstes = Hauptbild,
   Sortieren per Ziehen oder Pfeilen, optional `name` für ein verstecktes Feld mit JSON-Liste).
+
+## Daten-Export (ab v0.13.0)
+
+`ExportPanel` lädt Inhalte und Medien der Website als ZIP (`daten/<tabelle>.json`, `medien/<bucket>/<pfad>`, `LIES-MICH.txt`). Es hat keinen eigenen Menüpunkt, sondern kommt als Tab in die Einstellungen-Seite des Projekts (`import { ExportPanel } from "core-cms/src/export"`):
+
+- **Tabellen** werden aus der Schnittstellen-Beschreibung (OpenAPI, Service-Role-Schlüssel) ermittelt, neue Tabellen sind also beim nächsten Export dabei. Nie enthalten: `email_settings` und Tabellen, deren Name secret, token, credential, password oder smtp enthält (`src/export/discover.ts`).
+- **Medien**: alle Buckets, rekursiv. Die Dateien werden mit kurzlebigen Adressen direkt aus dem Browser geladen und dort gezippt (Chrome/Edge schreiben direkt in die Datei, andere Browser sammeln im Arbeitsspeicher, Grenze 1,5 GB).
+- Braucht `SUPABASE_SERVICE_ROLE_KEY`. Eine eigene Backup-Seite im Projekt (`.../admin/.../backup/page.tsx`) samt Menüeintrag löschen.
 
 ## Pop-up (ab v0.9.0)
 
@@ -233,7 +243,7 @@ Ein Bild als Hinweis beim Öffnen der Website (z. B. Aktionen, Betriebsferien), 
 1. **Datenbank:** einmal pro Projekt `sql/0.9.0_site_popup.sql` ausführen (Spalten `popup_enabled`,
    `popup_image_url`, `popup_image_alt` in `site_settings`). Ohne Migration bleibt das Pop-up aus,
    die Website läuft weiter.
-2. **Verwaltung:** `/admin/popup` erscheint automatisch über `coreAdminPages` unter „Inhalte“.
+2. **Verwaltung:** `/admin/popup` erscheint automatisch über `coreAdminPages` unter „System“.
 3. **Website:** dort einbinden, wo es erscheinen soll (liest ohne Cookies, Seite bleibt statisch):
 
 ```tsx
@@ -245,6 +255,97 @@ return <>{popup && <SitePopup {...popup} />} …</>;
 
 Kein Cookie, nur `sessionStorage` im Browser. Für automatische Tests blendet
 `sessionStorage.setItem("site-popup-gesehen", "*")` das Pop-up aus.
+
+**Für die ganze Website (ab v0.12.0, empfohlen):** `<SitePopupHost />` einmal im Root-Layout der öffentlichen Seiten
+(`import { SitePopupHost } from "core-cms/src/popup"`), dann überall und ohne Seiten-Code. Einzelne `SitePopup`-Einbindungen
+auf Seiten dann entfernen, sonst erscheint es doppelt. Zeitraum, Häufigkeit, Verzögerung und Seiten stellt der Kunde unter
+`/admin/popup` ein; dafür einmal `sql/0.12.0_site_popup_options.sql` ausführen (ohne sie gilt das bisherige Verhalten). „Einmal pro Tag/Woche“
+speichert Bild und Zeitpunkt im `localStorage` des Besuchers (nur „pro Besuch“ nutzt `sessionStorage`). Das gilt als technisch notwendig, braucht
+keine Einwilligung, sollte aber in der Datenschutzerklärung stehen, z. B.: „Zum Merken, dass ein Hinweisfenster (Pop-up) bereits angezeigt wurde, nutzen
+wir den Session Storage bzw. Local Storage Ihres Browsers; gespeichert werden nur die Adresse des Hinweisbildes und der Zeitpunkt, es erfolgt keine Übermittlung.“ Bei mehreren Root-Layouts (z. B. zwei Abteilungen) in jedes öffentliche Layout.
+
+## Rechtstexte bearbeiten (ab v0.12.0)
+
+Datenschutzerklärung u. Ä. im Admin bearbeiten: Überschriften mit ihren Texten als aufklappbare Gruppen,
+Nummern (1. / 1.1 / 1.1.1) automatisch nach der Stelle, Inhaltsverzeichnis aus den Überschriften 1 und 2,
+Verweise („siehe 2.5 …“) wandern bei Änderungen mit, Hinweis auf offene Platzhalter `[● …]`.
+
+**Datenschutz-Vorlage für alle Projekte:** Die Grundtexte der Datenschutzerklärung liefert der Core
+(`src/legal/templates/datenschutz.ts`): Allgemeines, Hosting, E-Mail, Cookies, Kontaktformular und Rechte. Diese Abschnitte
+sind im Editor gesperrt. Im Admin unter „Datenschutzerklärung“ trägt das Projekt Firma und Kontakt ein. „Text aus
+Vorlage holen“ zeigt zuerst wortweise die Änderungen und ersetzt nur diese Abschnitte, alles andere trägt das Projekt als eigenen Abschnitt ein und das bleibt erhalten.
+Bei einer neuen Vorlagenversion zeigt der Admin „Neue Vorlage verfügbar“ mit der Liste der Änderungen.
+Ablauf, Regelwerk und die Übersicht, welches Projekt auf welcher Vorlagenversion steht: [docs/RECHTSTEXTE.md](docs/RECHTSTEXTE.md).
+
+**Standard (empfohlen): alles kommt aus dem Core.**
+
+1. **Datenbank:** einmal pro Projekt `sql/0.12.0_legal_documents.sql` ausführen (Tabelle `legal_documents`, nur die Inhalte
+   sind öffentlich lesbar, keine E-Mail-Adresse des Bearbeiters). Die Datei kann gefahrlos erneut ausgeführt werden.
+   Ohne Migration und ohne Vorlage im Projekt liefert die Seite „nicht gefunden“.
+2. **Website:** einmalig eine Route anlegen, z. B. `app/[legal]/page.tsx` (in der Route-Gruppe mit dem passenden Layout):
+
+```tsx
+export { LegalRoute as default, generateLegalMetadata as generateMetadata, generateLegalStaticParams as generateStaticParams } from "core-cms/src/legal";
+export const dynamicParams = false; // nur /datenschutz und /impressum
+```
+
+   Das Aussehen der Seiten gibt der Core vor (einheitlich, keine Optionen pro Projekt). Nur Vorlagen für die Zeit vor dem ersten Speichern kann das Projekt in einer eigenen Route-Datei mitgeben:
+
+```tsx
+import { renderLegalPage, generateLegalMetadata, generateLegalStaticParams } from "core-cms/src/legal";
+export const generateMetadata = generateLegalMetadata;
+export const generateStaticParams = generateLegalStaticParams;
+export const dynamicParams = false;
+export default function Page(props: { params: Promise<{ legal?: string | string[] }> }) {
+  return renderLegalPage(props, { templates: { datenschutz: { title, version, blocks }, impressum: { anbieter: { na: false, v: { name: "…" } } } } });
+}
+```
+
+3. **Admin:** „Datenschutzerklärung“ und „Impressum“ erscheinen über `coreAdminPages` (Menü und Catch-all) automatisch unter „System“. Nicht zusätzlich im Menü des Projekts eintragen, sonst stehen sie doppelt dort.
+   Die Kennungen sind fest: `datenschutz` (Text) und `impressum` (Formular, eigene Spalte `data`). Das Impressum kann nicht über
+   den Text-Editor gespeichert werden, damit sich beide Wege nie überschreiben.
+
+**Alternativ: eigene Admin-Seite mit Vorlage** (eigene Route, hat Vorrang vor dem Catch-all, der Menüpunkt kommt weiter aus dem Core), z. B. `app/admin/(dashboard)/datenschutz/page.tsx`:
+
+```tsx
+import { LegalDocumentPage } from "core-cms/src/legal";
+export default function Page() {
+  return <LegalDocumentPage slug="datenschutz" label="Datenschutzerklärung" publicPath="/datenschutz"
+    template={{ title, version, blocks }} />; // Vorlage: Liste { t: "h1"|"h2"|"h3"|"p"|"li", text, ref? }
+}
+```
+
+**Website komplett selbst gestalten:** Text lesen und Verweise einsetzen, dann selbst rendern
+(`groupPolicyBlocks`, `policyToc`, `policyAnchor` helfen dabei):
+
+```tsx
+import { getLegalDocument, resolvePolicyRefs } from "core-cms/src/legal";
+const doc = await getLegalDocument("datenschutz", template);
+const blocks = resolvePolicyRefs(doc.blocks);
+```
+
+Für schlichte Texte ohne Nummern, Inhaltsverzeichnis und Verweise `numbered={false}` und ggf. `showVersion={false}` setzen; `slug` ist frei wählbar, nur „impressum“ ist für das Impressum-Formular reserviert.
+
+**Impressum als Formular:** Das Impressum ist kein freier Text, sondern ein festes Formular mit den Pflichtangaben nach
+§ 5 DDG (je Abschnitt mit Gesetzesstelle; Abschnitte, die nicht zutreffen, als „Nicht anwendbar“ markierbar, Vorschau,
+Prüfung der Pflichtfelder). Es nutzt dieselbe Tabelle (Spalte `data`). Einbindung:
+
+```tsx
+// Admin: app/admin/(dashboard)/impressum/page.tsx
+import { ImpressumPage } from "core-cms/src/legal";
+export default async function Page() {
+  return <ImpressumPage slug="impressum" publicPath="/impressum"
+    template={{ anbieter: { na: false, v: { name: "…", street: "…" } }, register: { na: true, v: {} } }} />; // Vorbelegung, Fehlendes wird leer ergänzt
+}
+
+// Website: app/impressum/page.tsx
+import { getImpressum, impressumToBlocks } from "core-cms/src/legal";
+const doc = await getImpressum("impressum", template);
+const blocks = impressumToBlocks(doc.data); // Absätze und Überschriften, selbst rendern
+```
+
+Überschriften, auf die verwiesen wird, tragen `ref: "kennung"`; im Text steht `{{ref:kennung}}`
+(im Editor über „Verweis einfügen“). Platzhalter-Format `[● …]`; ein Verweis ohne Ziel erscheint als „[● Verweis fehlt]“.
 
 ## Mehrfachbearbeitung (ab v0.10.0)
 
@@ -314,10 +415,10 @@ Siehe Kommentare in den jeweiligen `src/*/index.ts`-Dateien für den Stand pro M
 | Phase | Modul | Status |
 |---|---|---|
 | 0 | Repo-Grundgerüst | ✅ erledigt |
-| 1 | Supabase-Client + Typen | offen |
-| 2 | Auth | offen |
-| 3 | Media Library + Site-Settings | offen |
-| 4 | Submissions + E-Mail-Adapter (Resend/SMTP) | offen |
-| 5 | Pilotprojekt migrieren | offen |
-| 6 | Restliche Projekte migrieren | offen |
-| 7 | sync-core.ps1 abschalten | offen |
+| 1 | Supabase-Client + Typen | ✅ erledigt |
+| 2 | Auth (Login, Passwort vergessen/ändern, Account) | ✅ erledigt |
+| 3 | Media Library + Site-Settings | ✅ erledigt |
+| 4 | Submissions + E-Mail-Adapter (Resend/SMTP) | ✅ erledigt |
+| 5 | Pilotprojekt migrieren (richardprinz) | ✅ erledigt |
+| 6 | Restliche Projekte migrieren | ✅ alb-naturenergie (v0.8.0), veee (v0.6.0, Update offen) |
+| 7 | sync-core.ps1 abschalten | ✅ erledigt (Skript und `template` entfernt, 2026-10-19) |

@@ -1,9 +1,16 @@
 import { notFound } from "next/navigation";
-import { Megaphone, Package, UserCircle } from "lucide-react";
+import { FileText, Megaphone, Package, ScrollText, UserCircle } from "lucide-react";
 import type { ComponentType } from "react";
 import { AccountPage } from "../auth";
 import VersionPage from "./VersionPage";
 import PopupPage from "../popup/PopupPage";
+import LegalDocumentPage from "../legal/LegalDocumentPage";
+import ImpressumPage from "../legal/ImpressumPage";
+import { IMPRESSUM_SLUG } from "../legal/impressum";
+
+// Rechtstexte: Seiten /datenschutz und /impressum liefert LegalRoute (siehe legal/LegalRoute.tsx) aus denselben Daten.
+const DatenschutzAdminPage = () => <LegalDocumentPage slug="datenschutz" label="Datenschutzerklärung" publicPath="/datenschutz" />;
+const ImpressumAdminPage = () => <ImpressumPage slug={IMPRESSUM_SLUG} publicPath="/impressum" />;
 
 export interface CoreAdminPage {
   /** URL-Segment unter /admin/, z.B. "konto" -> /admin/konto */
@@ -13,6 +20,8 @@ export interface CoreAdminPage {
   Component: ComponentType;
   /** Menügruppe in AdminShell: "content" (Inhalte) oder "system" (Standard). */
   group?: "content" | "system";
+  /** false: kein eigener Menüpunkt, die Seite ist anders erreichbar (Konto über den Benutzer unten, Version über die Versionsangabe). */
+  inMenu?: boolean;
 }
 
 /**
@@ -25,9 +34,11 @@ export interface CoreAdminPage {
  * angelegt werden muss.
  */
 export const coreAdminPages: CoreAdminPage[] = [
-  { slug: "popup", label: "Pop-up", icon: Megaphone, Component: PopupPage, group: "content" },
-  { slug: "konto", label: "Mein Konto", icon: UserCircle, Component: AccountPage },
-  { slug: "version", label: "Core-Version", icon: Package, Component: VersionPage },
+  { slug: "popup", label: "Pop-up", icon: Megaphone, Component: PopupPage, group: "system" },
+  { slug: "datenschutz", label: "Datenschutzerklärung", icon: ScrollText, Component: DatenschutzAdminPage, group: "system" },
+  { slug: "impressum", label: "Impressum", icon: FileText, Component: ImpressumAdminPage, group: "system" },
+  { slug: "konto", label: "Mein Konto", icon: UserCircle, Component: AccountPage, inMenu: false },
+  { slug: "version", label: "Core-Version", icon: Package, Component: VersionPage, inMenu: false },
 ];
 
 export function getCoreAdminPage(slug: string): CoreAdminPage | undefined {

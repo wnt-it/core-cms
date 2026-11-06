@@ -4,6 +4,8 @@ export interface EmailMessage {
   html: string;
   fromName?: string;
   fromEmail?: string;
+  /** Empfänger von „Antworten“, z. B. der Besucher, der das Formular abgeschickt hat. */
+  replyTo?: { name?: string; email: string };
 }
 
 export interface EmailProvider {

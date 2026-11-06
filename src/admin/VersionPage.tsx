@@ -1,6 +1,7 @@
 // Admin-Seite: installierte Core-Version + Changelog
 import { ChevronDown } from 'lucide-react'
 import { CORE_CHANGELOG, CORE_VERSION, type ChangeType } from './changelog'
+import { getNewerCoreVersions } from './version-check'
 import { Badge, Card, Note, PageHeader, Section, mutedClass } from '../ui'
 
 const TYPE_LABELS: Record<ChangeType, { label: string; tone: 'green' | 'blue' | 'red' | 'neutral' }> = {
@@ -14,35 +15,10 @@ function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' })
 }
 
-// Neueste veröffentlichte Core-Version von GitHub (öffentliches Repo, stündlich gecacht).
-// Bei Fehlern (offline, Rate-Limit) kein Hinweis statt einer Fehlerseite.
-async function getLatestCoreVersion(): Promise<string | null> {
-  try {
-    const res = await fetch('https://api.github.com/repos/wnt-it/core-cms/tags?per_page=30', {
-      next: { revalidate: 3600 },
-    })
-    if (!res.ok) return null
-    const tags: { name: string }[] = await res.json()
-    const versions = tags.map((t) => t.name.replace(/^v/, '')).filter((v) => /^\d+\.\d+\.\d+$/.test(v))
-    versions.sort((a, b) => compareVersions(b, a))
-    return versions[0] ?? null
-  } catch {
-    return null
-  }
-}
-
-function compareVersions(a: string, b: string) {
-  const pa = a.split('.').map(Number)
-  const pb = b.split('.').map(Number)
-  for (let i = 0; i < 3; i++) {
-    if (pa[i] !== pb[i]) return pa[i] - pb[i]
-  }
-  return 0
-}
-
 export default async function VersionPage() {
-  const latest = await getLatestCoreVersion()
-  const updateAvailable = latest !== null && compareVersions(latest, CORE_VERSION) > 0
+  const newer = await getNewerCoreVersions()
+  const latest = newer === null ? null : (newer[0] ?? CORE_VERSION)
+  const updateAvailable = !!newer?.length
   const current = CORE_CHANGELOG.find((entry) => entry.version === CORE_VERSION)
 
   return (

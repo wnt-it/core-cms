@@ -8,6 +8,12 @@ export interface ResendProviderConfig {
   apiKey?: string;
 }
 
+// Der Name kommt aus dem öffentlichen Formular: Zeichen entfernen, die die Adresse verfälschen könnten.
+function formatReplyTo({ name, email }: NonNullable<EmailMessage["replyTo"]>): string {
+  const safeName = name?.replace(/[<>",\r\n]/g, "").trim();
+  return safeName ? `${safeName} <${email}>` : email;
+}
+
 export class ResendEmailProvider implements EmailProvider {
   private client: Resend;
 
@@ -32,6 +38,7 @@ export class ResendEmailProvider implements EmailProvider {
       to: message.to,
       subject: message.subject,
       html: message.html,
+      ...(message.replyTo ? { replyTo: formatReplyTo(message.replyTo) } : {}),
     });
 
     if (error) {
