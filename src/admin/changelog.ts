@@ -18,7 +18,7 @@ export interface ChangelogEntry {
 export const CORE_CHANGELOG: ChangelogEntry[] = [
   {
     version: "0.14.0",
-    date: "2026-11-06",
+    date: "2026-11-09",
     changes: [
       { type: "feature", text: "Cookie-Einwilligung: Eingebettete Inhalte wie Karten, Videos oder Terminbuchung laden erst, wenn Besucher zustimmen, direkt am Inhalt oder über einen Cookie-Banner. Ablehnen ist genauso einfach wie Zustimmen, und die Auswahl lässt sich jederzeit über „Cookie-Einstellungen“ ändern. Auf Datenschutzerklärung und Impressum erscheint der Banner nie." },
       { type: "feature", text: "Neue Seite „Einwilligungen“ (sofern auf Ihrer Website eingerichtet): zeigt, wie viele Besucher zustimmen, und hält jede Entscheidung als Nachweis fest, ohne IP-Adresse und ohne Namen. Das Protokoll lässt sich als Tabelle herunterladen, alte Einträge lassen sich löschen." },
