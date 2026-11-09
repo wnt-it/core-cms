@@ -367,6 +367,29 @@ import { FormGuard, sendForm } from "core-cms/src/submissions/client";
 2. Löschen: die eigene Posteingang-Seite `admin/(dashboard)/submissions/` und den Menüpunkt `/admin/submissions` in `content` bzw. `system`, dazu die Zählung neuer Anfragen fürs Menü (`newSubmissions`), das macht jetzt die AdminShell. Links auf `/admin/submissions` (Dashboard, AdminLiveBar) auf `/admin/posteingang` ändern, die Umleitung fängt vergessene ab.
 3. Eigenen Spam-Schutz in Kontakt-Routen bzw. Server Actions durch `defineForm` + `receiveSubmission` ersetzen, im Formular `<FormGuard />` statt eigener Felder `website`/`form_age`. Projektspezifische Kennzeichnung (z. B. Abteilung) über `receiveSubmission(form, data, { metadata: { … }, type: "Kontakt · Abteilung" })` (der Filter im Posteingang gruppiert nach dem Teil vor „ · “).
 
+## Absicherung und Aufräumen (ab v0.16.0)
+
+**Beim Update eines Projekts:**
+
+1. `sql/0.16.0_haertung.sql` im Supabase-Projekt ausführen (vor oder nach dem Update, beides geht). Die Datei gibt dem Server-Zugang Leserechte auf die Rechtstexte (Daten-Export), verhindert Ordner-Kreise in der Mediathek, pflegt `updated_at` automatisch und legt `core_storage_usage()` für die Speicheranzeige an. Außerdem kommen Indizes für Posteingang und Einwilligungen dazu, und die Dateiliste des Buckets `images` ist nur noch für Admins sichtbar (die Dateien selbst bleiben öffentlich abrufbar).
+2. Empfohlen: `NEXT_PUBLIC_SITE_URL` (z. B. `https://www.example.org`) in Vercel setzen. Links in Passwort-E-Mails nutzen dann immer diese Adresse. Ohne die Variable gilt: der Host der Anfrage, wenn er zum Deployment gehört, sonst die Produktions-Domain von Vercel.
+3. Optional, aber empfohlen: Fehler- und Ladeseite für den Admin. Die Dateien im Projekt bestehen nur aus einem Re-Export:
+   - `app/admin/(dashboard)/error.tsx`: `export { default } from "core-cms/src/admin/AdminError";`
+   - `app/admin/(dashboard)/loading.tsx`: `export { default } from "core-cms/src/admin/AdminLoading";`
+4. Prüfen, dass in Supabase unter Authentication die Registrierung neuer Benutzer und anonyme Anmeldungen aus sind. Jeder angemeldete Benutzer ist Admin.
+
+**Was sich für Entwickler ändert:**
+
+- **Server-Module** (`supabase/service-role`, `email/smtp-settings`, `submissions/save`, `receive`, `cleanup`, `export/discover`) enthalten `import "server-only"`. Ein Import aus einer Client-Komponente bricht den Build mit klarer Meldung ab.
+- **AdminShell** lädt keine Server-Seiten und keinen Changelog mehr. Das Menü kommt aus `src/admin/core-nav.ts`, die installierte Version aus `src/admin/core-version.ts` (setzt `npm run release`). Eine neue Core-Seite braucht einen Eintrag in `core-nav.ts` und ihre Komponente in `core-pages.tsx`.
+- **SMTP:** `getSmtpSettings()` liefert das Passwort nicht mehr, sondern `passStatus` (`none`, `saved`, `unreadable`) und `missing`. Ein leer gelassenes Passwortfeld behält das gespeicherte. Test-E-Mail und Benachrichtigung prüfen gleich (`email/smtp-settings.ts`), beide gehen an den „Empfänger für Anfragen“.
+- **`saveGeneralSettings`** speichert nur die Felder aus `GENERAL_SETTINGS_FIELDS` (`src/admin/general-settings.ts`). **`updateHeroImageSetting`** lehnt Kern-Spalten ab (`id`, Name, Logo, `popup_*` …).
+- **`submitContactForm`** hat Grund-Spam-Schutz (siehe Posteingang). `receiveSubmission` zählt die Begrenzung je Adresse erst nach der Feldprüfung.
+- **Mediathek:** `useMediaLibrary({ enabled })` lädt nur, solange das Fenster offen ist. `MoveModal` nimmt `excludeFolderIds`, `bucket` ist überflüssig. Typen `MediaItem`, `MediaFileItem`, `MediaFolderItem` in `src/media/folder-tree.ts`. `formatBytes` liegt in `src/ui/format.ts` (deutsch, „1,5 MB“), der Export aus `core-cms/src/media` bleibt.
+- **Posteingang** lädt 100 Anfragen, ältere per „Ältere laden“. Nie fertig hochgeladene Anhänge (älter als 3 Stunden) räumt der Core beim Öffnen des Posteingangs und nach neuen Anfragen weg.
+- **Einwilligungen:** zusätzlich höchstens 30 Einträge je Absender in 10 Minuten (`createConsentHandler(config, { maxPerSender })`), gezählt nur im Arbeitsspeicher.
+- **Favicon-Sperre** in `withCoreCms` meldet `icons:` nur noch in Dateien mit Metadaten (`export const metadata`, `generateMetadata`, `withSiteBranding`).
+
 ## Daten-Export (ab v0.13.0)
 
 `ExportPanel` lädt Inhalte und Medien der Website als ZIP (`daten/<tabelle>.json`, `medien/<bucket>/<pfad>`, `LIES-MICH.txt`). Ab v0.14.0 ist es ein Tab der Core-Seite „Einstellungen“ (siehe oben); einzeln einbinden geht weiter (`import { ExportPanel } from "core-cms/src/export"`):

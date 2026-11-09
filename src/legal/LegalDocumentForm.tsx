@@ -4,16 +4,15 @@
 // Jede Überschrift bildet mit ihren Absätzen und Listenpunkten eine aufklappbare Gruppe.
 // Das Inhaltsverzeichnis entsteht automatisch aus den Überschriften 1 und 2.
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useTransition } from 'react'
+import { useMemo, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, Loader2, Plus, RotateCcw, Trash2 } from 'lucide-react'
-import { Badge, Button, Card, Field, FieldGrid, Input, Note, SaveBar, Section, Segmented, Select, Textarea } from '../ui/components'
+import { Badge, Button, Card, Field, FieldGrid, Input, Note, SaveBar, Section, Segmented, Select } from '../ui/components'
 import { ConfirmDialog } from '../ui/ConfirmDialog'
 import { cx, iconButtonClass, iconButtonDangerClass } from '../ui/styles'
 import { saveLegalDocument } from './actions'
 import {
-  PLACEHOLDER_SOURCE,
   POLICY_LIMITS,
   POLICY_TYPE_LABELS,
   MISSING_REF_TEXT,
@@ -25,117 +24,30 @@ import {
   refTargets,
   renumberPolicyBlocks,
   resolvePolicyText,
-  stripHeadingNumber,
   type LegalDocumentContent,
   type PolicyBlock,
   type PolicyBlockType,
 } from './policy'
 
-type Row = PolicyBlock & { id: number }
-type Group = { head: Row | null; items: Row[]; start: number; end: number }
+import AutoTextarea from './AutoTextarea'
+import {
+  HEAD_TYPES,
+  INTRO,
+  buildGroups,
+  clean,
+  hasPlaceholder,
+  isHead,
+  newId,
+  nextSibling,
+  numbered,
+  plain,
+  prevSibling,
+  subEnd,
+  withIds,
+  type Group,
+  type Row,
+} from './editor-groups'
 
-const INTRO = -1
-const HEAD_TYPES: PolicyBlockType[] = ['h1', 'h2', 'h3']
-const BODY_TYPES: PolicyBlockType[] = ['p', 'li']
-const isHead = (r: Row) => r.t === 'h1' || r.t === 'h2' || r.t === 'h3'
-const hasPlaceholder = (text: string) => new RegExp(PLACEHOLDER_SOURCE).test(text)
-
-let nextId = 1
-// Im Editor stehen Überschriften ohne Nummer; die Nummer ergibt sich aus der Stelle in der Liste und wird beim Speichern (und in der Anzeige) gesetzt.
-const withIds = (blocks: PolicyBlock[], strip = true): Row[] =>
-  blocks.map((b) => ({ ...b, text: strip && b.t.startsWith('h') ? stripHeadingNumber(b.text) : b.text, id: nextId++ }))
-const plain = (rows: Row[]): PolicyBlock[] => rows.map(({ t, text, ref, fest }) => ({ t, text, ...(ref ? { ref } : {}), ...(fest ? { fest: true } : {}) }))
-/** Stand wie gespeichert: Überschriften mit Nummer. */
-const numbered = (rows: Row[], on = true): PolicyBlock[] => (on ? renumberPolicyBlocks(plain(rows)) : plain(rows))
-const clean = (blocks: PolicyBlock[]) => blocks.map((b) => ({ ...b, text: b.text.trim() })).filter((b) => b.text)
-
-/** Teilt die Liste in Gruppen: eine Überschrift mit allem, was bis zur nächsten Überschrift folgt. */
-function buildGroups(rows: Row[]): Group[] {
-  const groups: Group[] = []
-  rows.forEach((r, i) => {
-    if (isHead(r)) groups.push({ head: r, items: [], start: i, end: i + 1 })
-    else {
-      if (groups.length === 0) groups.push({ head: null, items: [], start: 0, end: 0 })
-      const g = groups[groups.length - 1]
-      g.items.push(r)
-      g.end = i + 1
-    }
-  })
-  return groups
-}
-
-/** Ebene einer Gruppe: Einleitung 0, Überschrift 1 bis 3. */
-const level = (g: Group) => (g.head ? Number(g.head.t[1]) : 0)
-/** Ende (exklusiv) der Gruppe i samt ihren Unterabschnitten. */
-const subEnd = (gs: Group[], i: number) => {
-  let e = i + 1
-  while (e < gs.length && level(gs[e]) > level(gs[i])) e++
-  return e
-}
-/** Vorherige bzw. nächste Gruppe derselben Ebene unter demselben Elternabschnitt, sonst -1. */
-const prevSibling = (gs: Group[], i: number) => {
-  for (let j = i - 1; j >= 0; j--) {
-    if (level(gs[j]) === level(gs[i])) return j
-    if (level(gs[j]) < level(gs[i])) return -1
-  }
-  return -1
-}
-const nextSibling = (gs: Group[], i: number) => {
-  const e = subEnd(gs, i)
-  return e < gs.length && level(gs[e]) === level(gs[i]) ? e : -1
-}
-
-/** Textfeld, das mit dem Inhalt wächst. */
-function AutoTextarea({
-  value,
-  onChange,
-  className,
-  elRef,
-  ...rest
-}: React.ComponentProps<'textarea'> & { elRef?: (el: HTMLTextAreaElement | null) => void }) {
-  const ref = useRef<HTMLTextAreaElement | null>(null)
-  // Höhe vor dem Zeichnen setzen (useLayoutEffect) und die Scrollposition festhalten: Beim kurzen Zurücksetzen
-  // auf „auto“ schrumpfte die Seite sonst, und beim Tippen sprang die Ansicht nach oben.
-  const fit = useCallback(() => {
-    const el = ref.current
-    if (!el) return
-    const scroller = document.scrollingElement
-    const top = scroller?.scrollTop ?? 0
-    el.style.height = 'auto'
-    el.style.height = `${el.scrollHeight + 2}px`
-    if (scroller && scroller.scrollTop !== top) scroller.scrollTop = top
-  }, [])
-  useLayoutEffect(fit, [value, fit])
-  // Bei geänderter Breite (Fenster, Layout) neu anpassen; ein Beobachter pro Feld, nicht einer pro Tastendruck
-  useEffect(() => {
-    const el = ref.current
-    if (!el) return
-    let width = el.offsetWidth
-    const ro = new ResizeObserver(() => {
-      if (el.offsetWidth !== width) {
-        width = el.offsetWidth
-        fit()
-      }
-    })
-    ro.observe(el)
-    return () => ro.disconnect()
-  }, [fit])
-  return (
-    <Textarea
-      ref={(el) => {
-        ref.current = el
-        elRef?.(el)
-      }}
-      rows={1}
-      value={value}
-      onChange={onChange}
-      className={cx('resize-none overflow-hidden', className)}
-      {...rest}
-      // Mindesthöhe einer Zeile (die Standardklasse der Textfelder hat 96 px)
-      style={{ minHeight: 40, ...rest.style }}
-    />
-  )
-}
 
 /** Neue Kennung für ein Verweisziel (Kleinbuchstaben und Ziffern, noch nicht vergeben). */
 function newRefId(rows: Row[]): string {
@@ -197,7 +109,7 @@ function bulletize(text: string, caret: number): { text: string; caret: number }
 
 /** Listenpunkte aus dem Text des Feldes (eine Zeile je Punkt, mit oder ohne Aufzählungszeichen); vorhandene Ids werden der Reihe nach wiederverwendet. */
 function listRows(text: string, old: Row[]): Row[] {
-  return text.split('\n').map((line, k) => ({ id: old[k]?.id ?? nextId++, t: 'li' as const, text: line.replace(BULLET_PREFIX, '') }))
+  return text.split('\n').map((line, k) => ({ id: old[k]?.id ?? newId(), t: 'li' as const, text: line.replace(BULLET_PREFIX, '') }))
 }
 
 function summary(g: Group): string {
@@ -354,7 +266,7 @@ export default function LegalDocumentForm({
 
   /** Neuer Absatz oder neue Liste am Ende der Gruppe. */
   const addItem = (g: Group, t: 'p' | 'li') => {
-    const row: Row = { id: nextId++, t, text: '' }
+    const row: Row = { id: newId(), t, text: '' }
     setRows((rs) => {
       const gs = buildGroups(rs)
       const grp = gs.find((x) => (x.head?.id ?? null) === (g.head?.id ?? null))
@@ -370,13 +282,13 @@ export default function LegalDocumentForm({
       const range = elRange(rs, el.key)
       if (!range) return rs
       const copy = rs.slice()
-      copy.splice(range[1], 0, { id: nextId++, t: 'p', text: '' })
+      copy.splice(range[1], 0, { id: newId(), t: 'p', text: '' })
       return copy
     })
     expand(keyOf(g))
   }
   const addGroupAfter = (g: Group | null) => {
-    const row: Row = { id: nextId++, t: g?.head?.t ?? 'h2', text: '' }
+    const row: Row = { id: newId(), t: g?.head?.t ?? 'h2', text: '' }
     setRows((rs) => {
       const copy = rs.slice()
       copy.splice(g ? g.end : (buildGroups(rs)[0]?.head ? 0 : buildGroups(rs)[0]?.end ?? 0), 0, row)
