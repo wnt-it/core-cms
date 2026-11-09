@@ -1,43 +1,17 @@
-// Quelle: template/src/lib/services/submissions.ts (submitContactForm)
+// Speichert eine Anfrage mit festen Feldern (name/email/...) und offenem `metadata`. Bleibt für bestehende
+// Projekte erhalten. Neue Formulare nutzen besser defineForm + receiveSubmission (core-cms/src/submissions/server),
+// das bringt Spam-Schutz, Feldbezeichnungen und Anhänge mit.
 //
-// Umgebaut auf das EmailProvider-Interface aus ../email statt fest verdrahtetem
-// Nodemailer/SMTP-Aufruf. Verwendet SMTP standardmäßig (liest Zugangsdaten
-// ausschließlich aus email_settings, d. h. dem, was im Admin gepflegt ist - keine
-// ENV-Variablen, keine Standardwerte), kann aber genauso mit
-// dem Resend-Adapter aufgerufen werden, indem `emailProvider` übergeben wird.
-//
-// Generisch gehalten: feste Felder (name/email/...) + offenes `metadata` für
-// kundenindividuelle Formularfelder (z.B. projectType/amount/energyType).
+// Ab v0.15.0 gibt der Core keine Pflichtfelder mehr vor. Eine angegebene E-Mail-Adresse muss gültig sein.
 
-import { createClient } from "../supabase/server";
-import { createServiceRoleClient } from "../supabase/service-role";
-import { decrypt } from "../supabase/encryption";
-import { getEmailProvider, type EmailProvider } from "../email";
+import type { EmailProvider } from "../email";
 import type { ContactPayload } from "./types";
-
-// Eingaben aus dem öffentlichen Formular dürfen nie als HTML in die Mail gelangen.
-function esc(value: unknown): string {
-  return String(value ?? "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
-}
-
-// Akzentfarbe nur als gültiger Hex-Wert zulassen (landet in style-Attributen).
-function safeColor(value: string | undefined): string {
-  return value && /^#[0-9a-fA-F]{3,8}$/.test(value) ? value : "#111111";
-}
+import { insertSubmission, notifySubmission } from "./save";
 
 export interface SubmitContactFormOptions {
-  /**
-   * Optionaler, bereits konfigurierter EmailProvider (z.B. Resend). Wenn nicht
-   * angegeben, wird wie im Original-Verhalten automatisch ein SMTP-Provider aus
-   * ENV-Variablen bzw. den site_settings der Datenbank aufgebaut.
-   */
+  /** Bereits eingerichteter EmailProvider (z. B. Resend). Ohne: SMTP aus den Einstellungen. */
   emailProvider?: EmailProvider;
-  /** Absendername für die Benachrichtigungs-E-Mail, falls kein Provider übergeben wird. */
+  /** Vorsatz im Betreff der Benachrichtigung */
   notificationSubjectPrefix?: string;
   /** Anzeigename der Website für das E-Mail-Template (z. B. Firmenname). */
   siteName?: string;
@@ -45,151 +19,36 @@ export interface SubmitContactFormOptions {
   brandColor?: string;
 }
 
+const str = (v: unknown) => (typeof v === "string" ? v.trim() : "");
+
 export async function submitContactForm(payload: ContactPayload, options: SubmitContactFormOptions = {}) {
-  const {
-    type = "Kontakt",
-    name,
-    email,
-    phone,
-    company,
-    subject,
-    message,
-    sourcePage,
-    sourceUrl,
-    metadata,
-  } = payload;
-
-  if (!name || !email) {
-    throw new Error("Name und E-Mail-Adresse sind Pflichtfelder.");
-  }
-
-  // Basic email format check
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  if (!emailRegex.test(email)) {
+  const email = str(payload.email).toLowerCase();
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     throw new Error("Ungültiges E-Mail Format.");
   }
 
-  const derivedSourcePage = sourcePage || "Kontaktseite (/kontakt)";
-  const cleanSubject = subject?.trim() || `Kontaktanfrage von ${name.trim()}`;
-
-  // 1. Speichere die Anfrage in Supabase in der Tabelle "submissions"
-  const supabase = await createClient();
-  const insertPayload = {
-    type: type || "Kontakt",
-    name: String(name).trim(),
-    email: String(email).trim().toLowerCase(),
-    phone: phone ? String(phone).trim() : null,
-    company: company ? String(company).trim() : null,
-    subject: cleanSubject,
-    message: message || "",
-    source_page: derivedSourcePage,
-    source_url: sourceUrl || null,
-    status: "Neu",
-    metadata: metadata || null,
+  const input = {
+    type: str(payload.type) || "Kontakt",
+    columns: {
+      name: str(payload.name),
+      email,
+      phone: str(payload.phone),
+      company: str(payload.company),
+      subject: str(payload.subject),
+      message: typeof payload.message === "string" ? payload.message : "",
+    },
+    metadata: payload.metadata ?? null,
+    sourcePage: str(payload.sourcePage) || null,
+    sourceUrl: str(payload.sourceUrl) || null,
   };
 
-  // Die ID wird hier erzeugt statt per RETURNING gelesen: Besucher dürfen Anfragen eintragen, aber nicht
-  // lesen (RLS). Mit .select() scheiterte das Speichern für nicht angemeldete Besucher.
-  const submissionId = crypto.randomUUID();
-  const { error: dbError } = await supabase.from("submissions").insert({ id: submissionId, ...insertPayload });
-
-  if (dbError) {
-    console.error("[CRITICAL DB INSERT ERROR]", dbError);
-    throw new Error("Datenbankfehler beim Speichern: " + dbError.message);
-  }
-
-  // 2. Optionale E-Mail-Benachrichtigung (SMTP per Default, oder übergebener Provider)
-  try {
-    let provider = options.emailProvider;
-    let fromName = "";
-    let fromEmail = "";
-    let recipientEmail = "";
-
-    if (!provider) {
-      // SMTP-Konfiguration ausschließlich aus email_settings (im Admin gepflegt).
-      // Keine Umgebungsvariablen, keine Standardwerte: ist etwas nicht gepflegt,
-      // wird keine E-Mail gesendet (die Anfrage ist trotzdem in "submissions" gespeichert).
-      // Bewusst über den Service-Role-Client (nicht den normalen anon-Client): diese Tabelle
-      // enthält SMTP-Zugangsdaten und darf nicht per RLS öffentlich lesbar sein (anders als
-      // site_settings, das absichtlich öffentlich ist für Logo/Site-Name/Kontaktdaten).
-      const serviceRoleClient = createServiceRoleClient();
-      if (!serviceRoleClient) {
-        console.warn("[submitContactForm] SUPABASE_SERVICE_ROLE_KEY fehlt - kann email_settings nicht laden, keine E-Mail gesendet.");
-      } else {
-        const { data: dbSettings } = await serviceRoleClient
-          .from("email_settings")
-          .select("smtp_host, smtp_port, smtp_user, smtp_pass, smtp_from_name, smtp_from_email, smtp_recipient")
-          .eq("id", "general")
-          .maybeSingle();
-
-        let smtpPassword = "";
-        if (dbSettings?.smtp_pass) {
-          try {
-            smtpPassword = decrypt(dbSettings.smtp_pass);
-          } catch {
-            smtpPassword = "";
-          }
-        }
-        const smtpPort = Number(dbSettings?.smtp_port);
-
-        if (
-          dbSettings?.smtp_host && smtpPort > 0 && dbSettings.smtp_user && smtpPassword &&
-          dbSettings.smtp_from_email && dbSettings.smtp_recipient
-        ) {
-          fromName = dbSettings.smtp_from_name || "";
-          fromEmail = dbSettings.smtp_from_email;
-          recipientEmail = dbSettings.smtp_recipient;
-          provider = getEmailProvider({
-            type: "smtp",
-            config: { host: dbSettings.smtp_host, port: smtpPort, user: dbSettings.smtp_user, pass: smtpPassword },
-          });
-        } else {
-          console.warn("[submitContactForm] SMTP im Admin nicht vollständig eingerichtet - keine E-Mail gesendet.");
-        }
-      }
-    }
-
-    if (provider && recipientEmail) {
-      const brandColor = safeColor(options.brandColor);
-      const siteLabel = esc(options.siteName || fromName);
-
-      const html = `
-        <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e0e0e0; border-radius: 16px; padding: 28px; color: #111111;">
-          <div style="background-color: ${brandColor}; color: white; padding: 16px 20px; border-radius: 12px; margin-bottom: 24px;">
-            <span style="font-size: 11px; font-weight: bold; text-transform: uppercase; letter-spacing: 1px;">${siteLabel} Formulareingang</span>
-            <h2 style="margin: 4px 0 0 0; font-size: 20px; color: white;">Neue ${esc(type)}-Meldung</h2>
-            <p style="margin: 4px 0 0 0; font-size: 12px; color: #e8f5e9;">Herkunft: ${esc(derivedSourcePage)}</p>
-          </div>
-          <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 14px;">
-            <tr><td style="padding: 8px 0; border-bottom: 1px solid #f0f0f0; font-weight: bold; width: 140px; color: #666666;">Absender:</td><td style="padding: 8px 0; border-bottom: 1px solid #f0f0f0; font-weight: bold;">${esc(name)}</td></tr>
-            <tr><td style="padding: 8px 0; border-bottom: 1px solid #f0f0f0; font-weight: bold; color: #666666;">E-Mail:</td><td style="padding: 8px 0; border-bottom: 1px solid #f0f0f0;"><a href="mailto:${esc(email)}" style="color: ${brandColor}; font-weight: bold;">${esc(email)}</a></td></tr>
-            ${phone ? `<tr><td style="padding: 8px 0; border-bottom: 1px solid #f0f0f0; font-weight: bold; color: #666666;">Telefon:</td><td style="padding: 8px 0; border-bottom: 1px solid #f0f0f0;">${esc(phone)}</td></tr>` : ""}
-            ${company ? `<tr><td style="padding: 8px 0; border-bottom: 1px solid #f0f0f0; font-weight: bold; color: #666666;">Firma:</td><td style="padding: 8px 0; border-bottom: 1px solid #f0f0f0;">${esc(company)}</td></tr>` : ""}
-            ${subject?.trim() ? `<tr><td style="padding: 8px 0; border-bottom: 1px solid #f0f0f0; font-weight: bold; color: #666666;">Betreff:</td><td style="padding: 8px 0; border-bottom: 1px solid #f0f0f0;">${esc(subject.trim())}</td></tr>` : ""}
-          </table>
-          ${message ? `
-            <h4 style="color: #111111; margin-bottom: 8px; font-size: 14px;">Nachricht:</h4>
-            <div style="background-color: #f9f9f9; border: 1px solid #eeeeee; padding: 16px; border-radius: 12px; font-size: 13px; line-height: 1.6; white-space: pre-wrap;">${esc(message)}</div>
-          ` : ""}
-          <div style="font-size: 11px; color: #888888; margin-top: 24px; border-top: 1px solid #eee; padding-top: 16px; display: flex; justify-content: space-between;">
-            <span>${siteLabel}</span>
-            <span>In Supabase DB archiviert</span>
-          </div>
-        </div>
-      `;
-
-      await provider.send({
-        to: recipientEmail,
-        subject: `[${options.notificationSubjectPrefix || "Kontakt"}] ${cleanSubject}`.replace(/[\r\n]+/g, " "),
-        html,
-        fromName,
-        fromEmail,
-        replyTo: { name: String(name).trim(), email: String(email).trim() },
-      });
-    }
-  } catch (mailErr) {
-    console.warn("[EMAIL SEND WARNING - falling back to DB only]", mailErr);
-  }
+  const submissionId = await insertSubmission(input);
+  await notifySubmission(input, {
+    emailProvider: options.emailProvider,
+    subjectPrefix: options.notificationSubjectPrefix,
+    siteName: options.siteName,
+    brandColor: options.brandColor,
+  });
 
   return {
     success: true,

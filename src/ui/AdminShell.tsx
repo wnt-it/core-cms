@@ -11,7 +11,8 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { ExternalLink, ImageIcon, LogOut, Menu, Package, X } from "lucide-react";
 import { CORE_VERSION } from "../admin/changelog";
-import { coreAdminPages } from "../admin/core-pages";
+import { coreAdminPages, RETIRED_ADMIN_PATHS } from "../admin/core-pages";
+import { createClient } from "../supabase/client";
 import { CORE_TAGS_URL, newerVersions } from "../admin/version-compare";
 
 const UPDATES_KEY = "core-cms-updates";
@@ -116,17 +117,31 @@ export function AdminShell({ logo, accent = WNT_COLORS.accent, content, system =
   const [mediaOpen, setMediaOpen] = useState(false);
   const [switching, startSwitch] = useTransition();
   const [updates, setUpdates] = useState(0);
+  const [newSubmissions, setNewSubmissions] = useState(0);
 
   useEffect(() => setMenuOpen(false), [pathname]);
+  // Neue Anfragen für die Zahl am Posteingang, bei jedem Seitenwechsel neu (nur angemeldete Admins dürfen lesen)
+  useEffect(() => {
+    createClient()
+      .from("submissions")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "Neu")
+      .then(({ count }) => setNewSubmissions(count ?? 0), () => {});
+  }, [pathname]);
   useEffect(() => {
     countCoreUpdates().then(setUpdates).catch(() => {});
   }, []);
 
-  const toItem = (p: (typeof coreAdminPages)[number]): AdminNavItem => ({ href: `/admin/${p.slug}`, label: p.label, icon: p.icon });
+  const toItem = (p: (typeof coreAdminPages)[number]): AdminNavItem => ({
+    href: `/admin/${p.slug}`,
+    label: p.label,
+    icon: p.icon,
+    ...(p.slug === "posteingang" ? { count: newSubmissions, countLabel: newSubmissions === 1 ? "1 neue Anfrage" : `${newSubmissions} neue Anfragen` } : {}),
+  });
   const menuPages = coreAdminPages.filter((p) => p.inMenu !== false && (!p.optional || optionalPages.includes(p.slug)));
   // Core-Seiten gibt es nur einmal, aus dem Core. Ein Projekt-Menüpunkt mit derselben Adresse ist ein Fehler:
   // in der Entwicklung bricht die Seite mit Hinweis ab, live wird er weggelassen (die Website soll nicht ausfallen).
-  const coreHrefs = new Set(coreAdminPages.map((p) => `/admin/${p.slug}`));
+  const coreHrefs = new Set([...coreAdminPages.map((p) => p.slug), ...Object.keys(RETIRED_ADMIN_PATHS)].map((slug) => `/admin/${slug}`));
   const doppelt = [...content, ...system].filter((item) => coreHrefs.has(item.href)).map((item) => item.href);
   if (doppelt.length > 0) {
     const meldung = `[core-cms] Diese Menüpunkte kommen aus dem Core und dürfen nicht im Projekt-Menü (content/system der AdminShell) stehen: ${doppelt.join(", ")}. Bitte dort entfernen.`;
@@ -134,8 +149,14 @@ export function AdminShell({ logo, accent = WNT_COLORS.accent, content, system =
     console.error(meldung);
   }
   const ohneCore = (items: AdminNavItem[]) => items.filter((item) => !coreHrefs.has(item.href));
-  const contentItems = [...ohneCore(content), ...menuPages.filter((p) => p.group === "content").map(toItem)];
-  const systemItems = [...ohneCore(system), ...menuPages.filter((p) => p.group !== "content").map(toItem)];
+  // Seiten mit top stehen ganz oben in ihrer Gruppe (in „Inhalte“ nach dem Dashboard /admin), die übrigen Core-Seiten am Ende
+  const group = (items: AdminNavItem[], pages: typeof menuPages) => {
+    const own = ohneCore(items);
+    const lead = own[0]?.href === "/admin" ? 1 : 0;
+    return [...own.slice(0, lead), ...pages.filter((p) => p.top).map(toItem), ...own.slice(lead), ...pages.filter((p) => !p.top).map(toItem)];
+  };
+  const contentItems = group(content, menuPages.filter((p) => p.group === "content"));
+  const systemItems = group(system, menuPages.filter((p) => p.group !== "content"));
   const versionItem: AdminNavItem = {
     href: "/admin/version",
     label: `Core v${CORE_VERSION}`,

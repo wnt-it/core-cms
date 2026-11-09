@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 // @ts-expect-error reines JavaScript ohne Typen
-import { CORE_ONLY_ADMIN_SLUGS, findCoreRouteConflicts, withCoreCms } from "../../next-config.mjs";
+import { CORE_ONLY_ADMIN_SLUGS, RETIRED_ADMIN_SLUGS, findCoreRouteConflicts, withCoreCms } from "../../next-config.mjs";
 
 const tmp: string[] = [];
 function projekt(files: string[]) {
@@ -41,6 +41,25 @@ describe("Core-Seiten nur aus dem Core", () => {
     expect(findCoreRouteConflicts(root)).toEqual([]);
   });
 
+  it("sperrt die alte Posteingang-Adresse /admin/submissions", () => {
+    const root = projekt(["src/app/admin/(dashboard)/submissions/page.tsx"]);
+    expect(findCoreRouteConflicts(root).map((c: { slug: string }) => c.slug)).toEqual(["submissions"]);
+  });
+
+  it("leitet alte Adressen vor den Umleitungen des Projekts um", async () => {
+    const root = projekt([]);
+    const cwd = process.cwd();
+    process.chdir(root);
+    try {
+      const config = withCoreCms({ redirects: async () => [{ source: "/alt", destination: "/neu", permanent: true }] });
+      const list = await config.redirects();
+      expect(list[0]).toMatchObject({ source: "/admin/submissions", destination: "/admin/posteingang" });
+      expect(list.at(-1)).toMatchObject({ source: "/alt" });
+    } finally {
+      process.chdir(cwd);
+    }
+  });
+
   it("withCoreCms bricht mit Hinweis ab", () => {
     const root = projekt(["app/admin/einstellungen/page.tsx"]);
     const cwd = process.cwd();
@@ -57,5 +76,7 @@ describe("Core-Seiten nur aus dem Core", () => {
     const slugs = [...src.matchAll(/\{ slug: "([^"]+)"/g)].map((m) => m[1]);
     const erwartet = slugs.filter((s) => s !== "datenschutz" && s !== "impressum").sort();
     expect([...CORE_ONLY_ADMIN_SLUGS].sort()).toEqual(erwartet);
+    const core = fs.readFileSync(path.join(__dirname, "../../src/admin/core-pages.tsx"), "utf8");
+    for (const [alt, neu] of Object.entries(RETIRED_ADMIN_SLUGS)) expect(core).toContain(`${alt}: "${neu}"`);
   });
 });

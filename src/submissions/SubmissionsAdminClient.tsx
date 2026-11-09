@@ -1,21 +1,22 @@
 'use client'
 
-// Quelle: template/src/app/admin/(dashboard)/submissions/SubmissionsAdminClient.tsx
-// Imports auf core-cms-interne relative Pfade umgestellt; generische mailto-Betreffzeile
-// (kein hartcodierter Firmenname mehr).
+// Posteingang (Core-Seite). Name und E-Mail sind keine Pflicht (ab v0.15.0), Zusatzfelder erscheinen mit
+// ihrer Bezeichnung aus field_labels, Anhänge liegen im privaten Speicherbereich und werden nur über kurz
+// gültige Links und nach einem Warnhinweis heruntergeladen.
 
 import { useState, useTransition, useEffect, useCallback, type KeyboardEvent as ReactKeyboardEvent } from 'react'
-import { Submission } from '../supabase/types'
+import type { Submission, SubmissionFile } from '../supabase/types'
 import { createClient } from '../supabase/client'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { Trash2, Mail, ChevronDown, X, Inbox } from 'lucide-react'
+import { Trash2, Mail, ChevronDown, X, Inbox, Paperclip, Download } from 'lucide-react'
 import {
   Badge,
   Button,
   ConfirmDialog,
   EmptyState,
   Menu,
+  Note,
   SearchInput,
   Segmented,
   Select,
@@ -32,6 +33,21 @@ import {
 
 interface SubmissionsAdminClientProps {
   initialSubmissions: Submission[]
+  initialFiles?: SubmissionFile[]
+}
+
+const ATTACHMENT_BUCKET = 'anfragen'
+
+// Anzeigename: Name, sonst E-Mail, sonst Hinweis
+const senderOf = (s: Submission) => s.name?.trim() || s.email?.trim() || 'Ohne Namen'
+
+const formatSize = (bytes: number) =>
+  bytes >= 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1).replace('.', ',')} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`
+
+const FILE_STATUS: Record<SubmissionFile['status'], string> = {
+  ausstehend: 'nicht vollständig hochgeladen',
+  ok: '',
+  abgelehnt: 'abgelehnt (Dateityp oder Größe passte nicht), gelöscht',
 }
 
 const STATUS_OPTIONS = [
@@ -54,8 +70,11 @@ const formatDate = (iso: string) =>
     minute: '2-digit',
   })
 
-export default function SubmissionsAdminClient({ initialSubmissions }: SubmissionsAdminClientProps) {
+export default function SubmissionsAdminClient({ initialSubmissions, initialFiles = [] }: SubmissionsAdminClientProps) {
   const [submissions, setSubmissions] = useState<Submission[]>(initialSubmissions)
+  const [files, setFiles] = useState<SubmissionFile[]>(initialFiles)
+  // Anhang, dessen Herunterladen gerade bestätigt werden soll
+  const [downloadTarget, setDownloadTarget] = useState<SubmissionFile | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [typeFilter, setTypeFilter] = useState('all')
   const [statusFilter, setStatusFilter] = useState('all')
@@ -70,16 +89,21 @@ export default function SubmissionsAdminClient({ initialSubmissions }: Submissio
   useEffect(() => {
     setSubmissions(initialSubmissions)
   }, [initialSubmissions])
+  useEffect(() => {
+    setFiles(initialFiles)
+  }, [initialFiles])
+
+  const filesOf = (id: string) => files.filter((f) => f.submission_id === id)
 
   // Detailansicht mit ESC schließen (nicht, solange der Löschdialog offen ist)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return
-      if (!deleteTarget) setActiveSubmission(null)
+      if (!deleteTarget && !downloadTarget) setActiveSubmission(null)
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [deleteTarget])
+  }, [deleteTarget, downloadTarget])
 
   // Vorhandene Formulare mit Anzahl, für den Filter
   const formTypes = Object.entries(
@@ -95,8 +119,8 @@ export default function SubmissionsAdminClient({ initialSubmissions }: Submissio
     const matchesStatus = statusFilter === 'all' || s.status === statusFilter
     const q = searchQuery.toLowerCase().trim()
     const matchesSearch = q === '' ||
-      s.name.toLowerCase().includes(q) ||
-      s.email.toLowerCase().includes(q) ||
+      (s.name && s.name.toLowerCase().includes(q)) ||
+      (s.email && s.email.toLowerCase().includes(q)) ||
       (s.company && s.company.toLowerCase().includes(q)) ||
       (s.subject && s.subject.toLowerCase().includes(q)) ||
       (s.source_page && s.source_page.toLowerCase().includes(q)) ||
@@ -159,8 +183,19 @@ export default function SubmissionsAdminClient({ initialSubmissions }: Submissio
 
     setSubmissions((prev) => prev.filter((s) => s.id !== id))
     if (activeSubmission?.id === id) setActiveSubmission(null)
+    const paths = filesOf(id).map((f) => f.path)
+    setFiles((prev) => prev.filter((f) => f.submission_id !== id))
 
     startTransition(async () => {
+      // Anhänge zuerst löschen, die Einträge in submission_files gehen mit der Anfrage
+      if (paths.length) {
+        const { error: storageError } = await supabase.storage.from(ATTACHMENT_BUCKET).remove(paths)
+        if (storageError) {
+          toast.error('Anhänge konnten nicht gelöscht werden: ' + storageError.message)
+          router.refresh()
+          return
+        }
+      }
       const { error } = await supabase
         .from('submissions')
         .delete()
@@ -191,7 +226,20 @@ export default function SubmissionsAdminClient({ initialSubmissions }: Submissio
   }
 
   const mailtoHref = (sub: Submission) =>
-    `mailto:${sub.email}?subject=Re: ${encodeURIComponent(sub.subject || 'Ihre Anfrage')}`
+    sub.email ? `mailto:${sub.email}?subject=Re: ${encodeURIComponent(sub.subject || 'Ihre Anfrage')}` : null
+
+  // Herunterladen erst nach Hinweis. Der Link gilt eine Minute und lädt immer als Datei (nie im Browser anzeigen).
+  const confirmDownload = async () => {
+    const file = downloadTarget
+    setDownloadTarget(null)
+    if (!file) return
+    const { data, error } = await supabase.storage.from(ATTACHMENT_BUCKET).createSignedUrl(file.path, 60, { download: file.name })
+    if (error || !data?.signedUrl) {
+      toast.error('Anhang konnte nicht geladen werden' + (error ? ': ' + error.message : ''))
+      return
+    }
+    window.location.href = data.signedUrl
+  }
 
   const toolbar = (
     <>
@@ -271,14 +319,17 @@ export default function SubmissionsAdminClient({ initialSubmissions }: Submissio
                     >
                       {/* Absender */}
                       <td className={tdClass}>
-                        <span className={cx('block max-w-[200px] truncate', sub.status === 'Neu' ? 'font-semibold' : 'font-medium')}>{sub.name}</span>
-                        <span className="block max-w-[200px] truncate text-[13px] text-[#64748B]">{sub.email}</span>
+                        <span className={cx('block max-w-[200px] truncate', sub.status === 'Neu' ? 'font-semibold' : 'font-medium')}>{senderOf(sub)}</span>
+                        {sub.name && sub.email && <span className="block max-w-[200px] truncate text-[13px] text-[#64748B]">{sub.email}</span>}
                         {sub.phone && <span className="block text-[12.5px] text-[#94A3B8]">{sub.phone}</span>}
                       </td>
 
                       {/* Betreff & Vorschau */}
                       <td className={tdClass}>
-                        <span className="block max-w-[230px] truncate">{sub.subject || 'Kein Betreff'}</span>
+                        <span className="flex max-w-[230px] items-center gap-1.5">
+                          <span className="truncate">{sub.subject || 'Kein Betreff'}</span>
+                          {filesOf(sub.id).some((f) => f.status === 'ok') && <Paperclip size={13} aria-label="mit Anhang" className="shrink-0 text-[#94A3B8]" />}
+                        </span>
                         <span className="block max-w-[230px] truncate text-[13px] text-[#64748B]">{sub.message || '–'}</span>
                       </td>
 
@@ -320,9 +371,9 @@ export default function SubmissionsAdminClient({ initialSubmissions }: Submissio
                       <td className={cx(tdClass, 'text-right')} onClick={(e) => e.stopPropagation()}>
                         <button
                           type="button"
-                          onClick={() => handleDelete(sub.id, sub.name)}
+                          onClick={() => handleDelete(sub.id, senderOf(sub))}
                           className={iconButtonDangerClass}
-                          aria-label={`Anfrage von ${sub.name} löschen`}
+                          aria-label={`Anfrage von ${senderOf(sub)} löschen`}
                           title="Löschen"
                         >
                           <Trash2 size={16} aria-hidden="true" />
@@ -347,7 +398,7 @@ export default function SubmissionsAdminClient({ initialSubmissions }: Submissio
                     >
                       <span className="flex items-center gap-2">
                         <span className={cx('min-w-0 flex-1 truncate text-[14px] text-[#0F172A]', sub.status === 'Neu' ? 'font-semibold' : 'font-medium')}>
-                          {sub.name}
+                          {senderOf(sub)}
                         </span>
                         <Badge tone={st.tone} dot>{st.label}</Badge>
                       </span>
@@ -388,7 +439,7 @@ export default function SubmissionsAdminClient({ initialSubmissions }: Submissio
               </span>
               <button
                 type="button"
-                onClick={() => handleDelete(activeSubmission.id, activeSubmission.name)}
+                onClick={() => handleDelete(activeSubmission.id, senderOf(activeSubmission))}
                 className={iconButtonDangerClass}
                 aria-label="Anfrage löschen"
                 title="Anfrage löschen"
@@ -436,19 +487,27 @@ export default function SubmissionsAdminClient({ initialSubmissions }: Submissio
 
               {/* Kontaktdaten */}
               <dl className="m-0 grid grid-cols-1 gap-x-4 gap-y-1 text-[14px] sm:grid-cols-[120px_minmax(0,1fr)] sm:gap-y-2">
-                <dt className="text-[13px] text-[#64748B]">Name</dt>
-                <dd className="m-0 mb-2 text-[#0F172A] sm:mb-0">{activeSubmission.name}</dd>
+                {activeSubmission.name && (
+                  <>
+                    <dt className="text-[13px] text-[#64748B]">{activeSubmission.field_labels?.name ?? 'Name'}</dt>
+                    <dd className="m-0 mb-2 text-[#0F172A] sm:mb-0">{activeSubmission.name}</dd>
+                  </>
+                )}
 
-                <dt className="text-[13px] text-[#64748B]">E-Mail</dt>
-                <dd className="m-0 mb-2 break-all sm:mb-0">
-                  <a href={mailtoHref(activeSubmission)} className="text-[#0F172A] underline decoration-[#CBD5E1] underline-offset-2 hover:decoration-current">
-                    {activeSubmission.email}
-                  </a>
-                </dd>
+                {activeSubmission.email && (
+                  <>
+                    <dt className="text-[13px] text-[#64748B]">{activeSubmission.field_labels?.email ?? 'E-Mail'}</dt>
+                    <dd className="m-0 mb-2 break-all sm:mb-0">
+                      <a href={mailtoHref(activeSubmission) ?? undefined} className="text-[#0F172A] underline decoration-[#CBD5E1] underline-offset-2 hover:decoration-current">
+                        {activeSubmission.email}
+                      </a>
+                    </dd>
+                  </>
+                )}
 
                 {activeSubmission.phone && (
                   <>
-                    <dt className="text-[13px] text-[#64748B]">Telefon</dt>
+                    <dt className="text-[13px] text-[#64748B]">{activeSubmission.field_labels?.phone ?? 'Telefon'}</dt>
                     <dd className="m-0 mb-2 sm:mb-0">
                       <a href={`tel:${activeSubmission.phone}`} className="text-[#0F172A] underline decoration-[#CBD5E1] underline-offset-2 hover:decoration-current">
                         {activeSubmission.phone}
@@ -459,7 +518,7 @@ export default function SubmissionsAdminClient({ initialSubmissions }: Submissio
 
                 {activeSubmission.company && (
                   <>
-                    <dt className="text-[13px] text-[#64748B]">Firma</dt>
+                    <dt className="text-[13px] text-[#64748B]">{activeSubmission.field_labels?.company ?? 'Firma'}</dt>
                     <dd className="m-0 mb-2 text-[#0F172A] sm:mb-0">{activeSubmission.company}</dd>
                   </>
                 )}
@@ -467,7 +526,7 @@ export default function SubmissionsAdminClient({ initialSubmissions }: Submissio
 
               {/* Nachricht */}
               <div className="flex flex-col gap-2">
-                <span className="text-[13px] font-medium text-[#334155]">Nachricht</span>
+                <span className="text-[13px] font-medium text-[#334155]">{activeSubmission.field_labels?.message ?? 'Nachricht'}</span>
                 {activeSubmission.message ? (
                   <p className="whitespace-pre-wrap break-words text-[14px] leading-relaxed text-[#1E293B]">{activeSubmission.message}</p>
                 ) : (
@@ -478,17 +537,51 @@ export default function SubmissionsAdminClient({ initialSubmissions }: Submissio
               {/* Dynamische Zusatzdaten (z. B. Projektdaten, Checkboxen, Sonderfelder) */}
               {activeSubmission.metadata && Object.keys(activeSubmission.metadata).length > 0 && (
                 <div className="flex flex-col gap-2">
-                  <span className="text-[13px] font-medium text-[#334155]">Zusätzliche Formular- &amp; Projektdaten</span>
+                  <span className="text-[13px] font-medium text-[#334155]">Weitere Angaben</span>
                   <dl className="m-0 grid grid-cols-1 gap-x-4 gap-y-1 rounded-lg bg-[#FAFAFC] px-4 py-3.5 text-[14px] sm:grid-cols-[120px_minmax(0,1fr)] sm:gap-y-2">
                     {Object.entries(activeSubmission.metadata).map(([key, val]) => (
                       <div key={key} className="contents">
-                        <dt className="text-[13px] capitalize text-[#64748B]">{key.replace(/_/g, ' ')}</dt>
+                        <dt className={cx('text-[13px] text-[#64748B]', !activeSubmission.field_labels?.[key] && 'capitalize')}>
+                          {activeSubmission.field_labels?.[key] ?? key.replace(/_/g, ' ')}
+                        </dt>
                         <dd className="m-0 mb-2 break-words text-[#0F172A] sm:mb-0">
                           {typeof val === 'object' ? JSON.stringify(val) : String(val)}
                         </dd>
                       </div>
                     ))}
                   </dl>
+                </div>
+              )}
+
+              {/* Anhänge (privater Speicher, nur für angemeldete Admins) */}
+              {filesOf(activeSubmission.id).length > 0 && (
+                <div className="flex flex-col gap-2">
+                  <span className="text-[13px] font-medium text-[#334155]">Anhänge</span>
+                  <ul className="m-0 flex list-none flex-col gap-1.5 p-0">
+                    {filesOf(activeSubmission.id).map((file) => (
+                      <li key={file.id} className="flex items-center gap-3 rounded-lg border border-[#E2E8F0] px-3 py-2.5">
+                        <Paperclip size={16} aria-hidden="true" className="shrink-0 text-[#94A3B8]" />
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-[14px] text-[#0F172A]">{file.name}</span>
+                          <span className="block text-[12.5px] text-[#64748B]">
+                            {formatSize(file.size)}
+                            {FILE_STATUS[file.status] && <> · {FILE_STATUS[file.status]}</>}
+                          </span>
+                        </span>
+                        {file.status === 'ok' && (
+                          <button
+                            type="button"
+                            onClick={() => setDownloadTarget(file)}
+                            className={iconButtonClass}
+                            aria-label={`${file.name} herunterladen`}
+                            title="Herunterladen"
+                          >
+                            <Download size={16} aria-hidden="true" />
+                          </button>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
                 </div>
               )}
             </div>
@@ -498,10 +591,12 @@ export default function SubmissionsAdminClient({ initialSubmissions }: Submissio
               <Button variant="ghost" onClick={() => setActiveSubmission(null)}>
                 Schließen
               </Button>
-              <a href={mailtoHref(activeSubmission)} className={buttonClass('primary', 'md', 'flex-1 sm:flex-none')}>
-                <Mail size={16} aria-hidden="true" />
-                Per E-Mail antworten
-              </a>
+              {mailtoHref(activeSubmission) && (
+                <a href={mailtoHref(activeSubmission)!} className={buttonClass('primary', 'md', 'flex-1 sm:flex-none')}>
+                  <Mail size={16} aria-hidden="true" />
+                  Per E-Mail antworten
+                </a>
+              )}
             </div>
           </section>
         </div>
@@ -514,7 +609,22 @@ export default function SubmissionsAdminClient({ initialSubmissions }: Submissio
         onConfirm={confirmDelete}
         onCancel={cancelDelete}
       >
-        Eintrag von „{deleteTarget?.name}“ wirklich löschen?
+        Eintrag von „{deleteTarget?.name}“ wirklich löschen? Anhänge werden mit gelöscht.
+      </ConfirmDialog>
+
+      <ConfirmDialog
+        open={downloadTarget !== null}
+        title="Anhang herunterladen?"
+        confirmLabel="Herunterladen"
+        danger={false}
+        onConfirm={confirmDownload}
+        onCancel={() => setDownloadTarget(null)}
+      >
+        <Note tone="warn">
+          Dieser Anhang wurde von einer fremden Person über ein Formular der Website geschickt und ist nicht auf Viren
+          geprüft. Öffnen Sie ihn nur, wenn Sie ihn erwarten, und lassen Sie ihn vorher vom Virenschutz Ihres Rechners
+          prüfen. Für alles, was beim Öffnen auf Ihrem Rechner passiert, sind Sie selbst verantwortlich.
+        </Note>
       </ConfirmDialog>
     </>
   )

@@ -265,6 +265,9 @@ export default function MediaLibraryModal({
                 <p className="mt-0.5 text-[13px] text-[#64748B]">
                   Bilder hochladen oder vorhandene Medien auswählen.
                 </p>
+                <p className="mt-1 text-[12.5px] text-[#92400E]">
+                  Alle Dateien hier sind öffentlich abrufbar. Keine vertraulichen Unterlagen hochladen.
+                </p>
                 <StorageUsage refreshKey={storageRefresh} className="mt-2" />
               </div>
               <button type="button" onClick={onClose} className={cx(iconButtonClass, '-mr-2 -mt-1')} aria-label="Schließen">

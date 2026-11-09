@@ -18,13 +18,8 @@ Format: `- [ ] **Bereich: kurzer Titel** (gefunden in Projekt, Datum)`, darunter
 
 ## Features
 
-- [ ] **Posteingang als Core-Seite, Formulare ohne Pflichtfelder, Anhänge** (Planung, 09.11.2026) → v0.15.0
-  - *Core-Seite:* „Posteingang“ in `coreAdminPages` wie „Einstellungen“ (nur aus dem Core, Sperre über `CORE_ONLY_ADMIN_SLUGS`). Die alten Projektseiten `/admin/submissions` fallen weg, die alte Adresse leitet weiter (Links aus E-Mails). Ein Projekt hat eine eigene Fassung, vor dem Löschen vergleichen.
-  - *Keine Pflichtfelder aus dem Core:* `name` und `email` in `submissions` optional (SQL), keine Pflichtprüfung in `submitContactForm`. Was Pflicht ist, legt das Formular im Projekt fest. Ausgefüllte Felder werden weiter geprüft (z. B. E-Mail-Format). Beliebige Zusatzfelder über `metadata`, mit lesbaren Bezeichnungen fürs Anzeigen.
-  - *Spam-Schutz zentral:* verstecktes Feld, Mindestzeit, Längen, Begrenzung je Adresse aus den Projekten in den Core.
-  - *Niemand liest Anfragen öffentlich:* Besucher dürfen heute nur einfügen, nicht lesen (`sql/0.14.0_basis.sql`). Zusätzlich: Einfügen nur noch über den Server (Service-Role), `insert` für `anon` entziehen, damit niemand am Spam-Schutz vorbei direkt in die Tabelle schreibt. Stand in jedem Projekt prüfen.
-  - *Anhänge (nur wenn ein Formular sie einschaltet):* privater Bucket `anfragen` (kein öffentlicher Link, nur angemeldete Admins), Tabelle `submission_files` (Anfrage, Name, Größe, Typ, Pfad, Datum). Upload erst nach Prüfung über eine einmalige Upload-Adresse direkt zu Supabase (Vercel nimmt nur ca. 4,5 MB pro Anfrage). Standard nur PDF, JPG, PNG, echter Dateityp wird am Inhalt geprüft, Größe und Anzahl je Formular einstellbar. Download nur über kurz gültige Links und immer als Download, nie im Browser angezeigt. Löschen der Anfrage löscht die Dateien, optional Löschfrist. Kein Virenscanner: Hinweis beim Herunterladen, dass Anhänge von Fremden stammen und vor dem Öffnen vom Virenschutz des eigenen Rechners geprüft werden sollten.
-  - *Mediathek:* Hinweis „Alle Dateien hier sind öffentlich abrufbar. Keine vertraulichen Unterlagen hochladen.“
+- [ ] **Posteingang: Löschfrist für Anhänge** (Planung, 09.11.2026)
+  Anhänge (z. B. abgelehnte Bewerbungen) nach einer einstellbaren Frist automatisch löschen (DSGVO), z. B. per Cron-Job auf Vercel. Vorbereitet: Tabelle `submission_files` mit `created_at`, privater Bucket `anfragen` (v0.15.0).
 
 - [ ] **Admin: Core-Seiten im Menü ausblenden** (wnt-it, 08.11.2026)
   Nicht jedes Projekt nutzt jede Core-Seite, z. B. bindet wnt-it das Pop-up nicht ein, der Menüpunkt „Pop-up“ erscheint trotzdem. Gewünscht: AdminShell-Prop `hiddenPages` (Gegenstück zu `optionalPages`), z. B. `hiddenPages={["popup"]}`.

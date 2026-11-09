@@ -17,6 +17,18 @@ export interface ChangelogEntry {
 /** Neueste Version zuerst. */
 export const CORE_CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.15.0",
+    date: "2026-11-09",
+    changes: [
+      { type: "feature", text: "Der Posteingang ist auf allen Websites gleich und steht im Menü ganz oben unter „System“, mit der Zahl neuer Anfragen. Anfragen aus allen Formularen der Website kommen hier an, auch mit eigenen Feldern, die mit ihrer Bezeichnung angezeigt werden." },
+      { type: "feature", text: "Formulare können Dateien annehmen, z. B. Bewerbungsunterlagen (PDF, JPG oder PNG). Die Dateien liegen in einem geschützten Bereich, den nur angemeldete Verwalter sehen, und werden mit der Anfrage gelöscht. Vor dem Herunterladen erscheint ein Hinweis, dass Anhänge von Fremden stammen und nicht auf Viren geprüft sind." },
+      { type: "feature", text: "Formulare müssen nicht mehr nach Name und E-Mail fragen. Welche Angaben Pflicht sind, wird je Formular festgelegt, z. B. eine Newsletter-Anmeldung nur mit E-Mail oder anonymes Feedback." },
+      { type: "security", text: "Anfragen sind von außen weder lesbar noch direkt eintragbar. Jede Anfrage läuft über den Spam-Schutz der Website." },
+      { type: "security", text: "Die Mediathek weist darauf hin, dass alle Dateien dort öffentlich abrufbar sind und keine vertraulichen Unterlagen hineingehören." },
+    ],
+    releaseNotes: "**Vor dem Update:** sql/0.15.0_posteingang.sql im Supabase-Projekt ausführen (name/email optional, field_labels, Besucher ohne Lese- und Schreibrecht auf submissions, Tabelle submission_files, privater Bucket anfragen). Danach speichert der Core Anfragen nur über SUPABASE_SERVICE_ROLE_KEY. **Posteingang als Core-Seite:** /admin/posteingang über coreAdminPages (Gruppe system, ganz oben), alte Adresse /admin/submissions leitet withCoreCms um. Eigene Seite admin/(dashboard)/submissions/, Menüpunkt /admin/submissions und die Zählung newSubmissions im selben Commit wie das Update löschen, sonst brechen next dev/next build ab. Links auf /admin/submissions auf /admin/posteingang ändern. **Formulare:** defineForm (core-cms/src/submissions), receiveSubmission (core-cms/src/submissions/server) in einer Server Action, im Formular <FormGuard /> und sendForm (core-cms/src/submissions/client). Eigener Spam-Schutz in den Projekten entfällt. submitContactForm bleibt, ohne Pflichtfelder. Siehe README, Abschnitt „Posteingang und Formulare“. Typen: Submission.name und Submission.email sind jetzt string | null.",
+  },
+  {
     version: "0.14.0",
     date: "2026-11-09",
     changes: [

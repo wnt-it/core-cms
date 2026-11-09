@@ -1,11 +1,12 @@
 import { notFound } from "next/navigation";
-import { FileText, Megaphone, Package, ScrollText, Settings, ShieldCheck, UserCircle } from "lucide-react";
+import { FileText, Inbox, Megaphone, Package, ScrollText, Settings, ShieldCheck, UserCircle } from "lucide-react";
 import type { ComponentType } from "react";
 import { AccountPage } from "../auth";
 import VersionPage from "./VersionPage";
 import SettingsPage, { type EinstellungenOptions } from "./SettingsPage";
 import PopupPage from "../popup/PopupPage";
 import ConsentAdminPage from "../consent/ConsentAdminPage";
+import AdminSubmissionsPage from "../submissions/AdminSubmissionsPage";
 import LegalDocumentPage from "../legal/LegalDocumentPage";
 import ImpressumPage from "../legal/ImpressumPage";
 import { IMPRESSUM_SLUG } from "../legal/impressum";
@@ -29,6 +30,8 @@ export interface CoreAdminPage {
   group?: "content" | "system";
   /** false: kein eigener Menüpunkt, die Seite ist anders erreichbar (Konto über den Benutzer unten, Version über die Versionsangabe). */
   inMenu?: boolean;
+  /** true: steht in der Gruppe ganz oben (in „Inhalte“ nach dem Dashboard /admin), z. B. Posteingang ganz oben unter „System“. */
+  top?: boolean;
   /** true: erscheint nur im Menü, wenn das Projekt den Slug in AdminShell `optionalPages` nennt (Feature ist Opt-in). Die Seite selbst ist immer erreichbar. */
   optional?: boolean;
 }
@@ -43,6 +46,7 @@ export interface CoreAdminPage {
  * angelegt werden muss.
  */
 export const coreAdminPages: CoreAdminPage[] = [
+  { slug: "posteingang", label: "Posteingang", icon: Inbox, Component: () => <AdminSubmissionsPage />, group: "system", top: true },
   { slug: "einstellungen", label: "Einstellungen", icon: Settings, Component: ({ options }) => <SettingsPage options={options?.einstellungen} />, group: "system" },
   { slug: "popup", label: "Pop-up", icon: Megaphone, Component: PopupPage, group: "system" },
   { slug: "datenschutz", label: "Datenschutzerklärung", icon: ScrollText, Component: DatenschutzAdminPage, group: "system" },
@@ -51,6 +55,9 @@ export const coreAdminPages: CoreAdminPage[] = [
   { slug: "konto", label: "Mein Konto", icon: UserCircle, Component: AccountPage, inMenu: false },
   { slug: "version", label: "Core-Version", icon: Package, Component: VersionPage, inMenu: false },
 ];
+
+/** Frühere Adressen von Core-Seiten. withCoreCms leitet sie um, Projekte dürfen sie nicht selbst belegen. */
+export const RETIRED_ADMIN_PATHS: Record<string, string> = { submissions: "posteingang" };
 
 export function getCoreAdminPage(slug: string): CoreAdminPage | undefined {
   return coreAdminPages.find((page) => page.slug === slug);

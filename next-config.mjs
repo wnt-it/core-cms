@@ -38,7 +38,13 @@ const SUPABASE_PATTERN = {
  * keine eigene Route anlegen, sonst würde sie vor dem Catch-all gewinnen und die Core-Seite verdrängen.
  * Datenschutzerklärung und Impressum fehlen hier bewusst: dafür ist eine eigene Seite mit Vorlage erlaubt (README).
  */
-export const CORE_ONLY_ADMIN_SLUGS = ['einstellungen', 'popup', 'einwilligungen', 'konto', 'version']
+export const CORE_ONLY_ADMIN_SLUGS = ['posteingang', 'einstellungen', 'popup', 'einwilligungen', 'konto', 'version']
+
+/**
+ * Frühere Adressen von Core-Seiten (wie RETIRED_ADMIN_PATHS in src/admin/core-pages.tsx). withCoreCms leitet sie
+ * auf die Core-Seite um (alte Links, z. B. in E-Mails), eigene Routen dafür sind ebenfalls gesperrt.
+ */
+export const RETIRED_ADMIN_SLUGS = { submissions: 'posteingang' }
 
 /** Ordner wie (dashboard) oder @modal ändern die Adresse nicht. */
 function routeSegment(name) {
@@ -66,7 +72,7 @@ export function findCoreRouteConflicts(root = process.cwd()) {
         const seg = routeSegment(entry.name)
         walk(full, seg ? [...segments, seg] : segments)
       } else if (/^page\.(tsx|ts|jsx|js|mdx)$/.test(entry.name)) {
-        if (segments.length === 2 && segments[0] === 'admin' && CORE_ONLY_ADMIN_SLUGS.includes(segments[1])) {
+        if (segments.length >= 2 && segments[0] === 'admin' && (CORE_ONLY_ADMIN_SLUGS.includes(segments[1]) || segments[1] in RETIRED_ADMIN_SLUGS)) {
           found.push({ slug: segments[1], file: path.relative(root, full) })
         }
       }
@@ -166,6 +172,7 @@ function patternKey(p) {
  *   qualities oder deviceSizes). Nur remotePatterns werden zusammengeführt
  *   (Supabase Storage + Projekt, ohne Duplikate).
  * - Bricht ab, wenn das Projekt eine Core-Seite (CORE_ONLY_ADMIN_SLUGS) als eigene Route anlegt.
+ * - redirects: alte Adressen von Core-Seiten (RETIRED_ADMIN_SLUGS) zuerst, danach die des Projekts.
  * - Bricht ab, wenn das Projekt ein eigenes Favicon festlegt (findBrandingOverrides).
  * - Alles andere (redirects, rewrites, headers, dangerouslyAllowSVG …) wird
  *   unverändert durchgereicht.
@@ -187,8 +194,18 @@ export function withCoreCms(userConfig = {}) {
     patterns.push(pattern)
   }
 
+  // Alte Adressen von Core-Seiten auf die neuen umleiten, vor den Umleitungen des Projekts
+  const coreRedirects = Object.entries(RETIRED_ADMIN_SLUGS).flatMap(([from, to]) => [
+    { source: `/admin/${from}`, destination: `/admin/${to}`, permanent: false },
+    { source: `/admin/${from}/:rest*`, destination: `/admin/${to}`, permanent: false },
+  ])
+  const userRedirects = userConfig.redirects
+
   return {
     ...userConfig,
+    async redirects() {
+      return [...coreRedirects, ...(userRedirects ? await userRedirects() : [])]
+    },
     transpilePackages: [...new Set(['core-cms', ...(userConfig.transpilePackages ?? [])])],
     images: {
       ...IMAGE_DEFAULTS,

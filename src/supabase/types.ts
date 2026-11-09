@@ -32,8 +32,8 @@ export interface SiteSettings {
 export interface Submission {
   id: string;
   type: string;
-  name: string;
-  email: string;
+  name: string | null;
+  email: string | null;
   phone?: string | null;
   company?: string | null;
   subject?: string | null;
@@ -42,6 +42,21 @@ export interface Submission {
   source_url?: string | null;
   status: 'Neu' | 'In Bearbeitung' | 'Erledigt';
   metadata?: Record<string, any> | null;
+  /** Bezeichnungen der Felder (ab v0.15.0), z. B. { wunschtermin: "Wunschtermin" } */
+  field_labels?: Record<string, string> | null;
   created_at: string;
   updated_at: string;
+}
+
+/** Anhang einer Anfrage im privaten Speicherbereich "anfragen" (ab v0.15.0) */
+export interface SubmissionFile {
+  id: string;
+  submission_id: string;
+  path: string;
+  name: string;
+  size: number;
+  mime: string;
+  /** ausstehend: angekündigt, noch nicht geprüft; ok: geprüft; abgelehnt: gelöscht, weil Typ oder Größe nicht passten */
+  status: 'ausstehend' | 'ok' | 'abgelehnt';
+  created_at: string;
 }

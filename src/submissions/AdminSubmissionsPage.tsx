@@ -1,11 +1,9 @@
-// Quelle: template/src/app/admin/(dashboard)/submissions/page.tsx
-// Als wiederverwendbare Server-Component statt Next.js-Routendatei, damit sie aus
-// core-cms importiert werden kann. Der Titel ist optional/generisch, statt
-// eines hartcodierten Namens.
+// Admin-Seite „Posteingang“ (ab v0.15.0 Core-Seite /admin/posteingang über coreAdminPages).
+// Lädt Anfragen und Anhänge mit dem Zugang des angemeldeten Admins. Besucher können nichts lesen (RLS).
 
 import { createClient } from '../supabase/server'
 import SubmissionsAdminClient from './SubmissionsAdminClient'
-import { Submission } from '../supabase/types'
+import type { Submission, SubmissionFile } from '../supabase/types'
 import { Note, PageHeader } from '../ui'
 
 export interface AdminSubmissionsPageProps {
@@ -15,14 +13,15 @@ export interface AdminSubmissionsPageProps {
 
 export default async function AdminSubmissionsPage({
   heading = 'Posteingang',
-  description = 'Alle Anfragen über das Kontaktformular und weitere Formulare an einem Ort.',
+  description = 'Alle Anfragen aus den Formularen der Website an einem Ort.',
 }: AdminSubmissionsPageProps = {}) {
   const supabase = await createClient()
 
-  const { data: submissions, error } = await supabase
-    .from('submissions')
-    .select('*')
-    .order('created_at', { ascending: false })
+  const [{ data: submissions, error }, files] = await Promise.all([
+    supabase.from('submissions').select('*').order('created_at', { ascending: false }),
+    // Tabelle gibt es erst ab sql/0.15.0_posteingang.sql, ohne sie einfach keine Anhänge zeigen
+    supabase.from('submission_files').select('*').order('created_at'),
+  ])
 
   return (
     <>
@@ -30,7 +29,10 @@ export default async function AdminSubmissionsPage({
 
       {error && <Note tone="error">Fehler beim Laden der Nachrichten: {error.message}</Note>}
 
-      <SubmissionsAdminClient initialSubmissions={(submissions as Submission[]) || []} />
+      <SubmissionsAdminClient
+        initialSubmissions={(submissions as Submission[]) || []}
+        initialFiles={files.error ? [] : ((files.data as SubmissionFile[]) ?? [])}
+      />
     </>
   )
 }

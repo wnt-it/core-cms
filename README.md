@@ -68,7 +68,7 @@ entfällt Punkt 2 komplett — npm kopiert das Package dann als echten Unterordn
 
 ## Datenbank eines neuen Projekts (ab v0.14.0)
 
-Neues Supabase-Projekt: einmal `sql/0.14.0_basis.sql` im SQL-Editor ausführen (Einstellungen, SMTP, Mediathek mit Bucket `images`, Posteingang, jeweils mit Rechten und Zugriffsregeln), danach die übrigen Dateien in `sql/` der Versionsreihe nach (`0.9.0_site_popup`, `0.12.0_site_popup_options`, `0.12.0_legal_documents`, bei Bedarf `0.14.0_consent`). Bestehende Projekte haben diese Tabellen schon. Danach in Supabase unter Authentication die Registrierung neuer Benutzer ausschalten und den Admin-Benutzer von Hand anlegen.
+Neues Supabase-Projekt: einmal `sql/0.14.0_basis.sql` im SQL-Editor ausführen (Einstellungen, SMTP, Mediathek mit Bucket `images`, Posteingang, jeweils mit Rechten und Zugriffsregeln), danach die übrigen Dateien in `sql/` der Versionsreihe nach (`0.9.0_site_popup`, `0.12.0_site_popup_options`, `0.12.0_legal_documents`, bei Bedarf `0.14.0_consent`, dann `0.15.0_posteingang`). Bestehende Projekte haben diese Tabellen schon. Danach in Supabase unter Authentication die Registrierung neuer Benutzer ausschalten und den Admin-Benutzer von Hand anlegen.
 
 ## Benötigte Umgebungsvariablen im Kundenprojekt
 
@@ -176,7 +176,7 @@ Optional: `dashboardHref` (Standard `/admin`) und projektspezifische Schnellzugr
 <AdminLiveBar
   links={[
     { href: "/admin/termine", label: "Termine", icon: <CalendarDays size={16} /> },
-    { href: "/admin/inbox", label: "Posteingang", icon: <Inbox size={16} /> },
+    { href: "/admin/posteingang", label: "Posteingang", icon: <Inbox size={16} /> },
   ]}
 />
 ```
@@ -301,6 +301,71 @@ export const generateMetadata = withSiteBranding({ title: "…", description: "�
 - `getSiteBranding()` liefert Name, Logo und Favicon für Sonderfälle (z. B. strukturierte Daten). Gelesen wird ohne Cookies, statische Seiten bleiben statisch. Speichern in den Einstellungen erneuert die Seiten sofort.
 - Login- und Passwort-Seiten nutzen dieselbe Quelle.
 - **Sperre:** `withCoreCms` bricht `next dev` und `next build` ab, wenn das Projekt ein eigenes Favicon festlegt: `app/favicon.ico`, `app/icon.*`, `app/apple-icon.*`, `public/favicon.*` oder `icons:` in einem Layout oder einer Seite. Ein fest eingebautes Logo-Bild lässt sich technisch nicht sicher erkennen, dafür gilt die Regel: immer `<SiteLogo />`.
+
+## Posteingang und Formulare (ab v0.15.0)
+
+`/admin/posteingang` ist eine Core-Seite (ganz oben unter „System“, wie alle Core-Seiten, mit Zahl der neuen Anfragen). Die alte Adresse `/admin/submissions` leitet `withCoreCms` dorthin um, eine eigene Seite oder ein eigener Menüpunkt dafür bricht `next dev`/`next build` ab (wie bei „Einstellungen“).
+
+**Der Core gibt keine Pflichtfelder vor.** Jedes Formular des Projekts legt mit `defineForm` fest, welche Felder es hat und welche Pflicht sind. Der Core bringt Speichern, Spam-Schutz, E-Mail-Benachrichtigung, Posteingang und Anhänge mit.
+
+```ts
+// src/forms.ts (Projekt)
+import { defineForm } from "core-cms/src/submissions";
+
+export const bewerbung = defineForm({
+  type: "Bewerbung",                                   // Formular-Art im Posteingang
+  fields: {
+    name: { label: "Name", required: true },           // name, email, phone, company, subject, message: eigene Spalten
+    email: { label: "E-Mail", required: true },        // kind "email" automatisch, Format wird geprüft
+    stelle: { label: "Stelle", required: true },       // alles andere: metadata, mit Bezeichnung im Posteingang
+    eintritt: { label: "Frühester Eintritt" },
+    message: { label: "Anschreiben" },                 // kind "long" automatisch (5000 Zeichen)
+  },
+  subjectField: "stelle",                              // optional: Betreff im Posteingang
+  attachments: { types: ["pdf"], maxSizeMb: 10, maxFiles: 3 }, // optional, ohne: keine Anhänge
+  notify: { siteName: "Muster GmbH", brandColor: "#102d42" },   // optional, false: keine E-Mail
+});
+```
+
+```ts
+// src/app/actions/bewerbung.ts (Projekt)
+"use server";
+import { receiveSubmission } from "core-cms/src/submissions/server";
+import { bewerbung } from "@/forms";
+
+export async function sendeBewerbung(data: Record<string, unknown>) {
+  return receiveSubmission(bewerbung, data);
+}
+```
+
+```tsx
+// Formular (Client-Komponente im Projekt)
+import { FormGuard, sendForm } from "core-cms/src/submissions/client";
+
+<form onSubmit={async (e) => {
+  e.preventDefault();
+  const result = await sendForm(sendeBewerbung, e.currentTarget);
+  // result.success, result.error, result.field, result.rejectedFiles
+}}>
+  <FormGuard />
+  <input name="name" /> <input name="email" type="email" /> <input name="stelle" />
+  <textarea name="message" />
+  <input type="file" name="unterlagen" accept=".pdf" multiple />
+</form>
+```
+
+- **Felder:** Nur Felder aus `fields` werden gespeichert, alles andere ignoriert. Mehrfachauswahl (Checkboxen mit gleichem Namen) wird mit Komma verbunden. Höchstlängen: text 200, long 5000, email 254, phone 40, je Feld mit `maxLength` änderbar. Mehr als 5 Links in einem Feld werden abgelehnt.
+- **Spam-Schutz:** `<FormGuard />` gehört in jedes Formular (verstecktes Feld, Zeitmessung, Herkunftsseite). Bots bekommen eine Erfolgsmeldung, ohne dass etwas gespeichert wird. Dazu höchstens 5 Anfragen je Adresse in 10 Minuten. Die Vercel-Firewall bleibt die Hauptsperre.
+- **Speichern** nur über den Server (Service-Role-Schlüssel). Besucher können Anfragen weder lesen noch direkt eintragen, lesen dürfen nur angemeldete Admins (`sql/0.15.0_posteingang.sql`).
+- **Anhänge:** `sendForm` schickt die Dateien nicht über den Server der Website (Vercel nimmt nur ca. 4,5 MB pro Anfrage), sondern nach der Prüfung über einmalige Upload-Adressen direkt in den privaten Speicherbereich `anfragen`. Danach prüft der Core Größe und echten Dateityp am Inhalt, was nicht passt, wird gelöscht und in `rejectedFiles` gemeldet. Erlaubt sind nur PDF, JPG und PNG. Im Posteingang lädt der Admin Anhänge nach einem Warnhinweis als Datei herunter (Link gilt eine Minute), angezeigt werden sie nie im Browser. Es gibt keinen Virenscanner. Löschen der Anfrage löscht die Anhänge mit. Anhänge zählen zum Speicher-Kontingent und sind im Daten-Export enthalten.
+- **Ohne JavaScript-Helfer:** `receiveSubmission(form, formData)` nimmt auch `FormData` oder ein Objekt aus einem Route Handler, dann ohne Anhänge.
+- **Bestehende Aufrufe** von `submitContactForm` laufen weiter, ohne Pflichtfelder (eine angegebene E-Mail muss gültig sein). Spam-Schutz und Feldbezeichnungen gibt es nur mit `receiveSubmission`.
+
+**Umstellen eines Projekts:**
+
+1. Vorher `sql/0.15.0_posteingang.sql` im Supabase-Projekt ausführen. Ohne die Datei scheitern Formulare mit eigenen Feldern und Anhänge. Danach speichern Formulare nur noch mit `SUPABASE_SERVICE_ROLE_KEY`.
+2. Löschen: die eigene Posteingang-Seite `admin/(dashboard)/submissions/` und den Menüpunkt `/admin/submissions` in `content` bzw. `system`, dazu die Zählung neuer Anfragen fürs Menü (`newSubmissions`), das macht jetzt die AdminShell. Links auf `/admin/submissions` (Dashboard, AdminLiveBar) auf `/admin/posteingang` ändern, die Umleitung fängt vergessene ab.
+3. Eigenen Spam-Schutz in Kontakt-Routen bzw. Server Actions durch `defineForm` + `receiveSubmission` ersetzen, im Formular `<FormGuard />` statt eigener Felder `website`/`form_age`. Projektspezifische Kennzeichnung (z. B. Abteilung) über `receiveSubmission(form, data, { metadata: { … }, type: "Kontakt · Abteilung" })` (der Filter im Posteingang gruppiert nach dem Teil vor „ · “).
 
 ## Daten-Export (ab v0.13.0)
 
