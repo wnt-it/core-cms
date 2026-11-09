@@ -4,7 +4,7 @@
 // ihrer Bezeichnung aus field_labels, Anhänge liegen im privaten Speicherbereich und werden nur über kurz
 // gültige Links und nach einem Warnhinweis heruntergeladen.
 
-import { useState, useTransition, useEffect, useCallback, useRef, type KeyboardEvent as ReactKeyboardEvent } from 'react'
+import { useState, useTransition, useEffect, useCallback, useMemo, useRef, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import type { Submission, SubmissionFile } from '../supabase/types'
 import { createClient } from '../supabase/client'
 import { useRouter } from 'next/navigation'
@@ -14,10 +14,13 @@ import { buttonClass, cx, iconButtonClass, iconButtonDangerClass, tableClass, td
 import { Badge, Button, EmptyState, Menu, Note, SearchInput, Segmented, Select, TableCard } from '../ui/components'
 import { ConfirmDialog } from '../ui/ConfirmDialog'
 import { formatBytes } from '../ui/format'
+import { SUBMISSIONS_PAGE } from './paging'
 
 interface SubmissionsAdminClientProps {
   initialSubmissions: Submission[]
   initialFiles?: SubmissionFile[]
+  /** Anzahl aller Anfragen in der Datenbank; mehr als geladen: Knopf „Ältere laden“ */
+  totalCount?: number
 }
 
 const ATTACHMENT_BUCKET = 'anfragen'
@@ -54,8 +57,10 @@ const formatDate = (iso: string) =>
     minute: '2-digit',
   })
 
-export default function SubmissionsAdminClient({ initialSubmissions, initialFiles = NO_FILES }: SubmissionsAdminClientProps) {
+export default function SubmissionsAdminClient({ initialSubmissions, initialFiles = NO_FILES, totalCount }: SubmissionsAdminClientProps) {
   const [submissions, setSubmissions] = useState<Submission[]>(initialSubmissions)
+  const [total, setTotal] = useState(totalCount ?? initialSubmissions.length)
+  const [loadingMore, setLoadingMore] = useState(false)
   const [files, setFiles] = useState<SubmissionFile[]>(initialFiles)
   // Anhang, dessen Herunterladen gerade bestätigt werden soll
   const [downloadTarget, setDownloadTarget] = useState<SubmissionFile | null>(null)
@@ -85,11 +90,41 @@ export default function SubmissionsAdminClient({ initialSubmissions, initialFile
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null)
 
   const router = useRouter()
-  const supabase = createClient()
+  const supabase = useMemo(() => createClient(), [])
 
   useEffect(() => {
     setSubmissions(initialSubmissions)
   }, [initialSubmissions])
+  useEffect(() => {
+    setTotal(totalCount ?? initialSubmissions.length)
+  }, [totalCount, initialSubmissions])
+
+  // Ältere Anfragen seitenweise nachladen, mit ihren Anhängen
+  const loadMore = async () => {
+    setLoadingMore(true)
+    try {
+      const from = submissions.length
+      const { data, error } = await supabase
+        .from('submissions')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .range(from, from + SUBMISSIONS_PAGE - 1)
+      if (error) throw error
+      const more = (data ?? []) as Submission[]
+      const ids = more.map((s) => s.id)
+      if (ids.length) {
+        const { data: moreFiles } = await supabase.from('submission_files').select('*').in('submission_id', ids).order('created_at')
+        setFiles((prev) => [...prev, ...((moreFiles ?? []) as SubmissionFile[]).filter((f) => !prev.some((p) => p.id === f.id))])
+      }
+      setSubmissions((prev) => [...prev, ...more.filter((m) => !prev.some((p) => p.id === m.id))])
+      if (more.length < SUBMISSIONS_PAGE) setTotal(from + more.length)
+    } catch (err) {
+      toast.error('Ältere Anfragen konnten nicht geladen werden' + (err instanceof Error ? ': ' + err.message : ''))
+    } finally {
+      setLoadingMore(false)
+    }
+  }
+  const hasMore = submissions.length < total
   useEffect(() => {
     setFiles(initialFiles)
   }, [initialFiles])
@@ -187,10 +222,15 @@ export default function SubmissionsAdminClient({ initialSubmissions, initialFile
     const paths = filesOf(id).map((f) => f.path)
     setFiles((prev) => prev.filter((f) => f.submission_id !== id))
 
+    setTotal((n) => Math.max(0, n - 1))
+
     startTransition(async () => {
-      // Anhänge zuerst löschen, die Einträge in submission_files gehen mit der Anfrage
-      if (paths.length) {
-        const { error: storageError } = await supabase.storage.from(ATTACHMENT_BUCKET).remove(paths)
+      // Anhänge zuerst löschen, die Einträge in submission_files gehen mit der Anfrage.
+      // Alles im Ordner der Anfrage, auch Dateien ohne Eintrag (z. B. abgebrochene Uploads)
+      const { data: listed } = await supabase.storage.from(ATTACHMENT_BUCKET).list(id, { limit: 1000 })
+      const all = [...new Set([...paths, ...(listed ?? []).map((o) => `${id}/${o.name}`)])]
+      if (all.length) {
+        const { error: storageError } = await supabase.storage.from(ATTACHMENT_BUCKET).remove(all)
         if (storageError) {
           toast.error('Anhänge konnten nicht gelöscht werden: ' + storageError.message)
           router.refresh()
@@ -416,6 +456,17 @@ export default function SubmissionsAdminClient({ initialSubmissions, initialFile
           </>
         )}
       </TableCard>
+
+      {hasMore && (
+        <div className="mt-4 flex flex-wrap items-center justify-center gap-3 text-[13px] text-[#64748B]">
+          <span>
+            {submissions.length} von {total} Anfragen geladen. Suche und Filter gelten für die geladenen.
+          </span>
+          <Button size="sm" onClick={loadMore} disabled={loadingMore}>
+            {loadingMore ? 'Lädt …' : 'Ältere laden'}
+          </Button>
+        </div>
+      )}
 
       {/* Detailansicht (Seitenleiste rechts) */}
       {activeSubmission && (

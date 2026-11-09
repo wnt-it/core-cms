@@ -7,6 +7,7 @@ import { createServiceRoleClient } from "../supabase/service-role";
 import { type FormDefinition, storageFileName, toText, validateSubmission } from "./form";
 import { checkBotSignals, TOO_MANY_REQUESTS, tooManyRequests } from "./guard";
 import { insertSubmission, notifySubmission } from "./save";
+import { cleanupPendingAttachments } from "./cleanup";
 
 export const ATTACHMENT_BUCKET = "anfragen";
 
@@ -107,5 +108,7 @@ export async function receiveSubmission(
   }
 
   if (form.notify !== false) await notifySubmission(save, form.notify || {});
+  // Nebenbei alte, nie fertig hochgeladene Anhänge anderer Anfragen entfernen (wenige je Aufruf)
+  if (service) await cleanupPendingAttachments(service, { limit: 20 });
   return { success: true, submissionId, ...(uploads.length ? { uploads } : {}) };
 }
