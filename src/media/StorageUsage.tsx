@@ -9,15 +9,17 @@ import { useEffect, useState } from 'react'
 import { getStorageUsage } from './storage-usage'
 import { storageStatus } from './storage-quota'
 import { cx } from '../ui/styles'
+import { formatBytes } from '../ui/format'
 
 type Usage = { usedBytes: number; quotaBytes: number | null }
 
 // Letzter bekannter Stand für alle Anzeigen dieser Seite (sofort sichtbar beim erneuten Öffnen)
 let lastUsage: Usage | null = null
 
+// Unter 100 MB wie überall im Admin (KB/MB, sonst stand bei wenigen Bildern „0 MB“), darüber in GB
 const formatSize = (bytes: number) => {
   const gb = bytes / (1024 * 1024 * 1024)
-  if (gb < 0.1) return `${Math.max(0, bytes / (1024 * 1024)).toLocaleString('de-DE', { maximumFractionDigits: 0 })} MB`
+  if (gb < 0.1) return formatBytes(bytes, bytes < 1024 * 1024 * 10 ? 1 : 0)
   return `${gb.toLocaleString('de-DE', { maximumFractionDigits: gb < 10 ? 1 : 0 })} GB`
 }
 

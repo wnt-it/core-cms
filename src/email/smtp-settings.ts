@@ -72,7 +72,8 @@ export function evaluateSmtpRow(row: Row | null | undefined, decryptPass: (v: st
     recipient: row.smtp_recipient || "",
     passStatus,
   };
-  const port = Number(row.smtp_port);
+  // Leerer Port: 587 wie im Formular vorbelegt
+  const port = Number(row.smtp_port || 587);
   const missing = [
     !values.host && "Server",
     !(Number.isInteger(port) && port > 0 && port < 65536) && "Port",

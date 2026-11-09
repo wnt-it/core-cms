@@ -9,5 +9,6 @@ export type { GeneralSettingsFormProps } from "./GeneralSettingsForm";
 export { coreAdminPages, getCoreAdminPage, CoreAdminRoute, generateCoreAdminMetadata } from "./core-pages";
 export type { CoreAdminPage, CoreAdminOptions } from "./core-pages";
 export type { EinstellungenOptions } from "./SettingsPage";
-export { CORE_VERSION, CORE_CHANGELOG } from "./changelog";
+export { CORE_CHANGELOG } from "./changelog";
+export { CORE_VERSION } from "./core-version";
 export type { ChangelogEntry, ChangeType } from "./changelog";

@@ -103,6 +103,11 @@ describe("Core-Seiten nur aus dem Core", () => {
     expect(found).toEqual(["src/app/layout.tsx"]);
   });
 
+  it("changelog.ts hat keine Imports (Release-Skript liest die Datei direkt mit Node)", () => {
+    const src = fs.readFileSync(path.join(__dirname, "../../src/admin/changelog.ts"), "utf8");
+    expect(src).not.toMatch(/^\s*(import|export\s+(\*|\{[^}]*\})\s+from)\s/m);
+  });
+
   it("Core-Version passt zu package.json", () => {
     const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, "../../package.json"), "utf8"));
     expect(CORE_VERSION).toBe(pkg.version);

@@ -17,14 +17,29 @@ export interface ChangelogEntry {
 /** Neueste Version zuerst. */
 export const CORE_CHANGELOG: ChangelogEntry[] = [
   {
-    version: "0.15.1",
-    date: "2026-11-09",
+    version: "0.16.0",
+    date: "2026-11-10",
     changes: [
-      { type: "fix", text: "Die Speicheranzeige in der Mediathek ist jetzt ein kleiner Ring mit Prozentzahl oben rechts, daneben „belegt von verfügbar“. Die Mediathek öffnet sich ruhig, ohne dass etwas nachträglich verrutscht. Beim erneuten Öffnen steht der Stand sofort da." },
-      { type: "fix", text: "Im Posteingang gleitet eine geöffnete Anfrage sanft herein und beim Schließen wieder hinaus." },
-      { type: "fix", text: "Der Hinweis, dass Dateien in der Mediathek öffentlich sind, steht jetzt unauffällig in der Beschreibung." },
+      { type: "security", text: "Fremde können keine E-Mail-Zugangsdaten mehr mitlesen: Das gespeicherte Passwort für den E-Mail-Versand bleibt auf dem Server und wird im Admin nicht mehr angezeigt. Leer gelassen bleibt es beim Speichern erhalten." },
+      { type: "security", text: "Besserer Schutz vor Spam auch für ältere Kontaktformulare: zu lange Eingaben, zu viele Links und zu viele Anfragen in kurzer Zeit werden abgewiesen." },
+      { type: "security", text: "Links in E-Mails zum Zurücksetzen des Passworts führen immer auf die eigene Website." },
+      { type: "security", text: "In den Einstellungen lassen sich nur noch die vorgesehenen Felder speichern." },
+      { type: "feature", text: "E-Mail-Einstellungen zeigen klar, was noch fehlt. Die Test-E-Mail geht an dieselbe Adresse wie neue Anfragen: Klappt der Test, kommen auch die Anfragen an." },
+      { type: "feature", text: "Posteingang lädt auch bei vielen Anfragen schnell: zuerst die neuesten 100, ältere per Knopf „Ältere laden“." },
+      { type: "feature", text: "Unvollständig hochgeladene Anhänge werden automatisch entfernt und belegen keinen Speicher mehr." },
+      { type: "fix", text: "Mediathek: öffnet schneller, lädt Vorschaubilder erst bei Bedarf und zeigt PDFs als Symbol. Die Suche reagiert ruhig beim Tippen und zeigt immer die richtigen Treffer." },
+      { type: "fix", text: "Mediathek: Ein Ordner lässt sich nicht mehr versehentlich in sich selbst oder einen eigenen Unterordner verschieben. Das Verschieben-Fenster schließt sich danach wieder." },
+      { type: "fix", text: "Mediathek: Beim Löschen eines Ordners werden auch seine Unterordner und Dateien gelöscht (vorher landeten die Dateien im Hauptverzeichnis). Die Rückfrage sagt vorher, was alles wegfällt." },
+      { type: "fix", text: "Mediathek: Der Abgleich mit dem Speicher findet alle Dateien, auch bei sehr vielen Bildern in einem Ordner." },
+      { type: "fix", text: "Die Speicheranzeige in der Mediathek ist jetzt ein kleiner Ring mit Prozentzahl, daneben „belegt von verfügbar“. Sie springt beim Öffnen nicht mehr und zeigt auch kleine Mengen richtig an." },
+      { type: "fix", text: "Im Posteingang gleitet eine geöffnete Anfrage sanft herein und beim Schließen wieder hinaus. Eigene Bezeichnungen für Felder wie „Nachricht“ bleiben erhalten." },
+      { type: "fix", text: "Admin-Seiten wie Datenschutzerklärung und Core-Version laden deutlich schneller." },
+      { type: "fix", text: "Das Pop-up erscheint erst, wenn sein Bild geladen ist (kein leerer Kasten mehr)." },
+      { type: "fix", text: "Einstellungen zeigen beim Öffnen sofort die gespeicherten Werte. Textfelder im Rechtstext-Editor springen beim Tippen nicht mehr." },
+      { type: "fix", text: "Größenangaben einheitlich auf Deutsch, z. B. „1,5 MB“." },
+      { type: "fix", text: "Rechtstexte sind im Daten-Export enthalten." },
     ],
-    releaseNotes: "StorageUsage: kompakter Ring (SVG) mit Prozent, fester Platz von Anfang an (Platzhalter beim Laden), letzter Stand im Modul zwischengespeichert, Warnhinweis im Tooltip statt als eigene Zeile. In MediaLibraryModal rechts im Kopf neben „Schließen“, Öffentlich-Hinweis grau in der Beschreibung. SubmissionsAdminClient: Detailansicht mit Ein- und Ausblend-Animation (panelOpen, motion-reduce beachtet). Keine SQL-Migration, keine Änderung in den Projekten.",
+    releaseNotes: "**Für Entwickler:** Einmal je Projekt `sql/0.16.0_haertung.sql` ausführen (vor oder nach dem Update): service_role-Recht auf legal_documents (Export), Trigger gegen Ordner-Kreise in media_folders, updated_at-Trigger, Funktion core_storage_usage() für die Speicheranzeige, Indizes für submissions(created_at) und consent_events(action), search_path für consent_guard, Bucket images: Dateiliste nur für Admins (Dateien bleiben öffentlich), Größen-/Typgrenze nur, wenn noch keine gesetzt ist. `sql/0.15.0_posteingang.sql` erst ausführen, wenn das Projekt mit v0.15.0 oder neuer live ist (entzieht Besuchern das direkte Eintragen); `0.14.0_basis.sql` entspricht jetzt dem Endstand. Empfohlen: NEXT_PUBLIC_SITE_URL in Vercel. Optional: Admin-Fehler- und Ladeseite per Re-Export (`core-cms/src/admin/AdminError`, `AdminLoading`). In Supabase prüfen: Registrierung und anonyme Anmeldung aus. **Änderungen im Code:** AdminShell lädt Menü aus `src/admin/core-nav.ts` und Version aus `src/admin/core-version.ts` (setzt `npm run release`), keine Server-Seiten und kein Changelog mehr im Browser-Bundle. Server-Module mit `import \"server-only\"`. `getSmtpSettings()` liefert kein Passwort mehr (`passStatus`, `missing`); Test-E-Mail und Benachrichtigung nutzen `email/smtp-settings.ts`. `saveGeneralSettings` nur Felder aus `GENERAL_SETTINGS_FIELDS`, `updateHeroImageSetting` lehnt Kern-Spalten ab. `submitContactForm` mit Längen-, Link- und Adresslimit. `useMediaLibrary({ enabled })`, `MoveModal({ excludeFolderIds })`, Typen in `media/folder-tree.ts`, `formatBytes` in `ui/format.ts`. Einwilligungen: zusätzlich `maxPerSender` (Standard 30 je 10 Minuten). Favicon-Sperre meldet `icons:` nur in Dateien mit Metadaten. Details: README, Abschnitt „Absicherung und Aufräumen (ab v0.16.0)“.",
   },
   {
     version: "0.15.0",
@@ -217,5 +232,5 @@ export const CORE_CHANGELOG: ChangelogEntry[] = [
   },
 ];
 
-/** Installierte Version (setzt der Release-Befehl, siehe core-version.ts). */
-export { CORE_VERSION } from "./core-version";
+// Die installierte Version steht in core-version.ts (setzt der Release-Befehl). Diese Datei bleibt ohne Imports,
+// weil scripts/release.mjs sie direkt mit Node einliest.
