@@ -4,24 +4,20 @@
 // Kachel mit Bild, darunter Name und Größe (auch ohne Maus lesbar).
 
 import React, { useState } from 'react'
-import { Check, Download } from 'lucide-react'
+import { Check, Download, FileText } from 'lucide-react'
 import { downloadSingleMedia } from './media-download'
+import { isImage, type MediaFileItem, type MediaItem } from './folder-tree'
 import { cx } from '../ui/styles'
+import { formatBytes } from '../ui/format'
 
-export function formatBytes(bytes: number, decimals = 1) {
-  if (!+bytes) return '0 Bytes'
-  const k = 1024
-  const dm = decimals < 0 ? 0 : decimals
-  const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB']
-  const i = Math.floor(Math.log(bytes) / Math.log(k))
-  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`
-}
+/** Früher hier definiert, jetzt in ui/format.ts (einheitlich „1,5 MB“). */
+export { formatBytes }
 
 interface MediaItemCardProps {
-  item: any
+  item: MediaFileItem
   isSelected: boolean
-  selectedItems?: any[]
-  toggleSelection: (item: any) => void
+  selectedItems?: MediaItem[]
+  toggleSelection: (item: MediaItem) => void
 }
 
 export function MediaItemCard({
@@ -34,7 +30,7 @@ export function MediaItemCard({
   const [isDownloading, setIsDownloading] = useState(false)
 
   const handleDragStart = (e: React.DragEvent) => {
-    const isPartOfSelection = selectedItems.some((i: any) => i.id === item.id)
+    const isPartOfSelection = selectedItems.some((i) => i.id === item.id)
     const itemsToDrag = isPartOfSelection && selectedItems.length > 1
       ? selectedItems
       : [item]
@@ -76,16 +72,25 @@ export function MediaItemCard({
             : 'border-[#E2E8F0] group-hover:border-[#CBD5E1]'
         )}
       >
-        {/* Image Preview */}
-        <img
-          src={item.url}
-          alt=""
-          className="pointer-events-none h-full w-full object-cover"
-          onLoad={(e) => {
-            const target = e.currentTarget as HTMLImageElement
-            setResolution(`${target.naturalWidth} × ${target.naturalHeight} px`)
-          }}
-        />
+        {/* Vorschau: Bilder erst laden, wenn sie in Sicht kommen; PDF und andere Dateien als Symbol */}
+        {isImage(item) ? (
+          <img
+            src={item.url}
+            alt=""
+            loading="lazy"
+            decoding="async"
+            className="pointer-events-none h-full w-full object-cover"
+            onLoad={(e) => {
+              const target = e.currentTarget as HTMLImageElement
+              setResolution(`${target.naturalWidth} × ${target.naturalHeight} px`)
+            }}
+          />
+        ) : (
+          <span className="pointer-events-none flex h-full w-full flex-col items-center justify-center gap-1 text-[#64748B]">
+            <FileText size={28} strokeWidth={1.5} aria-hidden="true" />
+            <span className="text-[11px] font-medium uppercase">{item.name.split('.').pop()?.slice(0, 5) || 'Datei'}</span>
+          </span>
+        )}
 
         {/* Auswahl-Haken */}
         <span

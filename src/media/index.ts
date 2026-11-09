@@ -1,5 +1,7 @@
 export * from "./media-download";
-export { MediaItemCard, formatBytes } from "./MediaItemCard";
+export { MediaItemCard } from "./MediaItemCard";
+export { formatBytes } from "../ui/format";
+export type { MediaItem, MediaFileItem, MediaFolderItem, MediaFolderRow } from "./folder-tree";
 export { MediaGrid } from "./MediaGrid";
 export { useMediaLibrary } from "./useMediaLibrary";
 export { default as DeleteConfirmModal } from "./DeleteConfirmModal";

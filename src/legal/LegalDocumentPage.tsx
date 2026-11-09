@@ -39,9 +39,13 @@ export default async function LegalDocumentPage({
   showVersion?: boolean
 }) {
   // Datenschutzerklärung: Vorlage und Einstellungen kommen aus dem Core (legal/templates), sofern das Projekt keine eigene Vorlage übergibt
-  const vorlage = slug === 'datenschutz' ? await getDatenschutzVorlage(vorlageDefaults) : null
-  const sicherungen = vorlage && !template ? await getDatenschutzSicherungen() : []
-  const vorlageText = vorlage && !template ? await getDatenschutzVorlageText() : undefined
+  // Parallel statt nacheinander: Die Vorlage kommt von GitHub und soll nicht auf die Datenbank warten
+  const coreVorlage = slug === 'datenschutz' && !template
+  const [vorlage, sicherungen, vorlageText] = await Promise.all([
+    slug === 'datenschutz' ? getDatenschutzVorlage(vorlageDefaults) : Promise.resolve(null),
+    coreVorlage ? getDatenschutzSicherungen() : Promise.resolve([]),
+    coreVorlage ? getDatenschutzVorlageText() : Promise.resolve(undefined),
+  ])
   const effectiveTemplate = template ?? (vorlage ? buildDatenschutz(vorlage.config, vorlageText) : { title: label, version: '', blocks: [] })
   const doc = await getLegalDocument(slug, effectiveTemplate)
   return (

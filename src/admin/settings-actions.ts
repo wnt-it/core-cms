@@ -7,6 +7,7 @@
 import { createClient } from "../supabase/server";
 import { encrypt } from "../supabase/encryption";
 import { EMPTY_SMTP_VALUES, loadSmtpSettings, type SmtpFormValues } from "../email/smtp-settings";
+import { isAllowedImageSettingColumn, sanitizeGeneralSettings, type GeneralSettingsField } from "./general-settings";
 import { revalidatePath } from "next/cache";
 import { SmtpEmailProvider } from "../email/smtp-provider";
 import { dbErrorMessage, smtpErrorMessage } from "../auth/auth-errors";
@@ -29,7 +30,7 @@ export async function saveSmtpSettings(formData: FormData) {
   const fromEmail = formData.get("smtp_from_email")?.toString() || "";
   const recipient = formData.get("smtp_recipient")?.toString() || "";
 
-  const updatePayload: Record<string, any> = {
+  const updatePayload: Record<string, string | null> = {
     id: "general",
     smtp_host: host || null,
     smtp_port: port || null,
@@ -43,9 +44,9 @@ export async function saveSmtpSettings(formData: FormData) {
   if (pass) {
     try {
       updatePayload.smtp_pass = encrypt(pass);
-    } catch (err: any) {
+    } catch (err) {
       console.error("SMTP password encryption failed:", err);
-      return { success: false, error: /ENCRYPTION_KEY/i.test(err?.message || "") ? "Der ENCRYPTION_KEY fehlt oder ist ungültig (Vercel → Environment Variables). Das Passwort kann so nicht gespeichert werden." : "Das Passwort konnte nicht verschlüsselt werden." };
+      return { success: false, error: /ENCRYPTION_KEY/i.test((err as Error)?.message || "") ? "Der ENCRYPTION_KEY fehlt oder ist ungültig (Vercel → Environment Variables). Das Passwort kann so nicht gespeichert werden." : "Das Passwort konnte nicht verschlüsselt werden." };
     }
   }
 
@@ -64,14 +65,17 @@ export async function saveSmtpSettings(formData: FormData) {
   return { success: true };
 }
 
-export async function saveGeneralSettings(payload: any) {
+/** Speichert „Website & Branding“. Nur die Felder aus GENERAL_SETTINGS_FIELDS, alles andere wird ignoriert. */
+export async function saveGeneralSettings(payload: Partial<Record<GeneralSettingsField, unknown>>) {
   const supabase = await createClient();
   if (!(await isLoggedIn(supabase))) return { success: false, error: "Nicht angemeldet." };
+  const { values, ignored } = sanitizeGeneralSettings(payload);
+  if (ignored.length) console.warn(`[einstellungen] Unbekannte Felder ignoriert: ${ignored.join(", ")}`);
   const { error } = await supabase
     .from("site_settings")
     .upsert({
+      ...values,
       id: "general",
-      ...payload,
       updated_at: new Date().toISOString(),
     });
 
@@ -87,6 +91,9 @@ export async function saveGeneralSettings(payload: any) {
 export async function updateHeroImageSetting(fieldId: string, url: string | null) {
   const supabase = await createClient();
   if (!(await isLoggedIn(supabase))) return { success: false, error: "Nicht angemeldet." };
+  // Nur projekteigene Bild-Spalten, keine Kern-Spalten (id, Name, Logo, Pop-up ...)
+  if (!isAllowedImageSettingColumn(fieldId)) return { success: false, error: "Dieses Feld kann hier nicht gespeichert werden." };
+  if (url !== null && typeof url !== "string") return { success: false, error: "Ungültige Bild-Adresse." };
   const { error } = await supabase
     .from("site_settings")
     .upsert({

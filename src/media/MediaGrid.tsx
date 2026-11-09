@@ -7,16 +7,17 @@ import React from 'react'
 import { motion } from 'motion/react'
 import { Folder, FolderInput, Loader2, UploadCloud } from 'lucide-react'
 import { MediaItemCard } from './MediaItemCard'
+import type { MediaFileItem, MediaFolderItem, MediaItem } from './folder-tree'
 import { cx } from '../ui/styles'
 
 interface MediaGridProps {
-  items: any[]
+  items: MediaItem[]
   loading: boolean
   uploading: boolean
   isSearchActive: boolean
   searchQuery: string
-  selectedItems: any[]
-  toggleSelection: (item: any) => void
+  selectedItems: MediaItem[]
+  toggleSelection: (item: MediaItem) => void
   hoveredFolderId: string | null
   setHoveredFolderId: (id: string | null) => void
   navigateTo: (folderId: string) => void
@@ -26,25 +27,24 @@ interface MediaGridProps {
 
 const containerVariants = {
   hidden: { opacity: 0 },
-  show: {
-    opacity: 1,
-    transition: {
-      staggerChildren: 0.03
-    }
-  }
+  show: { opacity: 1 }
 }
 
+// Nacheinander einblenden, aber höchstens die ersten 16 versetzt: Bei vielen Dateien stand die letzte
+// Kachel sonst erst nach Sekunden da. Alles danach erscheint zusammen mit der 16.
+const MAX_STAGGERED = 16
 const itemVariants = {
   hidden: { opacity: 0, scale: 0.96, y: 6 },
-  show: {
+  show: (index: number) => ({
     opacity: 1,
     scale: 1,
     y: 0,
     transition: {
       duration: 0.18,
+      delay: Math.min(index, MAX_STAGGERED) * 0.025,
       ease: [0.23, 1, 0.32, 1] as const
     }
-  }
+  })
 }
 
 const filesGridClass = 'grid grid-cols-2 gap-4 min-[480px]:grid-cols-3 md:grid-cols-4 lg:grid-cols-6'
@@ -120,8 +120,8 @@ export function MediaGrid({
     )
   }
 
-  const folders = isSearchActive ? [] : items.filter((i) => i.isFolder)
-  const files = items.filter((i) => !i.isFolder)
+  const folders = isSearchActive ? [] : items.filter((i): i is MediaFolderItem => i.isFolder)
+  const files = items.filter((i): i is MediaFileItem => !i.isFolder)
 
   return (
     <motion.div
@@ -134,13 +134,14 @@ export function MediaGrid({
       {/* Folders first */}
       {folders.length > 0 && (
         <div className="grid grid-cols-1 gap-3 min-[480px]:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-          {folders.map((folder) => {
+          {folders.map((folder, index) => {
             const isSelected = selectedItems.some((i) => i.id === folder.id)
             const isDropHovered = hoveredFolderId === folder.id
 
             return (
               <motion.div
                 variants={itemVariants}
+                custom={index}
                 key={folder.id}
                 role="button"
                 tabIndex={0}
@@ -195,10 +196,10 @@ export function MediaGrid({
       {/* Files */}
       {files.length > 0 && (
         <div className={filesGridClass}>
-          {files.map((file) => {
+          {files.map((file, index) => {
             const isSelected = selectedItems.some((i) => i.id === file.id)
             return (
-              <motion.div variants={itemVariants} key={file.id} className="min-w-0">
+              <motion.div variants={itemVariants} custom={folders.length + index} key={file.id} className="min-w-0">
                 <MediaItemCard
                   item={file}
                   isSelected={isSelected}

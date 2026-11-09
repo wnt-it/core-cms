@@ -13,7 +13,8 @@ let cache: { at: number; vorlage: DatenschutzVorlageText } | null = null;
 
 async function fetchRemote(): Promise<DatenschutzVorlageText | null> {
   try {
-    const res = await fetch(VORLAGE_URL, { cache: "no-store", signal: AbortSignal.timeout(4000) });
+    // Next-Datencache: gilt über alle Server-Instanzen, nicht nur für die laufende (5 Minuten wie unten)
+    const res = await fetch(VORLAGE_URL, { next: { revalidate: 300 }, signal: AbortSignal.timeout(4000) } as RequestInit);
     if (!res.ok) return null;
     if (Number(res.headers.get("content-length") ?? 0) > MAX_BYTES) return null;
     const text = await res.text();

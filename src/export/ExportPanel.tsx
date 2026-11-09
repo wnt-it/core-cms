@@ -7,6 +7,7 @@ import { Zip, ZipDeflate, ZipPassThrough, strToU8 } from "fflate";
 import { Badge, Button, Card, Section } from "../ui/components";
 import { cx, mutedClass } from "../ui/styles";
 import { getExportPlan, listExportMedia, readExportTable, signExportMedia } from "./actions";
+import { formatBytes } from "../ui/format";
 
 const LAST_KEY = "core_last_export_time";
 /** Ohne Streaming in eine Datei liegt alles im Arbeitsspeicher des Browsers. */
@@ -24,8 +25,6 @@ type FileSystemWindow = Window & {
   }>;
 };
 
-const formatBytes = (n: number) =>
-  n >= 1024 ** 3 ? `${(n / 1024 ** 3).toFixed(1)} GB` : n >= 1024 ** 2 ? `${(n / 1024 ** 2).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`;
 
 function downloadBlob(blob: Blob, name: string) {
   const url = URL.createObjectURL(blob);

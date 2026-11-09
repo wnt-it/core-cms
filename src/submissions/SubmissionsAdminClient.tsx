@@ -13,6 +13,7 @@ import { Trash2, Mail, ChevronDown, X, Inbox, Paperclip, Download } from 'lucide
 import { buttonClass, cx, iconButtonClass, iconButtonDangerClass, tableClass, tdClass, thClass, trClass } from '../ui/styles'
 import { Badge, Button, EmptyState, Menu, Note, SearchInput, Segmented, Select, TableCard } from '../ui/components'
 import { ConfirmDialog } from '../ui/ConfirmDialog'
+import { formatBytes } from '../ui/format'
 
 interface SubmissionsAdminClientProps {
   initialSubmissions: Submission[]
@@ -26,8 +27,6 @@ const NO_FILES: SubmissionFile[] = []
 // Anzeigename: Name, sonst E-Mail, sonst Hinweis
 const senderOf = (s: Submission) => s.name?.trim() || s.email?.trim() || 'Ohne Namen'
 
-const formatSize = (bytes: number) =>
-  bytes >= 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1).replace('.', ',')} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`
 
 const FILE_STATUS: Record<SubmissionFile['status'], string> = {
   ausstehend: 'nicht vollständig hochgeladen',
@@ -573,7 +572,7 @@ export default function SubmissionsAdminClient({ initialSubmissions, initialFile
                         <span className="min-w-0 flex-1">
                           <span className="block truncate text-[14px] text-[#0F172A]">{file.name}</span>
                           <span className="block text-[12.5px] text-[#64748B]">
-                            {formatSize(file.size)}
+                            {formatBytes(file.size)}
                             {FILE_STATUS[file.status] && <> · {FILE_STATUS[file.status]}</>}
                           </span>
                         </span>

@@ -1,167 +1,178 @@
 'use client'
 
-// Quelle: template/src/hooks/useMediaLibrary.ts
-// Import von createClient auf core-cms-internen relativen Pfad umgestellt.
+// Daten und Aktionen der Mediathek (Ordner, Dateien, Upload, Verschieben, Löschen, Abgleich mit dem Speicher).
+//
+// Ab v0.16.0:
+// - lädt nur, solange die Mediathek offen ist (`enabled`), nicht schon beim Seitenaufbau des Admins
+// - Suche wartet kurz, bis nicht mehr getippt wird; eine ältere Antwort überschreibt nie eine neuere
+// - Ordner und Dateien kommen parallel, der Pfad oben aus derselben Ordnerliste (statt Abfrage je Ebene)
+// - Ordner lassen sich nicht in sich selbst oder einen eigenen Unterordner verschieben
+// - Löschen eines Ordners löscht auch Unterordner und Dateien darin (vorher landeten die Dateien im Hauptverzeichnis);
+//   scheitert das Löschen im Speicher, bleiben die Einträge erhalten
+// - Abgleich liest den Speicher seitenweise (keine Grenze bei 150 Dateien) und trägt neue Dateien gesammelt ein
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { createClient } from '../supabase/client'
 import { toast } from 'sonner'
 import { confirmLargeFiles } from './upload-limits'
-import { STORAGE_CACHE_CONTROL, type ImageOptimizationOptions } from './image-prepare'
+import type { ImageOptimizationOptions } from './image-prepare'
 import { prepareFilesForUpload } from './prepare-uploads'
+import { uploadToLibrary } from './upload-to-library'
+import {
+  chunk,
+  folderChain,
+  folderIdsByPath,
+  moveConflict,
+  withDescendants,
+  type MediaFileItem,
+  type MediaFolderItem,
+  type MediaFolderRow,
+  type MediaItem,
+} from './folder-tree'
 
 interface UseMediaLibraryConfig {
   bucket?: string
   multiSelect?: boolean
   /** Bilder beim Upload verkleinern (Standard: an, 2000 px, WebP). */
   imageOptimization?: ImageOptimizationOptions
+  /** false: nichts laden (z. B. solange das Fenster geschlossen ist). Standard: true. */
+  enabled?: boolean
+}
+
+const FILE_COLUMNS = 'id, display_name, storage_path, url, size, mime_type, folder_id'
+const SEARCH_DELAY_MS = 250
+const PAGE = 1000
+
+type FileRow = {
+  id: string
+  display_name: string
+  storage_path: string
+  url: string
+  size: number | null
+  mime_type: string | null
+  folder_id: string | null
+}
+
+const message = (err: unknown, fallback: string): string => {
+  const m = err && typeof err === 'object' && 'message' in err ? (err as { message?: unknown }).message : undefined
+  return typeof m === 'string' && m ? m : fallback
+}
+
+const byName = (a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name, 'de')
+
+function toFile(f: FileRow, folderName?: string): MediaFileItem {
+  return {
+    id: f.id,
+    name: f.display_name,
+    url: f.url,
+    size: f.size,
+    storage_path: f.storage_path,
+    mime_type: f.mime_type,
+    folder_id: f.folder_id,
+    ...(folderName !== undefined ? { folderName } : {}),
+    isFolder: false,
+  }
 }
 
 export function useMediaLibrary({
   bucket = 'images',
   multiSelect = true,
-  imageOptimization
+  imageOptimization,
+  enabled = true,
 }: UseMediaLibraryConfig = {}) {
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(null)
-  const [folderBreadcrumbs, setFolderBreadcrumbs] = useState<{ id: string; name: string }[]>([])
   const [searchQuery, setSearchQuery] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
 
-  const [items, setItems] = useState<any[]>([])
+  const [folders, setFolders] = useState<MediaFolderRow[]>([])
+  const [items, setItems] = useState<MediaItem[]>([])
   const [loading, setLoading] = useState(false)
+  /** Eine Änderung läuft (Löschen, Verschieben …): Knöpfe sperren, Ansicht bleibt stehen */
+  const [busy, setBusy] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [syncing, setSyncing] = useState(false)
-  const [selectedItems, setSelectedItems] = useState<any[]>([])
+  const [selectedItems, setSelectedItems] = useState<MediaItem[]>([])
   const [error, setError] = useState<string | null>(null)
 
-  const supabase = createClient()
+  const supabase = useMemo(() => createClient(), [])
+  /** Laufende Nummer der Abfrage: Nur die neueste darf die Anzeige setzen */
+  const requestId = useRef(0)
+  const hasLoaded = useRef(false)
 
-  // Fetch breadcrumbs for current folder hierarchy
-  const fetchBreadcrumbs = useCallback(async (folderId: string | null) => {
-    if (!folderId) {
-      setFolderBreadcrumbs([])
+  // Suche erst nach einer kurzen Tipp-Pause; Leeren wirkt sofort
+  useEffect(() => {
+    if (!searchQuery.trim()) {
+      setDebouncedSearch('')
       return
     }
+    const timer = setTimeout(() => setDebouncedSearch(searchQuery), SEARCH_DELAY_MS)
+    return () => clearTimeout(timer)
+  }, [searchQuery])
 
-    try {
-      const crumbs: { id: string; name: string }[] = []
-      let currentId: string | null = folderId
-
-      while (currentId) {
-        const result = await supabase
-          .from('media_folders')
-          .select('id, name, parent_id')
-          .eq('id', currentId)
-          .single()
-
-        const data = result.data as { id: string; name: string; parent_id: string | null } | null
-        const crumbError = result.error
-
-        if (crumbError || !data) break
-        crumbs.unshift({ id: data.id, name: data.name })
-        currentId = data.parent_id
-      }
-      setFolderBreadcrumbs(crumbs)
-    } catch (err) {
-      console.error('Error fetching breadcrumbs:', err)
-    }
+  const loadFolders = useCallback(async (): Promise<MediaFolderRow[]> => {
+    const { data, error: err } = await supabase.from('media_folders').select('id, name, parent_id')
+    if (err) throw err
+    return (data ?? []) as MediaFolderRow[]
   }, [supabase])
 
-  // Fetch items (files and folders) with live search capability
-  const fetchItems = useCallback(async (folderId: string | null, search: string = '') => {
-    setLoading(true)
-    setError(null)
-
-    try {
-      if (search.trim().length > 0) {
-        // GLOBAL SEARCH across all folders
-        const queryTerm = `%${search.trim()}%`
-        const [filesRes, foldersRes] = await Promise.all([
-          supabase
-            .from('media_files')
-            .select('id, display_name, storage_path, url, size, mime_type, folder_id')
-            .ilike('display_name', queryTerm),
-          supabase
-            .from('media_folders')
-            .select('id, name')
-        ])
-
+  const fetchItems = useCallback(
+    async (folderId: string | null, search: string, { quiet = false } = {}) => {
+      const id = ++requestId.current
+      // Platzhalter nur beim ersten Laden und beim Ordnerwechsel, bei Suche und nach Änderungen bleibt die Ansicht stehen
+      if (!quiet) setLoading(true)
+      setError(null)
+      try {
+        const term = search.trim()
+        const filesQuery = term
+          ? supabase.from('media_files').select(FILE_COLUMNS).ilike('display_name', `%${term.replace(/[%_\\]/g, '\\$&')}%`).limit(500)
+          : folderId
+            ? supabase.from('media_files').select(FILE_COLUMNS).eq('folder_id', folderId)
+            : supabase.from('media_files').select(FILE_COLUMNS).is('folder_id', null)
+        const [allFolders, filesRes] = await Promise.all([loadFolders(), filesQuery])
         if (filesRes.error) throw filesRes.error
+        if (id !== requestId.current) return
 
-        const folderMap = new Map<string, string>()
-        if (foldersRes.data) {
-          for (const f of foldersRes.data) {
-            folderMap.set(f.id, f.name)
-          }
-        }
+        const folderName = new Map(allFolders.map((f) => [f.id, f.name]))
+        const files = ((filesRes.data ?? []) as FileRow[])
+          .map((f) => toFile(f, term ? (f.folder_id ? folderName.get(f.folder_id) ?? 'Unterordner' : 'Hauptverzeichnis') : undefined))
+          .sort(byName)
+        const subfolders: MediaFolderItem[] = term
+          ? []
+          : allFolders
+              .filter((f) => f.parent_id === folderId)
+              .map((f) => ({ id: f.id, name: f.name, isFolder: true as const }))
+              .sort(byName)
 
-        const formattedFiles = (filesRes.data || []).map((f: any) => ({
-          id: f.id,
-          name: f.display_name,
-          url: f.url,
-          size: f.size,
-          storage_path: f.storage_path,
-          mime_type: f.mime_type,
-          folder_id: f.folder_id,
-          folderName: f.folder_id ? (folderMap.get(f.folder_id) || 'Unterordner') : 'Hauptverzeichnis',
-          isFolder: false
-        })).sort((a: any, b: any) => a.name.localeCompare(b.name))
-
-        setItems(formattedFiles)
+        setFolders(allFolders)
+        setItems([...subfolders, ...files])
         setSelectedItems([])
-        setFolderBreadcrumbs([])
-      } else {
-        // NORMAL FOLDER BROWSING
-        let folderQuery = supabase.from('media_folders').select('id, name, parent_id')
-        if (folderId) {
-          folderQuery = folderQuery.eq('parent_id', folderId)
-        } else {
-          folderQuery = folderQuery.is('parent_id', null)
-        }
-        const { data: dbFolders, error: foldersErr } = await folderQuery
-
-        if (foldersErr) throw foldersErr
-
-        let filesQuery = supabase.from('media_files').select('id, display_name, storage_path, url, size, mime_type, folder_id')
-        if (folderId) {
-          filesQuery = filesQuery.eq('folder_id', folderId)
-        } else {
-          filesQuery = filesQuery.is('folder_id', null)
-        }
-        const { data: dbFiles, error: filesErr } = await filesQuery
-
-        if (filesErr) throw filesErr
-
-        const formattedFolders = (dbFolders || []).map((f: any) => ({
-          id: f.id,
-          name: f.name,
-          isFolder: true
-        })).sort((a: any, b: any) => a.name.localeCompare(b.name))
-
-        const formattedFiles = (dbFiles || []).map((f: any) => ({
-          id: f.id,
-          name: f.display_name,
-          url: f.url,
-          size: f.size,
-          storage_path: f.storage_path,
-          mime_type: f.mime_type,
-          isFolder: false
-        })).sort((a: any, b: any) => a.name.localeCompare(b.name))
-
-        setItems([...formattedFolders, ...formattedFiles])
-        setSelectedItems([])
-        await fetchBreadcrumbs(folderId)
+        hasLoaded.current = true
+      } catch (err) {
+        if (id !== requestId.current) return
+        console.error('Error fetching media items:', err)
+        setError(message(err, 'Fehler beim Laden der Medien aus der Datenbank'))
+      } finally {
+        if (id === requestId.current) setLoading(false)
       }
-    } catch (err: any) {
-      console.error('Error fetching media items:', err)
-      setError(err.message || 'Fehler beim Laden der Medien aus der Datenbank')
-    } finally {
-      setLoading(false)
-    }
-  }, [supabase, fetchBreadcrumbs])
+    },
+    [supabase, loadFolders],
+  )
 
+  const lastFolder = useRef<string | null | undefined>(undefined)
   useEffect(() => {
-    fetchItems(currentFolderId, searchQuery)
-  }, [currentFolderId, searchQuery, fetchItems])
+    if (!enabled) return
+    const folderChanged = lastFolder.current !== currentFolderId
+    lastFolder.current = currentFolderId
+    void fetchItems(currentFolderId, debouncedSearch, { quiet: hasLoaded.current && !folderChanged })
+  }, [enabled, currentFolderId, debouncedSearch, fetchItems])
+
+  /** Nach einer Änderung neu laden, ohne Platzhalter */
+  const reload = useCallback(() => fetchItems(currentFolderId, debouncedSearch, { quiet: true }), [fetchItems, currentFolderId, debouncedSearch])
+
+  const folderBreadcrumbs = useMemo(
+    () => (debouncedSearch.trim() ? [] : folderChain(folders, currentFolderId).map((f) => ({ id: f.id, name: f.name }))),
+    [folders, currentFolderId, debouncedSearch],
+  )
 
   const navigateTo = (folderId: string) => {
     setSearchQuery('')
@@ -173,23 +184,16 @@ export function useMediaLibrary({
     setCurrentFolderId(folderId)
   }
 
-  const toggleSelection = (item: any) => {
+  const toggleSelection = (item: MediaItem) => {
     if (multiSelect) {
-      setSelectedItems(prev =>
-        prev.some(i => i.id === item.id)
-          ? prev.filter(i => i.id !== item.id)
-          : [...prev, item]
-      )
+      setSelectedItems((prev) => (prev.some((i) => i.id === item.id) ? prev.filter((i) => i.id !== item.id) : [...prev, item]))
     } else {
-      setSelectedItems(prev =>
-        prev.some(i => i.id === item.id) ? [] : [item]
-      )
+      setSelectedItems((prev) => (prev.some((i) => i.id === item.id) ? [] : [item]))
     }
   }
 
   const handleUpload = async (files: FileList | File[] | null) => {
     if (!files || files.length === 0) return
-
     setUploading(true)
     setError(null)
 
@@ -200,334 +204,241 @@ export function useMediaLibrary({
       return
     }
 
+    let done = 0
     try {
-      const fileList = prepared
-      for (let i = 0; i < fileList.length; i++) {
-        const file = fileList[i]
-        const fileExt = file.name.split('.').pop()
-        const uniqueId = Math.random().toString(36).substring(2, 15)
-        const storagePath = `uploads/${uniqueId}_${Date.now()}.${fileExt}`
-
-        const { error: uploadError } = await supabase.storage
-          .from(bucket)
-          .upload(storagePath, file, { cacheControl: STORAGE_CACHE_CONTROL, upsert: false })
-
-        if (uploadError) throw uploadError
-
-        const { data: { publicUrl } } = supabase.storage
-          .from(bucket)
-          .getPublicUrl(storagePath)
-
-        const { error: dbError } = await supabase
-          .from('media_files')
-          .insert({
-            storage_path: storagePath,
-            display_name: file.name,
-            url: publicUrl,
-            size: file.size,
-            mime_type: file.type,
-            folder_id: currentFolderId
-          })
-
-        if (dbError) throw dbError
+      for (const file of prepared) {
+        await uploadToLibrary(supabase, file, { bucket, folderId: currentFolderId })
+        done++
       }
-
-      await fetchItems(currentFolderId, searchQuery)
-      toast.success(`${fileList.length} Datei(en) erfolgreich hochgeladen`)
-    } catch (err: any) {
+      toast.success(`${done} Datei(en) erfolgreich hochgeladen`)
+    } catch (err) {
       console.error('Error uploading:', err)
-      setError(err.message || 'Fehler beim Hochladen')
-      toast.error(err.message || 'Fehler beim Hochladen')
+      const text = message(err, 'Fehler beim Hochladen')
+      setError(done ? `${done} von ${prepared.length} Dateien hochgeladen. ${text}` : text)
+      toast.error(text)
     } finally {
       setUploading(false)
+      await reload()
     }
   }
 
+  /** Was beim Löschen der Auswahl alles wegfällt (für die Rückfrage). */
+  const deletePreview = useCallback(
+    (selection: MediaItem[] = selectedItems) => {
+      const folderIds = selection.filter((i) => i.isFolder).map((i) => i.id)
+      const affected = withDescendants(folders, folderIds)
+      return { folders: affected.size, subfolders: affected.size - folderIds.length, files: selection.filter((i) => !i.isFolder).length }
+    },
+    [folders, selectedItems],
+  )
+
   const confirmDelete = async () => {
     if (selectedItems.length === 0) return
-
-    setLoading(true)
-    const filesToDelete = selectedItems.filter(i => !i.isFolder)
-    const foldersToDelete = selectedItems.filter(i => i.isFolder)
-    const storagePaths = filesToDelete.map(i => i.storage_path).filter(Boolean)
-    const fileIds = filesToDelete.map(i => i.id)
-    const folderIds = foldersToDelete.map(i => i.id)
-
+    setBusy(true)
     try {
-      if (storagePaths.length > 0) {
-        const { error: deleteError } = await supabase.storage
-          .from(bucket)
-          .remove(storagePaths)
+      const allFolders = await loadFolders()
+      const folderIds = [...withDescendants(allFolders, selectedItems.filter((i) => i.isFolder).map((i) => i.id))]
 
-        if (deleteError) {
-          console.warn('Storage deletion notice:', deleteError)
-        }
+      // Dateien: ausgewählte plus alle in den gelöschten Ordnern (beliebig tief)
+      const files = new Map<string, string>()
+      for (const item of selectedItems) if (!item.isFolder) files.set(item.id, item.storage_path)
+      for (const ids of chunk(folderIds, 200)) {
+        const { data, error: err } = await supabase.from('media_files').select('id, storage_path').in('folder_id', ids)
+        if (err) throw err
+        for (const f of data ?? []) files.set(f.id, f.storage_path)
       }
 
-      if (fileIds.length > 0) {
-        const { error: dbError } = await supabase
-          .from('media_files')
-          .delete()
-          .in('id', fileIds)
-
-        if (dbError) throw dbError
+      // Erst im Speicher löschen. Scheitert das, bleiben die Einträge, damit nichts unsichtbar Platz belegt
+      for (const paths of chunk([...files.values()].filter(Boolean), 100)) {
+        const { error: err } = await supabase.storage.from(bucket).remove(paths)
+        if (err) throw new Error(`Dateien konnten im Speicher nicht gelöscht werden (${err.message}). Es wurde nichts entfernt.`)
+      }
+      for (const ids of chunk([...files.keys()], 200)) {
+        const { error: err } = await supabase.from('media_files').delete().in('id', ids)
+        if (err) throw err
+      }
+      for (const ids of chunk(folderIds, 200)) {
+        const { error: err } = await supabase.from('media_folders').delete().in('id', ids)
+        if (err) throw err
       }
 
-      if (folderIds.length > 0) {
-        const { error: dbError } = await supabase
-          .from('media_folders')
-          .delete()
-          .in('id', folderIds)
-
-        if (dbError) throw dbError
-      }
-
-      toast.success(`${selectedItems.length} Element(e) gelöscht`)
+      const parts = [files.size && `${files.size} Datei(en)`, folderIds.length && `${folderIds.length} Ordner`].filter(Boolean)
+      toast.success(`${parts.join(' und ')} gelöscht`)
       setSelectedItems([])
-      await fetchItems(currentFolderId, searchQuery)
-    } catch (err: any) {
+      // Steht man in einem gelöschten Ordner (z. B. nach einer Suche), zurück ins Hauptverzeichnis
+      if (currentFolderId && folderIds.includes(currentFolderId)) setCurrentFolderId(null)
+    } catch (err) {
       console.error('Error deleting:', err)
-      setError(err.message || 'Fehler beim Löschen')
-      toast.error(err.message || 'Fehler beim Löschen')
+      setError(message(err, 'Fehler beim Löschen'))
+      toast.error(message(err, 'Fehler beim Löschen'))
     } finally {
-      setLoading(false)
+      setBusy(false)
+      await reload()
     }
   }
 
   const handleCreateFolder = async (folderName: string) => {
-    if (!folderName) return
-    setLoading(true)
-
+    const name = folderName.trim()
+    if (!name) return
+    setBusy(true)
     try {
-      const { error: dbError } = await supabase
-        .from('media_folders')
-        .insert({
-          name: folderName,
-          parent_id: currentFolderId
-        })
-
+      const { error: dbError } = await supabase.from('media_folders').insert({ name: name.slice(0, 120), parent_id: currentFolderId })
       if (dbError) throw dbError
-
-      toast.success(`Ordner "${folderName}" erstellt`)
-      await fetchItems(currentFolderId, searchQuery)
-    } catch (err: any) {
+      toast.success(`Ordner "${name}" erstellt`)
+    } catch (err) {
       console.error('Error creating folder:', err)
-      setError(err.message || 'Fehler beim Erstellen des Ordners')
+      setError(message(err, 'Fehler beim Erstellen des Ordners'))
       toast.error('Fehler beim Erstellen des Ordners')
     } finally {
-      setLoading(false)
+      setBusy(false)
+      await reload()
     }
   }
 
   const handleRename = async (newName: string) => {
-    if (selectedItems.length !== 1 || !newName) return
-    setLoading(true)
-
-    const targetItem = selectedItems[0]
-
+    const name = newName.trim()
+    if (selectedItems.length !== 1 || !name) return
+    setBusy(true)
+    const target = selectedItems[0]
     try {
-      if (targetItem.isFolder) {
-        const { error: dbError } = await supabase
-          .from('media_folders')
-          .update({ name: newName })
-          .eq('id', targetItem.id)
-
-        if (dbError) throw dbError
-      } else {
-        const { error: dbError } = await supabase
-          .from('media_files')
-          .update({ display_name: newName })
-          .eq('id', targetItem.id)
-
-        if (dbError) throw dbError
-      }
-
+      const { error: dbError } = target.isFolder
+        ? await supabase.from('media_folders').update({ name: name.slice(0, 120) }).eq('id', target.id)
+        : await supabase.from('media_files').update({ display_name: name }).eq('id', target.id)
+      if (dbError) throw dbError
       toast.success('Erfolgreich umbenannt')
       setSelectedItems([])
-      await fetchItems(currentFolderId, searchQuery)
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error renaming:', err)
-      setError(err.message || 'Fehler beim Umbenennen')
+      setError(message(err, 'Fehler beim Umbenennen'))
       toast.error('Fehler beim Umbenennen')
     } finally {
-      setLoading(false)
+      setBusy(false)
+      await reload()
     }
   }
 
-  const moveItems = async (itemsToMove: any[], destinationFolderId: string | null) => {
-    if (!itemsToMove || itemsToMove.length === 0) return
-    setLoading(true)
-
+  /** Verschiebt Dateien und Ordner. Liefert false, wenn nichts verschoben wurde. */
+  const moveItems = async (itemsToMove: MediaItem[], destinationFolderId: string | null): Promise<boolean> => {
+    if (!itemsToMove || itemsToMove.length === 0) return false
     const targetFolderId = destinationFolderId === '' ? null : destinationFolderId
-    const fileIds = itemsToMove.filter(i => !i.isFolder).map(i => i.id)
-    const folderIds = itemsToMove.filter(i => i.isFolder).map(i => i.id)
+    const fileIds = itemsToMove.filter((i) => !i.isFolder).map((i) => i.id)
+    const folderIds = itemsToMove.filter((i) => i.isFolder).map((i) => i.id)
 
+    setBusy(true)
     try {
-      let movedCount = 0
+      // Prüfen mit dem aktuellen Stand der Datenbank (die Datenbank prüft ab v0.16.0 zusätzlich selbst)
+      const conflict = moveConflict(folderIds.length ? await loadFolders() : [], folderIds, targetFolderId)
+      if (conflict) throw new Error(conflict)
 
       if (fileIds.length > 0) {
-        const { error: dbError } = await supabase
-          .from('media_files')
-          .update({ folder_id: targetFolderId })
-          .in('id', fileIds)
-
+        const { error: dbError } = await supabase.from('media_files').update({ folder_id: targetFolderId }).in('id', fileIds)
         if (dbError) throw dbError
-        movedCount += fileIds.length
       }
-
       if (folderIds.length > 0) {
-        const invalidFolderId = folderIds.find(id => id === targetFolderId)
-        if (invalidFolderId) {
-          throw new Error('Ordner kann nicht in sich selbst verschoben werden')
-        }
-
-        const { error: dbError } = await supabase
-          .from('media_folders')
-          .update({ parent_id: targetFolderId })
-          .in('id', folderIds)
-
+        const { error: dbError } = await supabase.from('media_folders').update({ parent_id: targetFolderId }).in('id', folderIds)
         if (dbError) throw dbError
-        movedCount += folderIds.length
       }
-
-      toast.success(`${movedCount} Element(e) verschoben`)
+      toast.success(`${fileIds.length + folderIds.length} Element(e) verschoben`)
       setSelectedItems([])
-      await fetchItems(currentFolderId, searchQuery)
-    } catch (err: any) {
+      return true
+    } catch (err) {
       console.error('Error moving items:', err)
-      setError(err.message || 'Fehler beim Verschieben')
-      toast.error(err.message || 'Fehler beim Verschieben')
+      setError(message(err, 'Fehler beim Verschieben'))
+      toast.error(message(err, 'Fehler beim Verschieben'))
+      return false
     } finally {
-      setLoading(false)
+      setBusy(false)
+      await reload()
     }
   }
 
-  const handleMove = async (destinationFolderId: string) => {
-    await moveItems(selectedItems, destinationFolderId)
-  }
+  const handleMove = (destinationFolderId: string) => moveItems(selectedItems, destinationFolderId)
 
   const handleSync = async () => {
     setSyncing(true)
     setError(null)
-
     try {
-      const getStorageFiles = async (path = ''): Promise<any[]> => {
-        const { data, error } = await supabase.storage
-          .from(bucket)
-          .list(path, { limit: 150 })
-
-        if (error) throw error
-
-        let files: any[] = []
-        if (data) {
-          for (const item of data) {
+      // Alle Dateien im Speicher, seitenweise und rekursiv
+      const storageFiles: { storage_path: string; size: number | null; mime_type: string | null }[] = []
+      const walk = async (path: string) => {
+        for (let offset = 0; ; offset += PAGE) {
+          const { data, error: err } = await supabase.storage.from(bucket).list(path, { limit: PAGE, offset, sortBy: { column: 'name', order: 'asc' } })
+          if (err) throw err
+          for (const item of data ?? []) {
             if (item.name === '.emptyFolderPlaceholder') continue
-
             const fullPath = path ? `${path}/${item.name}` : item.name
-            const isFolder = !item.metadata
-
-            if (isFolder) {
-              const nested = await getStorageFiles(fullPath)
-              files.push(...nested)
-            } else {
-              files.push({
-                storage_path: fullPath,
-                name: item.name,
-                size: item.metadata?.size,
-                mime_type: item.metadata?.mimetype
-              })
-            }
+            if (!item.metadata) await walk(fullPath)
+            else storageFiles.push({ storage_path: fullPath, size: item.metadata.size ?? null, mime_type: item.metadata.mimetype ?? null })
           }
+          if (!data || data.length < PAGE) break
         }
-        return files
       }
+      toast.info('Durchsuche den Speicher nach neuen Dateien …')
+      await walk('')
 
-      toast.info('Scanne Supabase Storage nach Dateien...')
-      const storageFiles = await getStorageFiles('')
+      // Schon eingetragene Pfade in einem Rutsch (seitenweise) statt einer Abfrage je Datei
+      const known = new Set<string>()
+      for (let from = 0; ; from += PAGE) {
+        const { data, error: err } = await supabase.from('media_files').select('storage_path').order('storage_path').range(from, from + PAGE - 1)
+        if (err) throw err
+        for (const row of data ?? []) known.add(row.storage_path)
+        if (!data || data.length < PAGE) break
+      }
+      const fresh = storageFiles.filter((f) => !known.has(f.storage_path))
 
-      let importedCount = 0
-      let folderCache = new Map<string, string | null>()
-
-      const ensureFoldersExist = async (folderParts: string[]): Promise<string | null> => {
-        let currentParentId: string | null = null
-        let pathAccumulator = ''
-
-        for (const part of folderParts) {
-          pathAccumulator = pathAccumulator ? `${pathAccumulator}/${part}` : part
-
-          if (folderCache.has(pathAccumulator)) {
-            currentParentId = folderCache.get(pathAccumulator) || null
+      // Ordner nach Pfad; fehlende werden einmal angelegt
+      const allFolders = await loadFolders()
+      const byPath = folderIdsByPath(allFolders)
+      const ensureFolder = async (parts: string[]): Promise<string | null> => {
+        let parentId: string | null = null
+        for (let i = 0; i < parts.length; i++) {
+          const path = parts.slice(0, i + 1).join('/')
+          const existing = byPath.get(path)
+          if (existing) {
+            parentId = existing
             continue
           }
-
-          let query = supabase.from('media_folders').select('id').eq('name', part)
-          if (currentParentId) {
-            query = query.eq('parent_id', currentParentId)
-          } else {
-            query = query.is('parent_id', null)
-          }
-
-          const { data: existingFolder } = await query
-
-          if (existingFolder && existingFolder.length > 0) {
-            currentParentId = existingFolder[0].id
-          } else {
-            const { data: newFolder, error: insertError } = await supabase
-              .from('media_folders')
-              .insert({ name: part, parent_id: currentParentId })
-              .select('id')
-              .single()
-
-            if (insertError) throw insertError
-            currentParentId = newFolder.id
-          }
-          folderCache.set(pathAccumulator, currentParentId)
+          const { data, error: err }: { data: { id: string } | null; error: Error | null } = await supabase
+            .from('media_folders')
+            .insert({ name: parts[i], parent_id: parentId })
+            .select('id')
+            .single()
+          if (!data) throw err ?? new Error('Ordner konnte nicht angelegt werden')
+          if (err) throw err
+          byPath.set(path, data.id)
+          parentId = data.id
         }
-        return currentParentId
+        return parentId
       }
 
-      for (const file of storageFiles) {
-        const { data: existing } = await supabase
-          .from('media_files')
-          .select('id')
-          .eq('storage_path', file.storage_path)
-
-        if (existing && existing.length > 0) continue
-
-        const pathParts = file.storage_path.split('/')
-        const fileName = pathParts.pop() || file.name
-        const folderParts = pathParts
-
-        const folderId = folderParts.length > 0 ? await ensureFoldersExist(folderParts) : null
-
-        const { data: { publicUrl } } = supabase.storage
-          .from(bucket)
-          .getPublicUrl(file.storage_path)
-
-        const { error: insertErr } = await supabase
-          .from('media_files')
-          .insert({
-            storage_path: file.storage_path,
-            display_name: fileName,
-            url: publicUrl,
-            size: file.size,
-            mime_type: file.mime_type,
-            folder_id: folderId
-          })
-
-        if (!insertErr) {
-          importedCount++
-        }
+      const rows = []
+      for (const file of fresh) {
+        const parts = file.storage_path.split('/')
+        const fileName = parts.pop() || file.storage_path
+        const { data: { publicUrl } } = supabase.storage.from(bucket).getPublicUrl(file.storage_path)
+        rows.push({
+          storage_path: file.storage_path,
+          display_name: fileName,
+          url: publicUrl,
+          size: file.size,
+          mime_type: file.mime_type,
+          folder_id: parts.length ? await ensureFolder(parts) : null,
+        })
       }
-
-      toast.success(`${importedCount} neue Datei(en) erfolgreich synchronisiert!`)
-      await fetchItems(currentFolderId, searchQuery)
-    } catch (err: any) {
+      let imported = 0
+      for (const part of chunk(rows, 200)) {
+        const { error: err } = await supabase.from('media_files').insert(part)
+        if (err) throw err
+        imported += part.length
+      }
+      toast.success(imported ? `${imported} neue Datei(en) übernommen` : 'Alles aktuell, keine neuen Dateien gefunden')
+    } catch (err) {
       console.error('Error syncing storage details:', err)
-      setError(err.message || 'Fehler beim Synchronisieren des Cloud-Speichers')
-      toast.error(`Fehler: ${err.message || 'Details in der Konsole'}`)
+      setError(message(err, 'Fehler beim Abgleich mit dem Speicher'))
+      toast.error(`Fehler: ${message(err, 'Details in der Konsole')}`)
     } finally {
       setSyncing(false)
+      await reload()
     }
   }
 
@@ -535,9 +446,13 @@ export function useMediaLibrary({
     currentFolderId,
     folderBreadcrumbs,
     searchQuery,
+    /** Suchbegriff, nach dem die aktuelle Liste gefiltert ist (nach der Tipp-Pause) */
+    activeSearch: debouncedSearch,
     setSearchQuery,
+    folders,
     items,
     loading,
+    busy,
     uploading,
     syncing,
     selectedItems,
@@ -548,12 +463,13 @@ export function useMediaLibrary({
     navigateToBreadcrumb,
     toggleSelection,
     handleUpload,
+    deletePreview,
     confirmDelete,
     handleCreateFolder,
     handleRename,
     handleMove,
     moveItems,
     handleSync,
-    refetch: () => fetchItems(currentFolderId, searchQuery)
+    refetch: reload,
   }
 }

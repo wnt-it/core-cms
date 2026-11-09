@@ -51,15 +51,18 @@ export async function getConsentOverview(): Promise<ConsentOverview> {
       : { ok: false, error: "Das Protokoll konnte nicht gelesen werden." };
   }
 
-  const count = async (action?: string) => {
-    let q = supabase.from("consent_events").select("id", { count: "exact", head: true });
-    if (action) q = q.eq("action", action);
-    const { count: n } = await q;
+  const count = async (action: string) => {
+    const { count: n } = await supabase.from("consent_events").select("id", { count: "exact", head: true }).eq("action", action);
     return n ?? 0;
   };
-  const [total, accept_all, reject_all, custom] = await Promise.all([count(), count("accept_all"), count("reject_all"), count("custom")]);
-
-  const latest = await supabase.from("consent_configs").select("*").order("created_at", { ascending: false }).limit(1).maybeSingle();
+  // Drei Zählungen (Index auf action, sql/0.16.0_haertung.sql); die Summe ist die Gesamtzahl, andere Werte lässt die Tabelle nicht zu
+  const [accept_all, reject_all, custom, latest] = await Promise.all([
+    count("accept_all"),
+    count("reject_all"),
+    count("custom"),
+    supabase.from("consent_configs").select("*").order("created_at", { ascending: false }).limit(1).maybeSingle(),
+  ]);
+  const total = accept_all + reject_all + custom;
 
   return {
     ok: true,

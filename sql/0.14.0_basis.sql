@@ -118,8 +118,10 @@ create policy "Allow authenticated full access on submissions" on public.submiss
 -- Öffentlicher Bucket für die Mediathek
 insert into storage.buckets (id, name, public) values ('images', 'images', true) on conflict (id) do nothing;
 
+-- Dateien sind über ihre öffentliche Adresse abrufbar (öffentlicher Bucket). Die Liste aller Dateien sehen nur Admins.
 drop policy if exists "Public read images bucket" on storage.objects;
-create policy "Public read images bucket" on storage.objects for select to public using (bucket_id = 'images');
+drop policy if exists "Authenticated read images bucket" on storage.objects;
+create policy "Authenticated read images bucket" on storage.objects for select to authenticated using (bucket_id = 'images');
 drop policy if exists "Authenticated insert images bucket" on storage.objects;
 create policy "Authenticated insert images bucket" on storage.objects for insert to authenticated with check (bucket_id = 'images');
 drop policy if exists "Authenticated update images bucket" on storage.objects;

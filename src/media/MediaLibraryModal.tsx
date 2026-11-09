@@ -1,7 +1,6 @@
 'use client'
 
-// Quelle: template/src/components/ui/MediaLibraryModal.tsx
-// Imports auf core-cms-interne relative Pfade umgestellt.
+// Mediathek als Fenster. Lädt erst, wenn es geöffnet wird (vorher lud jede Admin-Seite die Medien im Hintergrund).
 // Wird aus AdminShell und aus Projektseiten geöffnet: Schrift, Farben und
 // Akzent-Rückfallwerte deshalb hier selbst setzen, nichts vom Projekt-CSS erben.
 
@@ -16,6 +15,7 @@ import { MediaGrid } from './MediaGrid'
 import { StorageUsage } from './StorageUsage'
 import { downloadMultipleMedia } from './media-download'
 import type { ImageOptimizationOptions } from './image-prepare'
+import type { MediaFileItem, MediaItem } from './folder-tree'
 import { Button, Note } from '../ui/components'
 import { cx, iconButtonClass, inputClass } from '../ui/styles'
 
@@ -40,6 +40,13 @@ const crumbClass = (active: boolean, dropHover: boolean) =>
         : 'text-[#64748B] hover:text-[#0F172A]'
   )
 
+/** Text der Rückfrage: Bei Ordnern auch, dass Unterordner und Dateien darin mit gelöscht werden. */
+function deleteDescription({ folders, files }: { folders: number; subfolders: number; files: number }) {
+  if (!folders) return `Möchten Sie ${files === 1 ? 'die ausgewählte Datei' : `die ${files} ausgewählten Dateien`} wirklich dauerhaft löschen?`
+  const was = [files && (files === 1 ? '1 Datei' : `${files} Dateien`), folders === 1 ? '1 Ordner' : `${folders} Ordner`].filter(Boolean).join(' und ')
+  return `${was} werden dauerhaft gelöscht, Ordner mit allen Unterordnern und allen Dateien darin. Das lässt sich nicht rückgängig machen.`
+}
+
 export default function MediaLibraryModal({
   isOpen,
   onClose,
@@ -52,9 +59,11 @@ export default function MediaLibraryModal({
     currentFolderId,
     folderBreadcrumbs,
     searchQuery,
+    activeSearch,
     setSearchQuery,
     items,
     loading,
+    busy,
     uploading,
     syncing,
     selectedItems,
@@ -64,13 +73,14 @@ export default function MediaLibraryModal({
     navigateToBreadcrumb,
     toggleSelection,
     handleUpload,
+    deletePreview,
     confirmDelete,
     handleCreateFolder,
     handleRename,
     handleMove,
     moveItems,
     handleSync
-  } = useMediaLibrary({ bucket, multiSelect, imageOptimization })
+  } = useMediaLibrary({ bucket, multiSelect, imageOptimization, enabled: isOpen })
 
   // Speicheranzeige nur nach Änderungen am Speicher neu laden (nicht bei Ordnerwechsel oder Suche)
   const [storageRefresh, setStorageRefresh] = useState(0)
@@ -109,7 +119,7 @@ export default function MediaLibraryModal({
   const handleConfirmSelect = () => {
     if (selectedItems.length === 0) return
 
-    const files = selectedItems.filter(i => !i.isFolder)
+    const files = selectedItems.filter((i): i is MediaFileItem => !i.isFolder)
     if (files.length === 0) return
 
     if (multiSelect) {
@@ -120,7 +130,8 @@ export default function MediaLibraryModal({
     onClose()
   }
 
-  const isSearchActive = searchQuery.trim().length > 0
+  // Treffer-Ansicht erst, wenn die Suche wirklich gelaufen ist (nach der Tipp-Pause)
+  const isSearchActive = activeSearch.trim().length > 0
   const selectedFileCount = selectedItems.filter(i => !i.isFolder).length
 
   // File Upload Drag & Drop Event Handlers (External files from desktop)
@@ -170,9 +181,9 @@ export default function MediaLibraryModal({
     try {
       const rawData = e.dataTransfer.getData('application/json')
       if (rawData) {
-        const draggedItems = JSON.parse(rawData)
+        const draggedItems = JSON.parse(rawData) as MediaItem[]
         if (Array.isArray(draggedItems) && draggedItems.length > 0) {
-          moveItems(draggedItems, targetFolderId)
+          void moveItems(draggedItems, targetFolderId)
           return
         }
       }
@@ -193,9 +204,9 @@ export default function MediaLibraryModal({
     try {
       const rawData = e.dataTransfer.getData('application/json')
       if (rawData) {
-        const draggedItems = JSON.parse(rawData)
+        const draggedItems = JSON.parse(rawData) as MediaItem[]
         if (Array.isArray(draggedItems) && draggedItems.length > 0) {
-          moveItems(draggedItems, targetFolderId)
+          void moveItems(draggedItems, targetFolderId)
         }
       }
     } catch (_) {}
@@ -279,7 +290,7 @@ export default function MediaLibraryModal({
               {isSearchActive ? (
                 <div className="flex min-w-0 flex-1 basis-full flex-wrap items-center gap-x-2 gap-y-1 text-[14px] text-[#64748B] md:basis-0">
                   <span className="min-w-0 truncate">
-                    Treffer für <strong className="font-medium text-[#0F172A]">„{searchQuery}“</strong> · {items.length}
+                    Treffer für <strong className="font-medium text-[#0F172A]">„{activeSearch}“</strong> · {items.length}
                   </span>
                   <button
                     type="button"
@@ -353,7 +364,7 @@ export default function MediaLibraryModal({
                   variant="ghost"
                   size="sm"
                   onClick={() => void Promise.resolve(handleSync()).finally(refreshStorage)}
-                  disabled={syncing || loading}
+                  disabled={syncing || loading || busy}
                   title="Cloud-Speicher scannen und neue Dateien automatisch registrieren"
                   aria-label={syncing ? 'Synchronisiere …' : 'Synchronisieren'}
                 >
@@ -405,7 +416,7 @@ export default function MediaLibraryModal({
                 loading={loading}
                 uploading={uploading}
                 isSearchActive={isSearchActive}
-                searchQuery={searchQuery}
+                searchQuery={activeSearch}
                 selectedItems={selectedItems}
                 toggleSelection={toggleSelection}
                 hoveredFolderId={hoveredFolderId}
@@ -449,7 +460,7 @@ export default function MediaLibraryModal({
                       </Button>
                     )}
 
-                    <Button variant="danger" size="sm" onClick={() => setIsDeleteOpen(true)}>
+                    <Button variant="danger" size="sm" onClick={() => setIsDeleteOpen(true)} disabled={busy}>
                       <Trash2 size={14} strokeWidth={1.75} />
                       <span>Löschen</span>
                     </Button>
@@ -501,9 +512,13 @@ export default function MediaLibraryModal({
           <MoveModal
             isOpen={isMoveOpen}
             onClose={() => setIsMoveOpen(false)}
-            onConfirm={handleMove}
-            bucket={bucket}
+            onConfirm={async (destination) => {
+              // Fenster schließt nach dem Verschieben (früher blieb es offen und wirkte hängend)
+              if (await handleMove(destination)) setIsMoveOpen(false)
+            }}
             itemsCount={selectedItems.length}
+            isLoading={busy}
+            excludeFolderIds={selectedItems.filter((i) => i.isFolder).map((i) => i.id)}
           />
 
           <DeleteConfirmModal
@@ -514,7 +529,7 @@ export default function MediaLibraryModal({
               setIsDeleteOpen(false)
             }}
             title="Elemente wirklich löschen?"
-            description={`Möchten Sie die ausgewählten ${selectedItems.length} Element(e) wirklich dauerhaft löschen?`}
+            description={deleteDescription(deletePreview())}
           />
         </div>
       )}

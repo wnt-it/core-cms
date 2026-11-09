@@ -24,6 +24,15 @@ async function getQuotaBytes(): Promise<number | null> {
   }
 }
 
+/** Belegter Speicher: eine Datenbankabfrage (sql/0.16.0_haertung.sql). Ohne die Funktion wie bisher Ordner für Ordner. */
+async function usedStorage(supabase: Awaited<ReturnType<typeof createClient>>): Promise<{ usedBytes: number; fileCount: number }> {
+  const { data, error } = await supabase.rpc("core_storage_usage");
+  const row = Array.isArray(data) ? data[0] : data;
+  if (!error && row) return { usedBytes: Number(row.used_bytes) || 0, fileCount: Number(row.file_count) || 0 };
+  const files = await listAllMedia({ fresh: true });
+  return { usedBytes: files.reduce((sum, f) => sum + f.size, 0), fileCount: files.length };
+}
+
 export async function getStorageUsage(): Promise<
   { ok: true; usedBytes: number; fileCount: number; quotaBytes: number | null } | { ok: false; error: string }
 > {
@@ -33,13 +42,8 @@ export async function getStorageUsage(): Promise<
   if (!user) return { ok: false, error: "Nicht angemeldet." };
 
   try {
-    const [files, quotaBytes] = await Promise.all([listAllMedia({ fresh: true }), getQuotaBytes()]);
-    return {
-      ok: true,
-      usedBytes: files.reduce((sum, f) => sum + f.size, 0),
-      fileCount: files.length,
-      quotaBytes,
-    };
+    const [used, quotaBytes] = await Promise.all([usedStorage(supabase), getQuotaBytes()]);
+    return { ok: true, ...used, quotaBytes };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "Unbekannter Fehler." };
   }
