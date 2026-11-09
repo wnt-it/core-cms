@@ -1,6 +1,5 @@
 'use client'
 
-// Quelle: template/src/components/admin/GeneralSettingsForm.tsx
 //
 // Abweichung vom Original: das Original bezog `settings`/`refreshSettings` aus einem
 // projekt-lokalen React Context (`@/contexts/SiteSettingsContext`), der pro Kundenprojekt
@@ -25,7 +24,8 @@ export interface GeneralSettingsFormProps {
 }
 
 export default function GeneralSettingsForm({ settings, refreshSettings, defaultSiteName = '' }: GeneralSettingsFormProps) {
-  const [formData, setFormData] = useState<Partial<SiteSettings>>({})
+  // Gleich mit den Daten starten: sonst zeigt der erste Frame leere Felder, die dann aufspringen
+  const [formData, setFormData] = useState<Partial<SiteSettings>>(() => settings ?? {})
   const [isSaving, setIsSaving] = useState(false)
   const [mediaModalOpen, setMediaModalOpen] = useState(false)
   const [mediaTarget, setMediaTarget] = useState<'logo' | 'favicon' | null>(null)

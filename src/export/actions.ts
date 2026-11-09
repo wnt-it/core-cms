@@ -1,8 +1,8 @@
 "use server";
 
-import { createClient } from "../supabase/server";
 import { createServiceRoleClient } from "../supabase/service-role";
 import { discoverTables, listAllMedia, withoutSecretColumns, type ExportMediaFile } from "./discover";
+import { getAdminSession, NOT_LOGGED_IN } from "../auth/session";
 
 const EXPORT_PAGE_SIZE = 1000;
 
@@ -10,9 +10,7 @@ type Fail = { ok: false; error: string };
 
 // Server Actions sind öffentlich aufrufbar: Jede prüft selbst, ob jemand angemeldet ist.
 async function requireUser(): Promise<Fail | null> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  return user ? null : { ok: false, error: "Nicht angemeldet." };
+  return (await getAdminSession()) ? null : { ok: false, error: NOT_LOGGED_IN };
 }
 
 const message = (e: unknown) => (e instanceof Error ? e.message : "Unbekannter Fehler.");

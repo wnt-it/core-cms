@@ -7,6 +7,7 @@
 import { createClient } from "../supabase/server";
 import { listAllMedia } from "../export/discover";
 import { kontingentAbfrageUrl, kontingentAusAntwort, parseQuotaGb } from "./storage-quota";
+import { getAdminSession } from "../auth/session";
 
 /** Kontingent in Bytes: erst STORAGE_QUOTA_GB, dann das zentrale Kundenregister (1 Stunde zwischengespeichert). */
 async function getQuotaBytes(): Promise<number | null> {
@@ -37,9 +38,9 @@ export async function getStorageUsage(): Promise<
   { ok: true; usedBytes: number; fileCount: number; quotaBytes: number | null } | { ok: false; error: string }
 > {
   // Server Actions sind öffentlich aufrufbar: nur für angemeldete Nutzer
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { ok: false, error: "Nicht angemeldet." };
+  const auth = await getAdminSession();
+  if (!auth) return { ok: false, error: "Nicht angemeldet." };
+  const { supabase } = auth;
 
   try {
     const [used, quotaBytes] = await Promise.all([usedStorage(supabase), getQuotaBytes()]);

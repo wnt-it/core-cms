@@ -13,6 +13,7 @@
 import { createHash } from "node:crypto";
 import { CORE_VERSION } from "../admin/core-version";
 import { createServiceRoleClient } from "../supabase/service-role";
+import { createRateLimiter, ipFromHeaders } from "../shared/rate-limit";
 import { stableStringify, validateEvent } from "./logic";
 import { TEXT_VERSION, TEXTS } from "./texts";
 import type { ResolvedConsentConfig } from "./types";
@@ -37,6 +38,8 @@ export function snapshotHash(config: ResolvedConsentConfig): string {
 export interface ConsentHandlerOptions {
   /** Obergrenze für Einträge pro Minute insgesamt (Schutz vor Überflutung, da es keine ID zum Zählen gibt). */
   maxPerMinute?: number;
+  /** Obergrenze je Absender in 10 Minuten (nur im Arbeitsspeicher gezählt, nichts gespeichert). Standard 30. */
+  maxPerSender?: number;
 }
 
 function json(status: number, body: Record<string, unknown> | null) {
@@ -59,6 +62,8 @@ function sameOrigin(request: Request): boolean {
 
 export function createConsentHandler(config: ResolvedConsentConfig, options: ConsentHandlerOptions = {}) {
   const maxPerMinute = options.maxPerMinute ?? 120;
+  // Ein einzelner Absender soll das Gesamtlimit nicht allein ausschöpfen (sonst würden echte Entscheidungen abgewiesen)
+  const perSender = createRateLimiter({ windowMs: 10 * 60 * 1000, max: options.maxPerSender ?? 30 });
   const hash = snapshotHash(config);
 
   return async function POST(request: Request): Promise<Response> {
@@ -75,6 +80,7 @@ export function createConsentHandler(config: ResolvedConsentConfig, options: Con
     }
     const parsed = validateEvent(body, config.dienste);
     if (!parsed.ok) return json(400, { error: parsed.error });
+    if (perSender.hit(ipFromHeaders(request.headers))) return json(429, { error: "Zu viele Anfragen." });
 
     const admin = createServiceRoleClient();
     if (!admin) return json(503, { error: "SUPABASE_SERVICE_ROLE_KEY fehlt." });

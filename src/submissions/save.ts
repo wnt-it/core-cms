@@ -4,6 +4,9 @@
 // Gespeichert wird über den Service-Role-Client: Besucher haben ab sql/0.15.0_posteingang.sql keinen
 // direkten Schreibzugriff mehr auf submissions, damit niemand am Spam-Schutz vorbei Einträge anlegt.
 
+// Nur auf dem Server: Ein versehentlicher Import aus einer Client-Komponente bricht den Build mit klarer Meldung ab,
+// statt Schlüssel oder Server-Code ins Browser-Bundle zu ziehen.
+import "server-only";
 import { createClient } from "../supabase/server";
 import { createServiceRoleClient } from "../supabase/service-role";
 import { getEmailProvider } from "../email";
@@ -79,7 +82,9 @@ export async function insertSubmission(input: SaveInput, id: string = crypto.ran
   };
   // Erst ab sql/0.15.0_posteingang.sql vorhanden. Ohne eigene Felder nicht mitschicken, damit ältere
   // Datenbanken mit den Standardfeldern weiter funktionieren.
-  if (input.labels && Object.keys(input.labels).some((k) => !(k in STANDARD_LABELS))) row.field_labels = input.labels;
+  // Speichern, sobald eine Bezeichnung vom Standard abweicht (eigene Felder oder z. B. „Ihr Anliegen“ statt „Nachricht“)
+  const standard = STANDARD_LABELS as Record<string, string>;
+  if (input.labels && Object.entries(input.labels).some(([k, label]) => standard[k] !== label)) row.field_labels = input.labels;
 
   const service = createServiceRoleClient();
   if (!service) console.warn("[submissions] SUPABASE_SERVICE_ROLE_KEY fehlt, speichere mit dem Besucher-Zugang (geht nach sql/0.15.0_posteingang.sql nicht mehr).");

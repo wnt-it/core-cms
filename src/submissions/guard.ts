@@ -2,10 +2,12 @@
 // Hauptsperre bleibt die Vercel-Firewall (Rate-Limit). Hier zusätzlich: unsichtbares Feld,
 // Mindestzeit zwischen Anzeige und Absenden (im Browser gemessen) und eine Begrenzung je Adresse.
 
+import { createRateLimiter } from "../shared/rate-limit";
+
 export const MIN_FILL_MS = 2500;
-const WINDOW_MS = 10 * 60 * 1000;
-const MAX_PER_WINDOW = 5;
-const recent = new Map<string, number[]>(); // pro Server-Instanz, nur als zusätzliche Bremse
+
+// 5 Anfragen je Adresse in 10 Minuten, pro Server-Instanz, nur als zusätzliche Bremse
+const limiter = createRateLimiter({ windowMs: 10 * 60 * 1000, max: 5 });
 
 export type GuardResult =
   | { ok: true }
@@ -14,16 +16,12 @@ export type GuardResult =
   | { ok: false; silent: false; error: string };
 
 export function tooManyRequests(ip: string, now = Date.now()): boolean {
-  const hits = (recent.get(ip) ?? []).filter((t) => now - t < WINDOW_MS);
-  hits.push(now);
-  recent.set(ip, hits);
-  if (recent.size > 1000) for (const [k, v] of recent) if (v.every((t) => now - t >= WINDOW_MS)) recent.delete(k);
-  return hits.length > MAX_PER_WINDOW;
+  return limiter.hit(ip, now);
 }
 
 /** Nur für Tests */
 export function resetGuard() {
-  recent.clear();
+  limiter.reset();
 }
 
 export const TOO_MANY_REQUESTS = "Zu viele Anfragen in kurzer Zeit. Bitte versuchen Sie es später erneut.";

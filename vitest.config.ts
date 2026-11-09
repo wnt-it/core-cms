@@ -1,3 +1,4 @@
+import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
 
 // Tests für Logik, Server-Endpunkt und Oberfläche des Einwilligungs-Features (tests/consent).
@@ -8,4 +9,6 @@ export default defineConfig({
     environment: "node",
   },
   esbuild: { jsx: "automatic" },
+  // In Next.js liefert das Framework "server-only" mit, in Tests ein leeres Modul
+  resolve: { alias: { "server-only": fileURLToPath(new URL("./tests/stubs/server-only.ts", import.meta.url)) } },
 });

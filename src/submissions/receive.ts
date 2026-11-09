@@ -2,10 +2,14 @@
 // Prüfung gegen die Formular-Definition, Speichern, Benachrichtigung und, falls erlaubt, Upload-Adressen
 // für Anhänge. Nur auf dem Server verwenden (Server Action oder Route Handler des Projekts).
 
+// Nur auf dem Server: Ein versehentlicher Import aus einer Client-Komponente bricht den Build mit klarer Meldung ab,
+// statt Schlüssel oder Server-Code ins Browser-Bundle zu ziehen.
+import "server-only";
 import { headers } from "next/headers";
 import { createServiceRoleClient } from "../supabase/service-role";
 import { type FormDefinition, storageFileName, toText, validateSubmission } from "./form";
 import { checkBotSignals, TOO_MANY_REQUESTS, tooManyRequests } from "./guard";
+import { ipFromHeaders } from "../shared/rate-limit";
 import { insertSubmission, notifySubmission } from "./save";
 import { cleanupPendingAttachments } from "./cleanup";
 
@@ -34,8 +38,7 @@ function toRecord(input: FormData | Record<string, unknown>): Record<string, unk
 
 export async function clientIp(): Promise<string> {
   try {
-    const h = await headers();
-    return (h.get("x-forwarded-for") ?? h.get("x-real-ip") ?? "unbekannt").split(",")[0].trim();
+    return ipFromHeaders(await headers());
   } catch {
     return "unbekannt";
   }

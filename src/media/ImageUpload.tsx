@@ -1,7 +1,5 @@
 'use client'
 
-// Quelle: template/src/components/ui/ImageUpload.tsx
-// Imports auf core-cms-interne relative Pfade umgestellt.
 // Bildfeld: leer = Ablagefläche, gefüllt = Vorschau mit Ersetzen/Entfernen.
 
 import { useState, useRef, useId } from 'react'

@@ -1,6 +1,5 @@
 'use client'
 
-// Quelle: template/src/components/ui/media-library/MediaItemCard.tsx
 // Kachel mit Bild, darunter Name und Größe (auch ohne Maus lesbar).
 
 import React, { useState } from 'react'

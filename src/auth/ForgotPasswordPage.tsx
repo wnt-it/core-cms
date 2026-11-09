@@ -1,4 +1,3 @@
-// Quelle: template/src/app/admin/forgot-password/page.tsx
 // Server-Wrapper: holt Branding über AuthCardShell, delegiert Interaktion an
 // ForgotPasswordForm (Client Component).
 

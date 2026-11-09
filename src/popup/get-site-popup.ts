@@ -5,7 +5,7 @@
 
 // Ohne Cookies lesen (site_settings ist öffentlich lesbar), damit statische bzw.
 // zwischengespeicherte Seiten (revalidate) nicht dynamisch werden.
-import { supabase } from "../supabase/browser-singleton";
+import { getPublicSiteSettings } from "../branding/site-settings";
 import {
   POPUP_FREQUENCIES,
   POPUP_MAX_DELAY,
@@ -55,7 +55,7 @@ const DEFAULTS: SitePopupSettings = {
 export async function getSitePopupSettings(): Promise<SitePopupSettings> {
   try {
     // select("*"), damit ein Projekt ohne Migration nicht mit Fehler abbricht
-    const { data } = await supabase.from("site_settings").select("*").eq("id", "general").maybeSingle();
+    const data = ((await getPublicSiteSettings()) ?? {}) as Record<string, any>;
     const delay = Number(data?.popup_delay_seconds);
     return {
       enabled: Boolean(data?.popup_enabled),

@@ -5,6 +5,9 @@
 // Tabellen stammen aus der OpenAPI-Beschreibung, die die Supabase-Schnittstelle (PostgREST)
 // für den Service-Role-Schlüssel bereitstellt. Nur serverseitig verwenden.
 
+// Nur auf dem Server: Ein versehentlicher Import aus einer Client-Komponente bricht den Build mit klarer Meldung ab,
+// statt Schlüssel oder Server-Code ins Browser-Bundle zu ziehen.
+import "server-only";
 import { createServiceRoleClient } from "../supabase/service-role";
 
 /** Tabellen, die nie exportiert werden (Zugangsdaten). */

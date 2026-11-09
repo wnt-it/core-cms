@@ -6,7 +6,7 @@
 // coreAdminPages erscheinen automatisch (Gruppe laut page.group, Standard „System“).
 // Mein Konto öffnet sich über den Benutzer unten, die Core-Version über die Versionsangabe darüber.
 
-import { useEffect, useState, useTransition, type ComponentType, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useRef, useState, useTransition, type ComponentType, type CSSProperties, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { ExternalLink, ImageIcon, LogOut, Menu, Package, X } from "lucide-react";
@@ -120,8 +120,13 @@ export function AdminShell({ logo, accent = WNT_COLORS.accent, content, system =
   const [newSubmissions, setNewSubmissions] = useState(0);
 
   useEffect(() => setMenuOpen(false), [pathname]);
-  // Neue Anfragen für die Zahl am Posteingang, bei jedem Seitenwechsel neu (nur angemeldete Admins dürfen lesen)
+  // Neue Anfragen für die Zahl am Posteingang (nur angemeldete Admins dürfen lesen). Höchstens alle 30 Sekunden
+  // beim Seitenwechsel neu, im Posteingang selbst immer (dort ändert sich die Zahl beim Öffnen von Anfragen).
+  const countAt = useRef(0);
   useEffect(() => {
+    const now = Date.now();
+    if (now - countAt.current < 30_000 && !pathname.startsWith("/admin/posteingang")) return;
+    countAt.current = now;
     createClient()
       .from("submissions")
       .select("id", { count: "exact", head: true })

@@ -6,7 +6,7 @@ import { cache } from "react";
 import type { Metadata } from "next";
 // Ohne Cookies lesen (site_settings ist öffentlich lesbar), damit statische Seiten statisch bleiben.
 // Speichern in den Einstellungen leert den Seiten-Cache (revalidatePath("/", "layout")).
-import { supabase } from "../supabase/browser-singleton";
+import { getPublicSiteSettings } from "./site-settings";
 
 export interface SiteBranding {
   siteName: string | null;
@@ -16,22 +16,9 @@ export interface SiteBranding {
 
 /** Liest Name, Logo und Favicon aus site_settings. Einmal pro Anfrage (React cache). */
 export const getSiteBranding = cache(async (): Promise<SiteBranding> => {
-  try {
-    const { data, error } = await supabase
-      .from("site_settings")
-      .select("site_name, logo_url, favicon_url")
-      .eq("id", "general")
-      .maybeSingle();
-    if (error) console.error("[getSiteBranding] site_settings query failed:", error.message);
-    return {
-      siteName: data?.site_name || null,
-      logoUrl: data?.logo_url || null,
-      faviconUrl: data?.favicon_url || null,
-    };
-  } catch (err) {
-    console.error("[getSiteBranding] unexpected error:", err);
-    return { siteName: null, logoUrl: null, faviconUrl: null };
-  }
+  const data = await getPublicSiteSettings();
+  const text = (v: unknown) => (typeof v === "string" && v ? v : null);
+  return { siteName: text(data?.site_name), logoUrl: text(data?.logo_url), faviconUrl: text(data?.favicon_url) };
 });
 
 const ICON_TYPES: Record<string, string> = {

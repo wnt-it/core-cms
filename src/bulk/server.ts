@@ -9,6 +9,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "../supabase/server";
 import { dbErrorMessage } from "../auth/auth-errors";
+import { getAdminSession } from "../auth/session";
 import {
   opsFor,
   type BulkClientConfig,
@@ -309,10 +310,9 @@ export async function runBulk(registry: BulkRegistry, key: string, request: Bulk
   const config = typeof key === "string" && Object.hasOwn(registry, key) ? registry[key] : undefined;
   if (!config) return { success: false, error: "Unbekannte Liste." };
 
-  const supabase = await createClient();
-  // Server Actions sind öffentlich aufrufbar, daher nicht nur auf RLS verlassen
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { success: false, error: "Nicht angemeldet." };
+  const auth = await getAdminSession();
+  if (!auth) return { success: false, error: "Nicht angemeldet." };
+  const { supabase } = auth;
 
   const max = config.maxItems ?? 500;
   const rawIds = Array.isArray(request?.ids) ? request.ids : [];

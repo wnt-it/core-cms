@@ -10,10 +10,10 @@ nicht mehr (entfernt am 2026-10-19). Projekte ohne Admin/Backend brauchen keinen
 ## Scope
 
 **Core CMS enthält:**
-- Auth (Login, Registrierung, Passwort vergessen, Passwort ändern)
+- Auth (Login, Passwort vergessen, Passwort ändern; keine Registrierung, Admins werden in Supabase angelegt)
 - Admin-Dashboard-Shell + Site-Settings
 - Media Library + Upload
-- E-Mail-Versand (Resend als Standard-Provider, SMTP als Fallback)
+- E-Mail-Versand über SMTP aus den Einstellungen (ohne SMTP werden Anfragen nur im Posteingang gespeichert)
 - Submissions/Posteingang (generisch, siehe `src/submissions`)
 - Supabase-Client-Factory + zentrale Typen
 

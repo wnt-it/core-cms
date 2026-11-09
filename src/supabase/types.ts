@@ -1,5 +1,4 @@
 // Zentrale Supabase-Typen, geteilt von allen Next.js-Kundenprojekten.
-// Quelle: template/src/config/supabase.ts
 
 export interface SiteSettings {
   id?: string;

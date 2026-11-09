@@ -5,8 +5,9 @@
 // nur Aufräumen nutzt die Datenbankfunktion consent_cleanup().
 
 import { revalidatePath } from "next/cache";
-import { createClient } from "../supabase/server";
 import type { ConsentChoices, ConsentService } from "./types";
+import { getAdminSession } from "../auth/session";
+import { isMissingTable } from "../supabase/db-errors";
 
 export interface ConsentEventRow {
   id: string;
@@ -37,16 +38,15 @@ export type ConsentOverview =
 
 const PAGE = 200;
 
-const isMissingTable = (message?: string) => /consent_(events|configs)|schema cache|does not exist/i.test(message ?? "");
 
 export async function getConsentOverview(): Promise<ConsentOverview> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { ok: false, error: "Nicht angemeldet." };
+  const auth = await getAdminSession();
+  if (!auth) return { ok: false, error: "Nicht angemeldet." };
+  const { supabase } = auth;
 
   const events = await supabase.from("consent_events").select("*").order("created_at", { ascending: false }).limit(PAGE);
   if (events.error) {
-    return isMissingTable(events.error.message)
+    return isMissingTable(events.error)
       ? { ok: false, migration: true, error: "Die Datenbank-Erweiterung für das Einwilligungsprotokoll fehlt (core-cms v0.14.0, Datei sql/0.14.0_consent.sql)." }
       : { ok: false, error: "Das Protokoll konnte nicht gelesen werden." };
   }
@@ -82,9 +82,9 @@ function csvCell(value: unknown): string {
 
 /** Gesamtes Protokoll als CSV (Semikolon, UTF-8 mit BOM für Excel). */
 export async function exportConsentCsv(): Promise<{ ok: true; csv: string } | { ok: false; error: string }> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { ok: false, error: "Nicht angemeldet." };
+  const auth = await getAdminSession();
+  if (!auth) return { ok: false, error: "Nicht angemeldet." };
+  const { supabase } = auth;
 
   const rows: ConsentEventRow[] = [];
   for (let from = 0; ; from += 1000) {
@@ -119,9 +119,9 @@ export async function exportConsentCsv(): Promise<{ ok: true; csv: string } | { 
 
 /** Löscht Einträge nach Ablauf der Frist (Standard: laufendes Jahr plus 3 Jahre). */
 export async function cleanupConsent(years = 3): Promise<{ ok: true; removed: number } | { ok: false; error: string }> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { ok: false, error: "Nicht angemeldet." };
+  const auth = await getAdminSession();
+  if (!auth) return { ok: false, error: "Nicht angemeldet." };
+  const { supabase } = auth;
   if (!Number.isInteger(years) || years < 1 || years > 10) return { ok: false, error: "Ungültige Aufbewahrungsdauer." };
 
   const { data, error } = await supabase.rpc("consent_cleanup", { p_years: years });

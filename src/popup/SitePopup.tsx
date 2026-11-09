@@ -61,6 +61,9 @@ function markSeen(imageUrl: string, frequency: PopupFrequency) {
 
 export default function SitePopup({ imageUrl, alt, from = '', until = '', frequency = 'session', delaySeconds = 0, pages = 'all', paths = [] }: SitePopupProps) {
   const [visible, setVisible] = useState(false)
+  // Erst zeigen, wenn das Bild geladen ist: vorher erschien kurz ein leerer weißer Kasten
+  const [loaded, setLoaded] = useState(false)
+  const shown = visible && loaded
   const pathname = usePathname() ?? '/'
   // Im Verwaltungsbereich nie anzeigen (das Pop-up ist für Besucher der Website)
   const inAdmin = pathname.startsWith('/admin')
@@ -79,7 +82,7 @@ export default function SitePopup({ imageUrl, alt, from = '', until = '', freque
   }, [imageUrl, inAdmin, pathname, from, until, frequency, delaySeconds, pages, pathsKey])
 
   useEffect(() => {
-    if (!visible) return
+    if (!shown) return
     opener.current = document.activeElement as HTMLElement | null
     closeRef.current?.focus()
     const onKey = (e: KeyboardEvent) => {
@@ -93,7 +96,7 @@ export default function SitePopup({ imageUrl, alt, from = '', until = '', freque
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visible])
+  }, [shown])
 
   function close() {
     setVisible(false)
@@ -109,7 +112,8 @@ export default function SitePopup({ imageUrl, alt, from = '', until = '', freque
       role="dialog"
       aria-modal="true"
       aria-label={alt || 'Hinweis'}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+      aria-hidden={!shown}
+      className={`fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 transition-opacity duration-200 motion-reduce:transition-none ${shown ? 'opacity-100' : 'pointer-events-none invisible opacity-0'}`}
       onClick={close}
     >
       <div className="relative max-h-full w-full max-w-[560px]" onClick={(e) => e.stopPropagation()}>
@@ -129,7 +133,10 @@ export default function SitePopup({ imageUrl, alt, from = '', until = '', freque
           height={1000}
           sizes="(max-width: 600px) 92vw, 560px"
           className="h-auto max-h-[90vh] w-full bg-white object-contain"
-          priority
+          loading="eager"
+          fetchPriority="high"
+          onLoad={() => setLoaded(true)}
+          onError={() => setVisible(false)}
         />
       </div>
     </div>

@@ -8,19 +8,20 @@ import { buildDatenschutz, normalizeDatenschutzConfig, type DatenschutzConfig } 
 import { getDatenschutzVorlageText } from "./vorlage-remote";
 import { mergeDatenschutz, vorschauDatenschutz } from "./merge";
 import { EINSTELLUNGEN_SLUG, MAX_SICHERUNGEN, SICHERUNG_SLUG } from "./vorlage";
+import { getAdminSession } from "../../auth/session";
+import { isMissingTable } from "../../supabase/db-errors";
 
 type Db = Awaited<ReturnType<typeof createClient>>;
 
 async function requireUser() {
-  const supabase = await createClient();
   // Server Actions sind öffentlich aufrufbar, daher nicht nur auf RLS verlassen
-  const { data: { user } } = await supabase.auth.getUser();
-  return { supabase, user };
+  const auth = await getAdminSession();
+  return auth ?? { supabase: await createClient(), user: null };
 }
 
 const dbError = (error: { code?: string; message?: string }, what: string) => {
   console.error(`Failed to ${what}:`, error);
-  if (error.code === "42P01" || error.code === "PGRST205" || /does not exist|schema cache/i.test(error.message || "")) {
+  if (isMissingTable(error)) {
     return { success: false as const, error: "In der Datenbank fehlt die Tabelle für Rechtstexte. Bitte die Datenbank-Aktualisierung für core-cms v0.12.0 ausführen." };
   }
   if (error.code === "42501" || /permission denied|row-level security/i.test(error.message || "")) {

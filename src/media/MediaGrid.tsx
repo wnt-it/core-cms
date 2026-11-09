@@ -1,6 +1,5 @@
 'use client'
 
-// Quelle: template/src/components/ui/media-library/MediaGrid.tsx
 // Oben die Ordner als Zeilen, darunter die Dateien als Kacheln.
 
 import React from 'react'

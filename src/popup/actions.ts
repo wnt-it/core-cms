@@ -1,9 +1,9 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createClient } from "../supabase/server";
 import { dbErrorMessage } from "../auth/auth-errors";
 import { POPUP_FREQUENCIES, POPUP_MAX_DELAY, POPUP_PAGES, parsePopupPaths, type PopupFrequency, type PopupPages } from "./options";
+import { getAdminSession } from "../auth/session";
 
 const validDate = (s: string) => /^\d{4}-\d{2}-\d{2}$/.test(s) && new Date(`${s}T00:00:00Z`).toISOString().startsWith(s);
 
@@ -19,10 +19,9 @@ export async function savePopupSettings(input: {
   /** Eine Adresse pro Zeile. */
   paths?: string;
 }) {
-  const supabase = await createClient();
-  // Server Actions sind öffentlich aufrufbar, daher nicht nur auf RLS verlassen
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { success: false, error: "Nicht angemeldet." };
+  const auth = await getAdminSession();
+  if (!auth) return { success: false, error: "Nicht angemeldet." };
+  const { supabase } = auth;
 
   if (input.enabled && !input.imageUrl) {
     return { success: false, error: "Bitte zuerst ein Bild wählen, sonst kann das Pop-up nicht erscheinen." };

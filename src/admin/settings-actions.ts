@@ -1,7 +1,6 @@
 "use server";
 
 // Server Actions für Site-Settings + SMTP-Einstellungen.
-// Quelle: template/src/app/admin/(dashboard)/einstellungen/actions.ts
 // Auf core-cms-interne relative Imports umgestellt (statt @/utils/supabase/server, @/utils/encryption).
 
 import { createClient } from "../supabase/server";
@@ -17,6 +16,7 @@ async function isLoggedIn(supabase: Awaited<ReturnType<typeof createClient>>) {
   const { data: { user } } = await supabase.auth.getUser();
   return !!user;
 }
+// (Gleiche Prüfung wie getAdminSession in auth/session.ts; hier mit dem schon erzeugten Client, um ihn nicht doppelt zu bauen.)
 
 export async function saveSmtpSettings(formData: FormData) {
   const supabase = await createClient();

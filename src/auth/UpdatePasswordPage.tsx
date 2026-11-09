@@ -1,4 +1,3 @@
-// Quelle: template/src/app/admin/update-password/page.tsx
 // Server-Wrapper: holt Branding über AuthCardShell, delegiert Interaktion an
 // UpdatePasswordForm (Client Component).
 

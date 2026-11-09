@@ -1,4 +1,3 @@
-// Quelle: template/src/app/admin/login/page.tsx
 // Zentrale Login-Seite mit automatischem Branding (Logo/Site-Name aus site_settings) -
 // siehe AuthCardShell. Kundenprojekte binden diese Seite direkt ein statt eine eigene zu pflegen.
 

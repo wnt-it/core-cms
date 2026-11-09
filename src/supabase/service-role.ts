@@ -7,6 +7,9 @@
 // damit sie garantiert nicht ins Browser-Bundle gelangt) - zu finden im
 // Supabase-Dashboard unter Project Settings -> API -> service_role secret.
 
+// Nur auf dem Server: Ein versehentlicher Import aus einer Client-Komponente bricht den Build mit klarer Meldung ab,
+// statt Schlüssel oder Server-Code ins Browser-Bundle zu ziehen.
+import "server-only";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 
 export function createServiceRoleClient() {

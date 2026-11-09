@@ -4,7 +4,7 @@
 // Jede Überschrift bildet mit ihren Absätzen und Listenpunkten eine aufklappbare Gruppe.
 // Das Inhaltsverzeichnis entsteht automatisch aus den Überschriften 1 und 2.
 
-import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, Loader2, Plus, RotateCcw, Trash2 } from 'lucide-react'
@@ -94,15 +94,22 @@ function AutoTextarea({
   ...rest
 }: React.ComponentProps<'textarea'> & { elRef?: (el: HTMLTextAreaElement | null) => void }) {
   const ref = useRef<HTMLTextAreaElement | null>(null)
+  // Höhe vor dem Zeichnen setzen (useLayoutEffect) und die Scrollposition festhalten: Beim kurzen Zurücksetzen
+  // auf „auto“ schrumpfte die Seite sonst, und beim Tippen sprang die Ansicht nach oben.
+  const fit = useCallback(() => {
+    const el = ref.current
+    if (!el) return
+    const scroller = document.scrollingElement
+    const top = scroller?.scrollTop ?? 0
+    el.style.height = 'auto'
+    el.style.height = `${el.scrollHeight + 2}px`
+    if (scroller && scroller.scrollTop !== top) scroller.scrollTop = top
+  }, [])
+  useLayoutEffect(fit, [value, fit])
+  // Bei geänderter Breite (Fenster, Layout) neu anpassen; ein Beobachter pro Feld, nicht einer pro Tastendruck
   useEffect(() => {
     const el = ref.current
     if (!el) return
-    const fit = () => {
-      el.style.height = 'auto'
-      el.style.height = `${el.scrollHeight + 2}px`
-    }
-    fit()
-    // Bei geänderter Breite (Fenster, Layout) neu anpassen, sonst bleibt die Höhe vom ersten Zeichnen stehen
     let width = el.offsetWidth
     const ro = new ResizeObserver(() => {
       if (el.offsetWidth !== width) {
@@ -112,7 +119,7 @@ function AutoTextarea({
     })
     ro.observe(el)
     return () => ro.disconnect()
-  }, [value])
+  }, [fit])
   return (
     <Textarea
       ref={(el) => {

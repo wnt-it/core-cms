@@ -1,5 +1,7 @@
 export * from "./settings-actions";
 export { default as AdminLiveBar } from "./AdminLiveBar";
+export { default as AdminError } from "./AdminError";
+export { default as AdminLoading } from "./AdminLoading";
 export type { AdminLiveBarProps, AdminLiveBarLink } from "./AdminLiveBar";
 export { default as SmtpSettingsForm } from "./SmtpSettingsForm";
 export { default as GeneralSettingsForm } from "./GeneralSettingsForm";

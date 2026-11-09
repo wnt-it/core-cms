@@ -1,4 +1,3 @@
-// Quelle: template/src/lib/media-download.ts
 import { toast } from 'sonner'
 
 /**

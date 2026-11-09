@@ -1,5 +1,4 @@
 // Supabase-Client für Client Components ("use client").
-// Quelle: template/src/utils/supabase/client.ts
 
 import { createBrowserClient } from '@supabase/ssr'
 

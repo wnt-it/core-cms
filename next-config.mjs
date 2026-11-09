@@ -98,8 +98,10 @@ function assertNoCoreRouteConflicts() {
 const ICON_FILE = /^(favicon\.ico|(icon|apple-icon)\d*\.(ico|png|jpe?g|gif|svg|webp|tsx?|jsx?))$/i
 /** Favicon-Dateien direkt in public/ (z. B. /favicon.png). */
 const PUBLIC_FAVICON = /^favicon\.(ico|png|jpe?g|gif|svg|webp)$/i
-/** Eigene icons-Metadaten in Layouts/Seiten (icons: …, metadata.icons = …). */
-const ICONS_METADATA = /\bicons\s*(:|=(?!=))/
+/** Eigene icons-Metadaten in Layouts/Seiten (icons: …, metadata.icons = …). Nur in Dateien mit Metadaten,
+ *  damit z. B. `const icons = [...]` oder eine Liste von Symbolen in Seiteninhalten nicht anschlägt. */
+const ICONS_METADATA = /(\bicons\s*:\s*[[{'"`]|\bmetadata\.icons\s*=(?!=))/
+const HAS_METADATA = /\b(export\s+const\s+metadata|generateMetadata|withSiteBranding)\b/
 const ROUTE_FILE = /^(layout|page|template|default)\.(tsx|ts|jsx|js)$/
 
 /**
@@ -132,7 +134,7 @@ export function findBrandingOverrides(root = process.cwd()) {
         } catch {
           continue
         }
-        if (ICONS_METADATA.test(text)) found.push({ file: path.relative(root, full), reason: 'eigene icons-Metadaten' })
+        if (HAS_METADATA.test(text) && ICONS_METADATA.test(text)) found.push({ file: path.relative(root, full), reason: 'eigene icons-Metadaten' })
       }
     }
   }

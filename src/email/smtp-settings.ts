@@ -2,6 +2,9 @@
 // und Test-E-Mail im Admin nutzen dieselbe Prüfung: Klappt der Test, gehen auch die echten E-Mails raus.
 // Nur auf dem Server verwenden (entschlüsselt das Passwort). Nicht im Barrel exportiert.
 
+// Nur auf dem Server: Ein versehentlicher Import aus einer Client-Komponente bricht den Build mit klarer Meldung ab,
+// statt Schlüssel oder Server-Code ins Browser-Bundle zu ziehen.
+import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { decrypt } from "../supabase/encryption";
 

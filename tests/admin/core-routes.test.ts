@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 // @ts-expect-error reines JavaScript ohne Typen
-import { CORE_ONLY_ADMIN_SLUGS, RETIRED_ADMIN_SLUGS, findCoreRouteConflicts, withCoreCms } from "../../next-config.mjs";
+import { CORE_ONLY_ADMIN_SLUGS, RETIRED_ADMIN_SLUGS, findBrandingOverrides, findCoreRouteConflicts, withCoreCms } from "../../next-config.mjs";
 import { coreAdminNav, RETIRED_ADMIN_PATHS } from "../../src/admin/core-nav";
 import { CORE_VERSION } from "../../src/admin/core-version";
 
@@ -89,6 +89,18 @@ describe("Core-Seiten nur aus dem Core", () => {
   it("AdminShell lädt keine Server-Seiten und keinen Changelog", () => {
     const shell = fs.readFileSync(path.join(__dirname, "../../src/ui/AdminShell.tsx"), "utf8");
     expect(shell).not.toMatch(/from "\.\.\/admin\/(core-pages|changelog)"/);
+  });
+
+  it("Favicon-Sperre: nur echte icons-Metadaten, keine Symbol-Listen", () => {
+    const root = projekt([]);
+    const write = (f: string, text: string) => {
+      fs.mkdirSync(path.dirname(path.join(root, f)), { recursive: true });
+      fs.writeFileSync(path.join(root, f), text);
+    };
+    write("src/app/leistungen/page.tsx", "const icons = [Star, Heart]\nconst data = { icons: [1] }\nexport default function P() { return null }");
+    write("src/app/layout.tsx", 'export const metadata = { title: "X", icons: { icon: "/x.png" } }');
+    const found = findBrandingOverrides(root).map((c: { file: string }) => c.file.replace(/\\/g, "/"));
+    expect(found).toEqual(["src/app/layout.tsx"]);
   });
 
   it("Core-Version passt zu package.json", () => {

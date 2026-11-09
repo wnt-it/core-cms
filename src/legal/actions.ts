@@ -1,10 +1,11 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createClient } from "../supabase/server";
 import { dbErrorMessage } from "../auth/auth-errors";
 import { IMPRESSUM_SLUG } from "./impressum";
 import { POLICY_LIMITS, isPolicyBlock, renumberPolicyBlocks, type PolicyBlock } from "./policy";
+import { getAdminSession } from "../auth/session";
+import { isMissingTable } from "../supabase/db-errors";
 
 const SLUG = /^[a-z0-9][a-z0-9-]{0,39}$/;
 
@@ -18,10 +19,9 @@ export async function saveLegalDocument(input: {
   /** false: Überschriften nicht nummerieren (schlichte Texte wie das Impressum). Standard: true. */
   numbered?: boolean;
 }) {
-  const supabase = await createClient();
-  // Server Actions sind öffentlich aufrufbar, daher nicht nur auf RLS verlassen
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { success: false, error: "Nicht angemeldet." };
+  const auth = await getAdminSession();
+  if (!auth) return { success: false, error: "Nicht angemeldet." };
+  const { supabase } = auth;
 
   if (!SLUG.test(input.slug)) return { success: false, error: "Ungültige Dokumentkennung." };
   // Das Impressum hat sein eigenes Formular (und eigene Spalte), damit beide Wege nie dieselbe Zeile beschreiben
@@ -56,7 +56,7 @@ export async function saveLegalDocument(input: {
 
   if (error) {
     console.error("Failed to save legal document:", error);
-    if (error.code === "42P01" || error.code === "PGRST205" || /does not exist|schema cache/i.test(error.message || "")) {
+    if (isMissingTable(error)) {
       return { success: false, error: "In der Datenbank fehlt die Tabelle für Rechtstexte. Bitte die Datenbank-Aktualisierung für core-cms v0.12.0 ausführen." };
     }
     if (error.code === "42501" || /permission denied|row-level security/i.test(error.message || "")) {

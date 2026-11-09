@@ -2,9 +2,9 @@
 // Gespeichert in legal_documents, Zeile „datenschutz-einstellungen“ (Spalte data: { version, config, appliedAt }).
 // Der Vorlagentext selbst liegt im Code (datenschutz.ts), nicht in der Datenbank.
 
-import { supabase } from "../../supabase/browser-singleton";
 import { createClient } from "../../supabase/server";
 import { DEFAULT_DATENSCHUTZ_CONFIG, normalizeDatenschutzConfig, type DatenschutzConfig } from "./datenschutz";
+import { getPublicSiteSettings } from "../../branding/site-settings";
 
 export const EINSTELLUNGEN_SLUG = "datenschutz-einstellungen";
 /** Sicherungen des bisherigen Textes: „datenschutz-sicherung-JJJJMMTT-HHMMSS“ (ältere Fassung: nur „datenschutz-sicherung“). */
@@ -25,7 +25,7 @@ export interface DatenschutzVorlageStand {
 /** Vorschläge aus den Website-Einstellungen (site_settings), soweit dort gepflegt. */
 async function defaultsFromSettings(): Promise<Partial<DatenschutzConfig>> {
   try {
-    const { data } = await supabase.from("site_settings").select("*").eq("id", "general").maybeSingle();
+    const data = (await getPublicSiteSettings()) as Record<string, any> | null;
     if (!data) return {};
     const cityLine = String(data.address_city || "").trim(); // „PLZ Ort“
     const m = cityLine.match(/^(\d{4,5})\s+(.*)$/);

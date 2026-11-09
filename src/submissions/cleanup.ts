@@ -3,6 +3,9 @@
 // Läuft nebenbei beim Öffnen des Posteingangs und nach neuen Anfragen, ein Zeitplan ist nicht nötig.
 // Nur auf dem Server verwenden (Service-Role).
 
+// Nur auf dem Server: Ein versehentlicher Import aus einer Client-Komponente bricht den Build mit klarer Meldung ab,
+// statt Schlüssel oder Server-Code ins Browser-Bundle zu ziehen.
+import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 /** Wie ATTACHMENT_BUCKET in receive.ts (hier nicht importiert, um einen Import-Kreis zu vermeiden) */
 const ATTACHMENT_BUCKET = "anfragen";
