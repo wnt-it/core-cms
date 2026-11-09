@@ -70,9 +70,12 @@ export interface ExportMediaFile {
 
 let mediaCache: { at: number; files: ExportMediaFile[] } | null = null;
 
-/** Alle Dateien in allen Speicher-Buckets (rekursiv durch die Ordner). Eine Minute zwischengespeichert. */
-export async function listAllMedia(): Promise<ExportMediaFile[]> {
-  if (mediaCache && Date.now() - mediaCache.at < CACHE_MS) return mediaCache.files;
+/**
+ * Alle Dateien in allen Speicher-Buckets (rekursiv durch die Ordner). Eine Minute zwischengespeichert,
+ * mit `fresh` neu gelesen (z. B. für die Speicheranzeige direkt nach einem Upload).
+ */
+export async function listAllMedia(options: { fresh?: boolean } = {}): Promise<ExportMediaFile[]> {
+  if (!options.fresh && mediaCache && Date.now() - mediaCache.at < CACHE_MS) return mediaCache.files;
   const admin = createServiceRoleClient();
   if (!admin) throw new Error("SUPABASE_SERVICE_ROLE_KEY fehlt in der Umgebung dieses Projekts.");
 

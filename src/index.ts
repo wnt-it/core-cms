@@ -9,3 +9,5 @@ export * from "./popup";
 export * from "./bulk";
 export * from "./legal";
 export * from "./export";
+export * from "./consent";
+export * from "./branding";

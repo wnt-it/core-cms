@@ -46,11 +46,15 @@ export interface DatenschutzConfig {
   domains: string;
   /** Bundesland des Sitzes: bestimmt die Aufsichtsbehörde im Text (siehe aufsichtsbehoerden.ts) */
   bundesland: string;
-  /** Verlinkte externe Seiten, z. B. „zu unseren Profilen bei Instagram und LinkedIn“ */
-  verlinkt: string;
-  /** Name des Eintrags im Local Storage für die Cookie-Auswahl (aus dem Cookie-Banner des Projekts) */
-  consentKey: string;
+  /** Abschnitt „Cookies und Einwilligungsmanagement“ in den Text aufnehmen. Abwählen, wenn die Website keine einwilligungspflichtigen Dienste nutzt. */
+  cookies: boolean;
+  /** Abschnitt „Kontaktformular und Anfragen“ in den Text aufnehmen. Abwählen, wenn die Website kein Kontaktformular hat. */
+  kontaktformular: boolean;
 }
+
+/** Abschnitte der Vorlage, die sich im Admin abwählen lassen: Schalter in DatenschutzConfig -> Kennung (ref) der Überschrift. */
+export const ABWAEHLBARE_ABSCHNITTE = { cookies: "cookies", kontaktformular: "kontaktformulare" } as const;
+export type AbwaehlbarerAbschnitt = keyof typeof ABWAEHLBARE_ABSCHNITTE;
 
 export const DEFAULT_DATENSCHUTZ_CONFIG: DatenschutzConfig = {
   kurzname: "",
@@ -65,13 +69,13 @@ export const DEFAULT_DATENSCHUTZ_CONFIG: DatenschutzConfig = {
   datenschutzbeauftragter: "",
   domains: "",
   bundesland: "",
-  verlinkt: "zu unseren Profilen bei Instagram, Facebook, LinkedIn und YouTube oder zur Routenplanung bei Google Maps und Apple Karten",
-  consentKey: "",
+  cookies: true,
+  kontaktformular: true,
 };
 
 const TEXT_KEYS = [
   "kurzname", "fassung", "firma", "strasse", "plz", "ort", "telefon", "email", "datenschutzEmail", "datenschutzbeauftragter",
-  "domains", "verlinkt", "consentKey",
+  "domains",
 ] as const;
 
 /** Prüft beliebige Eingaben und macht daraus eine vollständige Konfiguration (unbekannte Felder entfallen, Texte werden gekürzt). */
@@ -81,16 +85,18 @@ export function normalizeDatenschutzConfig(raw: unknown): DatenschutzConfig {
   for (const k of TEXT_KEYS) if (typeof src[k] === "string") out[k] = (src[k] as string).trim().slice(0, 1000);
   // Nur bekannte Bundesländer: Ein älterer Freitext ergibt im Text einen Platzhalter statt einer falschen Behörde
   out.bundesland = typeof src.bundesland === "string" && Object.hasOwn(AUFSICHTSBEHOERDEN, src.bundesland) ? src.bundesland : "";
+  // Fehlt die Angabe (ältere Einstellungen), bleibt der Abschnitt drin
+  for (const k of Object.keys(ABWAEHLBARE_ABSCHNITTE) as AbwaehlbarerAbschnitt[]) out[k] = src[k] !== false;
   return out;
 }
 
-/** Die Bausteine der Vorlage (im Admin sichtbar, aber nicht abwählbar). */
-export const DATENSCHUTZ_STANDARD_BAUSTEINE: { label: string; hint: string }[] = [
+/** Die Bausteine der Vorlage (im Admin sichtbar). Nur Bausteine mit schalter lassen sich abwählen. */
+export const DATENSCHUTZ_STANDARD_BAUSTEINE: { label: string; hint: string; schalter?: AbwaehlbarerAbschnitt }[] = [
   { label: "Allgemeine Informationen", hint: "Fest vorgegeben. Verantwortlicher, Umfang, Speicherdauer, Drittländer, verlinkte Webseiten." },
   { label: "Hosting, Betrieb und Sicherheit", hint: "Fest vorgegeben. Betrieb der Webseiten durch den Auftragsverarbeiter." },
   { label: "Versand von E-Mails", hint: "Fest vorgegeben. Allgemein beschrieben, ohne Namen des Dienstes." },
-  { label: "Cookies und Einwilligungsmanagement", hint: "Fest vorgegeben, allgemein gehalten. Dienste mit eigenen Cookies bekommen einen eigenen Abschnitt." },
-  { label: "Kontaktformular und Anfragen", hint: "Fest vorgegeben, gilt nur für das Standard-Kontaktformular. Andere Formulare brauchen einen eigenen Abschnitt." },
+  { label: "Cookies und Einwilligungsmanagement", hint: "Allgemeine Infos zu Cookies und zum Cookie-Banner. Welche Cookies ein Dienst setzt, steht in dessen eigenem Abschnitt. Ausschalten, wenn die Website keine einwilligungspflichtigen Dienste (z. B. Karten, Videos, Statistik) nutzt.", schalter: "cookies" },
+  { label: "Kontaktformular und Anfragen", hint: "Gilt nur für das Standard-Kontaktformular. Andere Formulare brauchen einen eigenen Abschnitt. Ausschalten, wenn die Website kein Kontaktformular hat.", schalter: "kontaktformular" },
   { label: "Ihre Rechte und Änderung", hint: "Fest vorgegeben. Betroffenenrechte, Aufsichtsbehörde, Änderungsklausel." },
 ];
 
@@ -107,8 +113,30 @@ function fill(blocks: PolicyBlock[], vars: Record<string, string>): PolicyBlock[
   return blocks.map((b) => ({ ...b, text: b.text.replace(/%([a-zA-Z]+)%/g, (m, k: string) => (k in vars ? vars[k] : m)) }));
 }
 
+/**
+ * Entfernt die Überschrift mit dieser Kennung samt Text bis zur nächsten Überschrift gleicher oder höherer Ebene.
+ * Verweise darauf in anderen Abschnitten fallen mit weg: ein Klammerzusatz „(… siehe …)“ nur als Klammer, sonst der ganze Satz.
+ */
+function ohneAbschnitt(blocks: PolicyBlock[], ref: string): PolicyBlock[] {
+  const start = blocks.findIndex((b) => b.ref === ref);
+  if (start < 0) return blocks;
+  const ebene = (t: string) => (t === "h1" ? 1 : t === "h2" ? 2 : t === "h3" ? 3 : 9);
+  const eigene = ebene(blocks[start].t);
+  let ende = start + 1;
+  while (ende < blocks.length && ebene(blocks[ende].t) > eigene) ende++;
+
+  const token = `{{ref:${ref}}}`;
+  const klammer = new RegExp(`\\s*\\([^()]*\\{\\{ref:${ref}\\}\\}[^()]*\\)`, "g");
+  const satz = new RegExp(`\\s*[^.!?]*\\{\\{ref:${ref}\\}\\}[^.!?]*[.!?]?`, "g");
+  return [...blocks.slice(0, start), ...blocks.slice(ende)].flatMap((b) => {
+    if (!b.text.includes(token)) return [b];
+    const text = b.text.replace(klammer, "").replace(satz, "").trim();
+    return text ? [{ ...b, text }] : [];
+  });
+}
+
 /** Platzhalter, die der Text verwenden darf. Eine Vorlage mit anderen wird abgelehnt (vorlage-text.ts). */
-export const VORLAGE_PLATZHALTER = ["domains", "verlinkt", "consentKey", "email", "dsEmail", "firma", "ort", "bundesland", "aufsicht"] as const;
+export const VORLAGE_PLATZHALTER = ["domains", "email", "dsEmail", "firma", "ort", "bundesland", "aufsicht"] as const;
 export const VORLAGE_MARKER = ["@@ADRESSE@@", "@@ANSPRECHPARTNER@@"] as const;
 
 /**
@@ -121,8 +149,6 @@ export function buildDatenschutz(input: Partial<DatenschutzConfig>, vorlage: Dat
   const adresse = [val(c.firma, "Firma"), val(c.strasse, "Straße"), `${val(c.plz, "PLZ")} ${val(c.ort, "Ort")}`];
   const vars: Record<string, string> = {
     domains: c.domains.trim() ? c.domains.trim() : "[● Domains der Webseiten]",
-    verlinkt: val(c.verlinkt, "Verlinkte Seiten"),
-    consentKey: val(c.consentKey, "Name des Eintrags im Local Storage"),
     email: val(c.email, "E-Mail-Adresse"),
     dsEmail: val(c.datenschutzEmail, "E-Mail-Adresse für den Datenschutz"),
     firma: val(c.firma, "Firma"),
@@ -136,12 +162,17 @@ export function buildDatenschutz(input: Partial<DatenschutzConfig>, vorlage: Dat
     `${val(c.firma, "Firma")}${c.datenschutzbeauftragter.trim() ? ` (Datenschutzbeauftragter: ${c.datenschutzbeauftragter.trim()})` : ""}, ${val(c.strasse, "Straße")}, ${val(c.plz, "PLZ")} ${val(c.ort, "Ort")}`,
     vars.dsEmail,
   ].join("\n");
-  const verantwortlicher = [...adresse, `Telefon: ${val(c.telefon, "Telefon")}`, `E-Mail: ${vars.email}`].join("\n");
+  // Telefon ist freiwillig: ohne Angabe fällt die Zeile weg (kein Platzhalter)
+  const telefon = c.telefon.trim() ? [`Telefon: ${c.telefon.trim()}`] : [];
+  const verantwortlicher = [...adresse, ...telefon, `E-Mail: ${vars.email}`].join("\n");
 
   const replaceMarker = (blocks: PolicyBlock[], marker: string, replacement: PolicyBlock[]) =>
     blocks.flatMap((b) => (b.text === marker ? replacement : [b]));
 
   let blocks = replaceMarker(vorlage.blocks, "@@ADRESSE@@", [{ t: "p", text: verantwortlicher }]);
+  for (const [schalter, ref] of Object.entries(ABWAEHLBARE_ABSCHNITTE) as [AbwaehlbarerAbschnitt, string][]) {
+    if (!c[schalter]) blocks = ohneAbschnitt(blocks, ref);
+  }
   blocks = replaceMarker(blocks, "@@ANSPRECHPARTNER@@", [{ t: "p", text: ansprechpartner }]);
 
   const fassung = c.fassung.trim() || new Date().toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" });

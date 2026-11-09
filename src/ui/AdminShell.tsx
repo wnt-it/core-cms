@@ -66,6 +66,8 @@ export interface AdminShellProps {
   content: AdminNavItem[];
   /** Eigene System-Punkte des Projekts (z. B. Einstellungen). Medien und Core-Seiten kommen dazu. */
   system?: AdminNavItem[];
+  /** Optionale Core-Seiten, die im Menü erscheinen sollen (z. B. ["einwilligungen"], wenn das Projekt den Cookie-Banner nutzt). */
+  optionalPages?: string[];
   switcher?: AdminSwitcher;
   userEmail: string;
   logoutAction: () => Promise<void>;
@@ -107,7 +109,7 @@ function NavLabel({ children }: { children: ReactNode }) {
   return <p className="px-2.5 pb-1 text-[12px] font-medium text-[#94A3B8]">{children}</p>;
 }
 
-export function AdminShell({ logo, accent = WNT_COLORS.accent, content, system = [], switcher, userEmail, logoutAction, siteUrl = "/", children }: AdminShellProps) {
+export function AdminShell({ logo, accent = WNT_COLORS.accent, content, system = [], optionalPages = [], switcher, userEmail, logoutAction, siteUrl = "/", children }: AdminShellProps) {
   const pathname = usePathname();
   const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -121,9 +123,19 @@ export function AdminShell({ logo, accent = WNT_COLORS.accent, content, system =
   }, []);
 
   const toItem = (p: (typeof coreAdminPages)[number]): AdminNavItem => ({ href: `/admin/${p.slug}`, label: p.label, icon: p.icon });
-  const menuPages = coreAdminPages.filter((p) => p.inMenu !== false);
-  const contentItems = [...content, ...menuPages.filter((p) => p.group === "content").map(toItem)];
-  const systemItems = [...system, ...menuPages.filter((p) => p.group !== "content").map(toItem)];
+  const menuPages = coreAdminPages.filter((p) => p.inMenu !== false && (!p.optional || optionalPages.includes(p.slug)));
+  // Core-Seiten gibt es nur einmal, aus dem Core. Ein Projekt-Menüpunkt mit derselben Adresse ist ein Fehler:
+  // in der Entwicklung bricht die Seite mit Hinweis ab, live wird er weggelassen (die Website soll nicht ausfallen).
+  const coreHrefs = new Set(coreAdminPages.map((p) => `/admin/${p.slug}`));
+  const doppelt = [...content, ...system].filter((item) => coreHrefs.has(item.href)).map((item) => item.href);
+  if (doppelt.length > 0) {
+    const meldung = `[core-cms] Diese Menüpunkte kommen aus dem Core und dürfen nicht im Projekt-Menü (content/system der AdminShell) stehen: ${doppelt.join(", ")}. Bitte dort entfernen.`;
+    if (process.env.NODE_ENV !== "production") throw new Error(meldung);
+    console.error(meldung);
+  }
+  const ohneCore = (items: AdminNavItem[]) => items.filter((item) => !coreHrefs.has(item.href));
+  const contentItems = [...ohneCore(content), ...menuPages.filter((p) => p.group === "content").map(toItem)];
+  const systemItems = [...ohneCore(system), ...menuPages.filter((p) => p.group !== "content").map(toItem)];
   const versionItem: AdminNavItem = {
     href: "/admin/version",
     label: `Core v${CORE_VERSION}`,

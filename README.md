@@ -66,6 +66,10 @@ Konsequenzen, die im Kundenprojekt (nicht in core-cms selbst) nachgezogen werden
 entfällt Punkt 2 komplett — npm kopiert das Package dann als echten Unterordner in
 `node_modules/core-cms`, kein Symlink mehr, normale Node-Modulauflösung greift wieder.
 
+## Datenbank eines neuen Projekts (ab v0.14.0)
+
+Neues Supabase-Projekt: einmal `sql/0.14.0_basis.sql` im SQL-Editor ausführen (Einstellungen, SMTP, Mediathek mit Bucket `images`, Posteingang, jeweils mit Rechten und Zugriffsregeln), danach die übrigen Dateien in `sql/` der Versionsreihe nach (`0.9.0_site_popup`, `0.12.0_site_popup_options`, `0.12.0_legal_documents`, bei Bedarf `0.14.0_consent`). Bestehende Projekte haben diese Tabellen schon. Danach in Supabase unter Authentication die Registrierung neuer Benutzer ausschalten und den Admin-Benutzer von Hand anlegen.
+
 ## Benötigte Umgebungsvariablen im Kundenprojekt
 
 Werden **niemals** im Admin-Backend eingetragen/gespeichert (Sicherheitsrisiko + zirkuläre
@@ -77,7 +81,19 @@ SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=  # Pflicht ab v0.3.1 - siehe unten
 ENCRYPTION_KEY=          # Pflicht ab v0.7.0 - verschlüsselt das SMTP-Passwort
 RESEND_API_KEY=          # falls Resend als Provider gewählt wird
+STORAGE_QUOTA_GB=        # optional ab v0.14.0 - nur für Sonderfälle, sonst kommt das Kontingent automatisch
 ```
+
+**Speicheranzeige (ab v0.14.0):** Die Mediathek zeigt den belegten Speicher aller Buckets, mit
+Kontingent zusätzlich als Balken (Warnung ab 80 %, Hinweis ab 100 %). Das ist nur eine Anzeige,
+Hochladen bleibt möglich. Das Kontingent kommt **automatisch** aus dem zentralen Kundenregister
+von WNT-IT: core-cms fragt `https://www.wnt-it.com/api/kontingent` mit dem Repo-Namen und der
+Produktions-Domain, die Vercel jedem Projekt selbst bereitstellt (`VERCEL_GIT_REPO_SLUG`,
+`VERCEL_PROJECT_PRODUCTION_URL`; bei Vercel muss „Automatically expose System Environment Variables“
+an sein, das ist Standard). Die Antwort enthält nur die Zahl und wird eine Stunde zwischengespeichert.
+`STORAGE_QUOTA_GB` überschreibt das, `CORE_KONTINGENT_URL` ändert die Adresse. Ist das Register nicht
+erreichbar, zeigt die Mediathek nur den belegten Speicher. Nutzt `SUPABASE_SERVICE_ROLE_KEY`; fehlt
+der Schlüssel, entfällt die Anzeige.
 
 **`ENCRYPTION_KEY` (ab v0.7.0 Pflicht):** Zufälliger, geheimer Wert (mind. 32 Zeichen, z.B.
 `openssl rand -hex 32`), pro Projekt in Vercel setzen. Es gibt keinen Ersatzschlüssel mehr
@@ -228,9 +244,67 @@ Das Projekt liefert nur Logo und Menüpunkte.
 - **Bildfelder:** `ImageUpload` (ein Bild) und `GalleryField` (mehrere Bilder, erstes = Hauptbild,
   Sortieren per Ziehen oder Pfeilen, optional `name` für ein verstecktes Feld mit JSON-Liste).
 
+## Einstellungen (ab v0.14.0)
+
+`/admin/einstellungen` ist eine Core-Seite (`coreAdminPages`, Gruppe „System“) und erscheint in jedem Projekt automatisch im Menü, ohne Datei und Menüeintrag im Projekt. Tabs: **Website & Branding** (`site_settings`: Name, Untertitel, Beschreibung, Logo, Favicon, Kontakt, Anschrift), **E-Mail & SMTP** (`email_settings`) und **Daten-Export** (`ExportPanel`). Die Seite lädt und speichert selbst, ein projekteigener `SiteSettingsContext` wird dafür nicht gebraucht. Tabellen wie in `sql/0.14.0_basis.sql`, keine neue SQL-Datei.
+
+Auf der Seite stehen nur Core-Funktionen. Projektspezifisches wie Kopfbilder oder Startseiten-Inhalte ist eine eigene Projektseite unter „Inhalte“ (Menü `content`), nie ein Tab in den Einstellungen. Über Optionen im Catch-all lässt sich nur Folgendes einstellen (alles optional):
+
+```tsx
+// app/admin/(dashboard)/[...core]/page.tsx
+import { CoreAdminRoute, type CoreAdminOptions } from "core-cms/src/admin";
+export { generateCoreAdminMetadata as generateMetadata } from "core-cms/src/admin";
+
+const options: CoreAdminOptions = {
+  einstellungen: {
+    defaultSiteName: "Muster GmbH",                       // gespeichert, wenn das Feld leer bleibt
+    // dataExport: false,                                 // Tab „Daten-Export“ ausblenden
+  },
+};
+
+export default function Page(props: { params: Promise<{ core?: string[] }> }) {
+  return <CoreAdminRoute {...props} options={options} />;
+}
+```
+
+Ohne Optionen bleibt der Catch-all wie bisher (`export { CoreAdminRoute as default, … }`).
+
+**Umstellen eines Projekts, das die Seite bisher selbst hat:**
+
+0. Vorher prüfen, dass nichts verloren geht: (a) SMTP-Daten liegen in `email_settings`. Projekte, die vor v0.10.0 eingerichtet wurden, haben sie eventuell noch in den Spalten `smtp_*` von `site_settings`: dann vor dem Update nach `email_settings` (id `general`) kopieren. (b) Der Standard-Seitenname des alten Wrappers (`defaultSiteName`) kommt in die Optionen. (c) Weitere Tabs oder Felder der alten Seite, die nicht aus dem Core kommen (z. B. Kopfbilder), werden eine eigene Seite unter „Inhalte“.
+1. Löschen: `admin/(dashboard)/einstellungen/` komplett (`page.tsx`, `actions.ts`, ggf. `AdminSettingsClient.tsx`).
+2. Löschen: die Wrapper `src/components/admin/GeneralSettingsForm.tsx` und `src/components/admin/SmtpSettingsForm.tsx`, wenn sie sonst nirgends importiert werden.
+3. Den Menüpunkt `{ href: '/admin/einstellungen', … }` aus `system` in der AdminShell entfernen.
+4. Nur bei Bedarf Optionen wie oben. Projekteigene Formulare, die aus der gelöschten `einstellungen/actions.ts` importieren (z. B. `updateHeroImageSetting`), ziehen mit ihrer neuen Seite unter „Inhalte“ um und bekommen dort eine eigene `"use server"`-Datei.
+
+**Einstellungen gibt es nur einmal, aus dem Core.** Ein Projekt kann keine eigene Einstellungsseite anlegen:
+
+- **Eigene Route:** `withCoreCms` (next.config) bricht `next dev` und `next build` mit Hinweis ab, wenn es unter `app/` bzw. `src/app/` eine Route `/admin/einstellungen` gibt (Routengruppen wie `(dashboard)` zählen nicht). Gilt für alle Core-Seiten außer Datenschutzerklärung und Impressum (`CORE_ONLY_ADMIN_SLUGS` in `next-config.mjs`).
+- **Eigener Menüpunkt:** Steht im `content` oder `system` der AdminShell die Adresse einer Core-Seite, bricht die Seite in der Entwicklung mit Hinweis ab. Live wird der Punkt nur weggelassen und ein Fehler protokolliert, damit der Admin nicht ausfällt.
+
+Die Schritte 0–3 gehören deshalb in denselben Commit wie das Update auf v0.14.0, sonst startet das Projekt nicht.
+
+## Logo und Favicon (ab v0.14.0)
+
+Logo, Favicon und Name der Website stehen nur in den Einstellungen (Admin → Einstellungen → Website & Branding, Bilder aus der Mediathek). Das Projekt legt sie nicht selbst fest.
+
+```tsx
+// app/layout.tsx: Favicon aus den Einstellungen, eigene icons werden ignoriert
+import { withSiteBranding, SiteLogo } from "core-cms/src/branding";
+export const generateMetadata = withSiteBranding({ title: "…", description: "…" });
+
+// Logo (Server Component). In Client-Komponenten als fertiges Element über eine Prop hineinreichen:
+<Navbar logo={<SiteLogo className="h-9 w-auto" priority />} />
+```
+
+- Ohne hinterlegtes Logo zeigt `<SiteLogo />` den Namen aus den Einstellungen (`fallback="none"` blendet ihn aus). Ohne Favicon gibt es keins.
+- `getSiteBranding()` liefert Name, Logo und Favicon für Sonderfälle (z. B. strukturierte Daten). Gelesen wird ohne Cookies, statische Seiten bleiben statisch. Speichern in den Einstellungen erneuert die Seiten sofort.
+- Login- und Passwort-Seiten nutzen dieselbe Quelle.
+- **Sperre:** `withCoreCms` bricht `next dev` und `next build` ab, wenn das Projekt ein eigenes Favicon festlegt: `app/favicon.ico`, `app/icon.*`, `app/apple-icon.*`, `public/favicon.*` oder `icons:` in einem Layout oder einer Seite. Ein fest eingebautes Logo-Bild lässt sich technisch nicht sicher erkennen, dafür gilt die Regel: immer `<SiteLogo />`.
+
 ## Daten-Export (ab v0.13.0)
 
-`ExportPanel` lädt Inhalte und Medien der Website als ZIP (`daten/<tabelle>.json`, `medien/<bucket>/<pfad>`, `LIES-MICH.txt`). Es hat keinen eigenen Menüpunkt, sondern kommt als Tab in die Einstellungen-Seite des Projekts (`import { ExportPanel } from "core-cms/src/export"`):
+`ExportPanel` lädt Inhalte und Medien der Website als ZIP (`daten/<tabelle>.json`, `medien/<bucket>/<pfad>`, `LIES-MICH.txt`). Ab v0.14.0 ist es ein Tab der Core-Seite „Einstellungen“ (siehe oben); einzeln einbinden geht weiter (`import { ExportPanel } from "core-cms/src/export"`):
 
 - **Tabellen** werden aus der Schnittstellen-Beschreibung (OpenAPI, Service-Role-Schlüssel) ermittelt, neue Tabellen sind also beim nächsten Export dabei. Nie enthalten: `email_settings` und Tabellen, deren Name secret, token, credential, password oder smtp enthält (`src/export/discover.ts`).
 - **Medien**: alle Buckets, rekursiv. Die Dateien werden mit kurzlebigen Adressen direkt aus dem Browser geladen und dort gezippt (Chrome/Edge schreiben direkt in die Datei, andere Browser sammeln im Arbeitsspeicher, Grenze 1,5 GB).
@@ -263,6 +337,71 @@ auf Seiten dann entfernen, sonst erscheint es doppelt. Zeitraum, Häufigkeit, Ve
 speichert Bild und Zeitpunkt im `localStorage` des Besuchers (nur „pro Besuch“ nutzt `sessionStorage`). Das gilt als technisch notwendig, braucht
 keine Einwilligung, sollte aber in der Datenschutzerklärung stehen, z. B.: „Zum Merken, dass ein Hinweisfenster (Pop-up) bereits angezeigt wurde, nutzen
 wir den Session Storage bzw. Local Storage Ihres Browsers; gespeichert werden nur die Adresse des Hinweisbildes und der Zeitpunkt, es erfolgt keine Übermittlung.“ Bei mehreren Root-Layouts (z. B. zwei Abteilungen) in jedes öffentliche Layout.
+
+## Einwilligungen: Cookie-Banner und Zwei-Klick-Lösung (ab v0.14.0)
+
+Ein Feature für alle Projekte: Eingebettete Inhalte (Karten, Videos, Terminbuchung) laden erst nach Zustimmung, optional mit globalem
+Banner. Texte, Gestaltung und Verhalten gibt der Core fest vor (gleichwertige Buttons, Pflichtangaben, Widerruf). Das Projekt trägt nur die
+Dienste ein. Konzept, Begründung und Rechtsgrundlagen: [docs/COOKIE_BANNER_KONZEPT.md](docs/COOKIE_BANNER_KONZEPT.md),
+Maßstab: [docs/REFERENZ_LFDI_BW_COOKIES_TRACKING.md](docs/REFERENZ_LFDI_BW_COOKIES_TRACKING.md).
+
+**Einrichtung im Projekt (6 Handgriffe):**
+
+1. **Datenbank:** `sql/0.14.0_consent.sql` einmal im Supabase-SQL-Editor ausführen (Tabellen `consent_configs`, `consent_events`).
+   Braucht `SUPABASE_SERVICE_ROLE_KEY` (wie die E-Mail-Einstellungen).
+2. **Konfiguration** `consent.config.ts` (Dienste aus dem Katalog `src/consent/catalog.ts`, sonst vollständiges `ConsentService`-Objekt):
+
+```ts
+import { defineConsentConfig, dienst } from "core-cms/src/consent";
+
+export const consentConfig = defineConsentConfig({
+  dienste: [dienst("google-maps"), dienst("youtube")],
+  design: { akzent: "#1f6f3f", platzierung: "leiste-unten" }, // nur Farbe, Rundung, Platzierung
+});
+```
+
+3. **Protokoll-Route** `app/api/consent/route.ts`:
+
+```ts
+import { createConsentHandler } from "core-cms/src/consent/server";
+import { consentConfig } from "@/consent.config";
+export const dynamic = "force-dynamic";
+export const POST = createConsentHandler(consentConfig);
+```
+
+4. **Layout** (öffentliche Seiten): `<ConsentProvider config={consentConfig}>{children}</ConsentProvider>`
+5. **Einbettungen** umschließen: `<ConsentGate service="google-maps"><iframe … /></ConsentGate>` (ersetzt eigene `ConsentEmbed`-Komponenten).
+   Footer-Link optional: `<ConsentSettingsLink />` (bei `einstellungenButton: "footer"` Pflicht).
+6. **Admin:** `<AdminShell optionalPages={["einwilligungen"]} …>`, dann erscheint „Einwilligungen“ unter „System“ (Protokoll, CSV-Export, Prüfstand der Dienste).
+
+**Dienst-Katalog (aktuell):** `google-maps`, `youtube`, `microsoft-bookings` (je Zwei-Klick-Einbettung, mit Anbieter, Zweck, Daten, Drittland-Grundlage und Prüfdatum).
+Der Katalog steht nur im Code (`src/consent/catalog.ts`), nicht im Admin: Welche Dienste ein Projekt nutzt, legt WNT-IT in `consent.config.ts` fest.
+Im Admin „Einwilligungen“ erscheinen nur die Dienste, die das Projekt tatsächlich eingetragen hat. Neuer Dienst oder geänderte Angaben (Anbieter, Daten, Drittland):
+im Katalog ergänzen bzw. `revision` und `geprueftAm` erhöhen, neuen Core-Tag veröffentlichen. Besucher werden dann nur zu diesem Dienst erneut gefragt.
+
+**Modus** (`modus`, automatisch gewählt): `einbettung` = nur Zwei-Klick am Inhalt, kein globaler Banner (Standard bei reinen Einbettungen);
+`banner` = globaler Banner (nötig bei seitenweiten Skripten); `aus` = keine einwilligungspflichtigen Dienste. Der Core verweigert einen
+Banner ohne einwilligungspflichtigen Dienst. Auf `/datenschutz` und `/impressum` und im Admin erscheint nie ein Banner.
+
+**Datenschutz:** Im Browser liegt nur Ja/Nein je Dienst mit Ablaufdatum (12 Monate, `localStorage` „cms_consent“), keine ID. Das Protokoll
+(Serverzeit, Auswahl, Textstand, Seitenpfad) enthält weder IP-Adresse noch Kennung und lässt sich keiner Person zuordnen. Es belegt das Verfahren
+und den Wortlaut je Fassung. Aufbewahrung: laufendes Jahr plus 3 Jahre (`consent_cleanup()`, im Admin auslösbar). Die Datenschutz-Vorlage
+(v. 2026-11-06) beschreibt das; erst übernehmen, wenn das Projekt auf dem neuen Banner läuft.
+
+**Prüfen:**
+
+```bash
+npm test                                                   # Logik, Server-Endpunkt, Oberfläche, Vorlage
+npm run consent:check -- https://projekt.example --out=bericht.json   # Browser-Prüfung gegen eine laufende Seite
+```
+
+`consent:check` startet einen frischen Browser und prüft: keine Fremdanfragen und kein unnötiger Speicher vor der Entscheidung und nach „Alle ablehnen“,
+gleich gestaltete Buttons, Überschrift nicht auf der Liste der FAQ, kein Banner auf den Rechtsseiten. Bei jedem Heben der Core-Version je Projekt
+ausführen und den Bericht beim Release ablegen. Braucht Playwright mit Browser (`npx playwright install chromium` oder `--channel=msedge`/`chrome`).
+
+**Neuen Dienst aufnehmen:** Erst die Vorprüfung (Konzept, Abschnitt 3a: Geht es ohne Dritten? Alternative? Drittland-Grundlage? AV-Vertrag?), dann ein Eintrag in
+`src/consent/catalog.ts` mit allen Pflichtfeldern. `revision` nur bei wesentlichen Änderungen erhöhen (löst eine neue Frage aus). Texte in `src/consent/texts.ts`
+sind rechtlich relevant: `TEXT_VERSION` erhöhen, juristisch gegenlesen, Release.
 
 ## Rechtstexte bearbeiten (ab v0.12.0)
 

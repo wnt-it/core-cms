@@ -12,7 +12,7 @@ export interface DatenschutzVorlageText {
 }
 
 const VERSION = /^(\d{4}-\d{2}-\d{2})(?:\.(\d{1,3}))?$/;
-const ERLAUBT = new Set(["domains", "verlinkt", "consentKey", "email", "dsEmail", "firma", "ort", "bundesland", "aufsicht"]);
+const ERLAUBT = new Set(["domains", "email", "dsEmail", "firma", "ort", "bundesland", "aufsicht"]);
 const MARKER = ["@@ADRESSE@@", "@@ANSPRECHPARTNER@@"];
 
 /** Vergleicht zwei Vorlagen-Versionen: > 0, wenn a neuer ist. Ungültige Angaben gelten als älteste. */

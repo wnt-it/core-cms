@@ -173,7 +173,7 @@ export default function TemplatePanel({
                   {text('plz', { label: 'PLZ' })}
                   {text('ort', { label: 'Ort' })}
                 </FieldGrid>
-                {text('telefon', { label: 'Telefon' })}
+                {text('telefon', { label: 'Telefon', optional: true, hint: 'Ohne Angabe erscheint keine Telefonzeile.' })}
                 {text('email', { label: 'E-Mail-Adresse' })}
                 {text('datenschutzEmail', { label: 'E-Mail für Datenschutzanfragen', placeholder: 'datenschutz@…' })}
                 {text('datenschutzbeauftragter', { label: 'Datenschutzbeauftragter', optional: true, hint: 'Name, falls bestellt. Sonst wird nur die Firma genannt.' })}
@@ -198,22 +198,32 @@ export default function TemplatePanel({
             </div>
 
             <div>
-              <h3 className="mb-3 text-[14px] font-semibold text-[#0F172A]">Technik</h3>
-              <FieldGrid>
-                {text('consentKey', { label: 'Name des Cookie-Eintrags', hint: 'Aus dem Cookie-Banner der Website, z. B. „ane_consent“.' })}
-                {text('verlinkt', { label: 'Verlinkte externe Seiten', hint: 'Satzteil, z. B. „zu unseren Profilen bei Instagram und LinkedIn“.' })}
-              </FieldGrid>
-            </div>
-
-            <div>
               <h3 className="mb-1 text-[14px] font-semibold text-[#0F172A]">Bausteine der Vorlage</h3>
               <p className="mb-3 text-[12.5px] text-[#64748B]">Alles andere, z. B. Karten, Videos oder Newsletter, kommt unten im Editor als eigener Abschnitt in den Text und bleibt beim Holen der Vorlage erhalten.</p>
+              <div className="mb-4">
+                <Note tone="info">
+                  <strong>Was die Schalter bewirken:</strong>
+                  <span className="mt-1 block">
+                    <strong>An:</strong> Der Abschnitt wird beim Holen aus der Vorlage in den Text übernommen und dabei immer auf den neuesten Stand der Vorlage gebracht.
+                  </span>
+                  <span className="mt-1 block">
+                    <strong>Aus:</strong> Der Abschnitt wird beim Holen aus dem Text entfernt, Hinweise darauf in anderen Abschnitten ebenfalls. Er wird nicht mehr aktualisiert.
+                  </span>
+                  <span className="mt-1 block">
+                    Das Umstellen allein ändert die veröffentlichte Datenschutzerklärung nicht. Erst „Text aus Vorlage holen“ zeigt eine Vorschau mit allen Änderungen, und erst „Übernehmen und speichern“ ändert den Text auf der Website. Der bisherige Text wird vorher gesichert.
+                  </span>
+                </Note>
+              </div>
               <div className="flex flex-col gap-4">
-                {DATENSCHUTZ_STANDARD_BAUSTEINE.map((b) => (
-                  <div key={b.label} className="opacity-60 [&_label]:cursor-not-allowed">
-                    <SwitchRow label={b.label} hint={`Immer enthalten. ${b.hint}`} checked disabled readOnly />
-                  </div>
-                ))}
+                {DATENSCHUTZ_STANDARD_BAUSTEINE.map((b) =>
+                  b.schalter ? (
+                    <SwitchRow key={b.label} label={b.label} hint={b.hint} checked={config[b.schalter]} onChange={(e) => set(b.schalter!, e.target.checked)} />
+                  ) : (
+                    <div key={b.label} className="opacity-60 [&_label]:cursor-not-allowed">
+                      <SwitchRow label={b.label} hint={`Immer enthalten. ${b.hint}`} checked disabled readOnly />
+                    </div>
+                  ),
+                )}
               </div>
             </div>
 

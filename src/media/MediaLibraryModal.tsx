@@ -13,6 +13,7 @@ import MoveModal from './MoveModal'
 import DeleteConfirmModal from './DeleteConfirmModal'
 import { useMediaLibrary } from './useMediaLibrary'
 import { MediaGrid } from './MediaGrid'
+import { StorageUsage } from './StorageUsage'
 import { downloadMultipleMedia } from './media-download'
 import type { ImageOptimizationOptions } from './image-prepare'
 import { Button, Note } from '../ui/components'
@@ -70,6 +71,11 @@ export default function MediaLibraryModal({
     moveItems,
     handleSync
   } = useMediaLibrary({ bucket, multiSelect, imageOptimization })
+
+  // Speicheranzeige nur nach Änderungen am Speicher neu laden (nicht bei Ordnerwechsel oder Suche)
+  const [storageRefresh, setStorageRefresh] = useState(0)
+  const refreshStorage = () => setStorageRefresh((n) => n + 1)
+  const uploadAndRefresh = (files: FileList) => void Promise.resolve(handleUpload(files)).finally(refreshStorage)
 
   const [isCreateFolderOpen, setIsCreateFolderOpen] = useState(false)
   const [isRenameOpen, setIsRenameOpen] = useState(false)
@@ -151,7 +157,7 @@ export default function MediaLibraryModal({
     dragCounter.current = 0
 
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      handleUpload(e.dataTransfer.files)
+      uploadAndRefresh(e.dataTransfer.files)
     }
   }
 
@@ -174,7 +180,7 @@ export default function MediaLibraryModal({
 
     // Fallback: if native files were dropped on a folder
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      handleUpload(e.dataTransfer.files)
+      uploadAndRefresh(e.dataTransfer.files)
     }
   }
 
@@ -233,7 +239,7 @@ export default function MediaLibraryModal({
               accept="image/*,application/pdf"
               onChange={(e) => {
                 if (e.target.files && e.target.files.length > 0) {
-                  handleUpload(e.target.files)
+                  uploadAndRefresh(e.target.files)
                 }
               }}
               disabled={uploading}
@@ -259,6 +265,7 @@ export default function MediaLibraryModal({
                 <p className="mt-0.5 text-[13px] text-[#64748B]">
                   Bilder hochladen oder vorhandene Medien auswählen.
                 </p>
+                <StorageUsage refreshKey={storageRefresh} className="mt-2" />
               </div>
               <button type="button" onClick={onClose} className={cx(iconButtonClass, '-mr-2 -mt-1')} aria-label="Schließen">
                 <X size={18} strokeWidth={1.75} />
@@ -345,7 +352,7 @@ export default function MediaLibraryModal({
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={handleSync}
+                  onClick={() => void Promise.resolve(handleSync()).finally(refreshStorage)}
                   disabled={syncing || loading}
                   title="Cloud-Speicher scannen und neue Dateien automatisch registrieren"
                   aria-label={syncing ? 'Synchronisiere …' : 'Synchronisieren'}
@@ -503,7 +510,7 @@ export default function MediaLibraryModal({
             isOpen={isDeleteOpen}
             onClose={() => setIsDeleteOpen(false)}
             onConfirm={() => {
-              confirmDelete()
+              void Promise.resolve(confirmDelete()).finally(refreshStorage)
               setIsDeleteOpen(false)
             }}
             title="Elemente wirklich löschen?"

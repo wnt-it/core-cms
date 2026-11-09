@@ -1,9 +1,11 @@
 import { notFound } from "next/navigation";
-import { FileText, Megaphone, Package, ScrollText, UserCircle } from "lucide-react";
+import { FileText, Megaphone, Package, ScrollText, Settings, ShieldCheck, UserCircle } from "lucide-react";
 import type { ComponentType } from "react";
 import { AccountPage } from "../auth";
 import VersionPage from "./VersionPage";
+import SettingsPage, { type EinstellungenOptions } from "./SettingsPage";
 import PopupPage from "../popup/PopupPage";
+import ConsentAdminPage from "../consent/ConsentAdminPage";
 import LegalDocumentPage from "../legal/LegalDocumentPage";
 import ImpressumPage from "../legal/ImpressumPage";
 import { IMPRESSUM_SLUG } from "../legal/impressum";
@@ -12,16 +14,23 @@ import { IMPRESSUM_SLUG } from "../legal/impressum";
 const DatenschutzAdminPage = () => <LegalDocumentPage slug="datenschutz" label="Datenschutzerklärung" publicPath="/datenschutz" />;
 const ImpressumAdminPage = () => <ImpressumPage slug={IMPRESSUM_SLUG} publicPath="/impressum" />;
 
+/** Projektspezifische Angaben für Core-Seiten, im Catch-all an CoreAdminRoute übergeben (siehe README). */
+export interface CoreAdminOptions {
+  einstellungen?: EinstellungenOptions;
+}
+
 export interface CoreAdminPage {
   /** URL-Segment unter /admin/, z.B. "konto" -> /admin/konto */
   slug: string;
   label: string;
   icon: ComponentType<{ size?: number; className?: string }>;
-  Component: ComponentType;
+  Component: ComponentType<{ options?: CoreAdminOptions }>;
   /** Menügruppe in AdminShell: "content" (Inhalte) oder "system" (Standard). */
   group?: "content" | "system";
   /** false: kein eigener Menüpunkt, die Seite ist anders erreichbar (Konto über den Benutzer unten, Version über die Versionsangabe). */
   inMenu?: boolean;
+  /** true: erscheint nur im Menü, wenn das Projekt den Slug in AdminShell `optionalPages` nennt (Feature ist Opt-in). Die Seite selbst ist immer erreichbar. */
+  optional?: boolean;
 }
 
 /**
@@ -34,9 +43,11 @@ export interface CoreAdminPage {
  * angelegt werden muss.
  */
 export const coreAdminPages: CoreAdminPage[] = [
+  { slug: "einstellungen", label: "Einstellungen", icon: Settings, Component: ({ options }) => <SettingsPage options={options?.einstellungen} />, group: "system" },
   { slug: "popup", label: "Pop-up", icon: Megaphone, Component: PopupPage, group: "system" },
   { slug: "datenschutz", label: "Datenschutzerklärung", icon: ScrollText, Component: DatenschutzAdminPage, group: "system" },
   { slug: "impressum", label: "Impressum", icon: FileText, Component: ImpressumAdminPage, group: "system" },
+  { slug: "einwilligungen", label: "Einwilligungen", icon: ShieldCheck, Component: ConsentAdminPage, group: "system", optional: true },
   { slug: "konto", label: "Mein Konto", icon: UserCircle, Component: AccountPage, inMenu: false },
   { slug: "version", label: "Core-Version", icon: Package, Component: VersionPage, inMenu: false },
 ];
@@ -55,8 +66,11 @@ export async function generateCoreAdminMetadata({ params }: { params: Promise<{ 
 
 export async function CoreAdminRoute({
   params,
+  options,
 }: {
   params: Promise<{ core?: string[] }>;
+  /** Projektspezifische Angaben, z. B. { einstellungen: { defaultSiteName: "Muster GmbH" } } */
+  options?: CoreAdminOptions;
 }) {
   const { core } = await params;
   const slug = core?.[0];
@@ -67,5 +81,5 @@ export async function CoreAdminRoute({
   }
 
   const Component = page.Component;
-  return <Component />;
+  return <Component options={options} />;
 }

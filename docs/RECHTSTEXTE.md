@@ -22,7 +22,7 @@ Der Text besteht aus **Bausteinen**:
 
 - **Bausteine der Vorlage** (alle fest, `fest: true`, im Editor für alle gesperrt, Änderung nur hier im Core): Allgemeine Informationen (1.x), Hosting, Betrieb und Sicherheit, Versand von E-Mails, Cookies und Einwilligungsmanagement, Kontaktformular, Rechte (3.x) mit Änderungsklausel. Sie dürfen keine `[● …]` enthalten, weil niemand sie im Editor füllen könnte: Alles Veränderliche kommt aus den Einstellungen.
 - **Alles andere ist nicht in der Vorlage:** Karten, Videos, Terminbuchung, Newsletter, Reichweitenmessung, KI-Agent, andere Formulare usw. trägt der Kunde bzw. WNT-IT im Admin als eigenen Abschnitt ein. Entwürfe: [DATENSCHUTZ_BAUSTEINE_SPAETER.md](DATENSCHUTZ_BAUSTEINE_SPAETER.md).
-- **Projektangaben** (Firma, Anschrift, Kontakt, Bundesland, Name des Cookie-Eintrags) ersetzen die `%Platzhalter%` im Text. Das Bundesland bestimmt die Aufsichtsbehörde (`src/legal/templates/aufsichtsbehoerden.ts`).
+- **Projektangaben** (Firma, Anschrift, Kontakt, Domains, Bundesland) ersetzen die `%Platzhalter%` im Text. Das Bundesland bestimmt die Aufsichtsbehörde (`src/legal/templates/aufsichtsbehoerden.ts`).
 - **Kontaktformular:** Der Abschnitt gilt nur für das Standard-Kontaktformular und sagt das ausdrücklich. Ein anderes Formular bekommt einen eigenen Abschnitt. Anfragen bleiben im Backend, bis sie bearbeitet wurden, und werden nach einer kurzen Vorhaltezeit gelöscht. Das Löschen passiert im Posteingang von Hand, der Kunde muss das also tun.
 - **Nicht genannt:** Standort der Datenbank und Name des E-Mail-Dienstes.
 - Offene Punkte stehen als `[● …]` im Text und werden im Editor gelb markiert (Zähler mit Hinweis).
