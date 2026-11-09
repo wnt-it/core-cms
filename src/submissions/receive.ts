@@ -5,7 +5,7 @@
 import { headers } from "next/headers";
 import { createServiceRoleClient } from "../supabase/service-role";
 import { type FormDefinition, storageFileName, toText, validateSubmission } from "./form";
-import { checkGuard } from "./guard";
+import { checkBotSignals, TOO_MANY_REQUESTS, tooManyRequests } from "./guard";
 import { insertSubmission, notifySubmission } from "./save";
 
 export const ATTACHMENT_BUCKET = "anfragen";
@@ -31,7 +31,7 @@ function toRecord(input: FormData | Record<string, unknown>): Record<string, unk
   return out;
 }
 
-async function clientIp(): Promise<string> {
+export async function clientIp(): Promise<string> {
   try {
     const h = await headers();
     return (h.get("x-forwarded-for") ?? h.get("x-real-ip") ?? "unbekannt").split(",")[0].trim();
@@ -48,11 +48,13 @@ export async function receiveSubmission(
 ): Promise<ReceiveResult> {
   const data = toRecord(input);
 
-  const guard = checkGuard(data, await clientIp());
+  const guard = checkBotSignals(data);
   if (!guard.ok) return guard.silent ? { success: true } : { success: false, error: guard.error };
 
   const checked = validateSubmission(form, data);
   if (!checked.ok) return { success: false, error: checked.error, field: checked.field };
+  // Erst gültige Anfragen zählen: Ein Tippfehler soll das Limit eines echten Besuchers nicht aufbrauchen
+  if (tooManyRequests(await clientIp())) return { success: false, error: TOO_MANY_REQUESTS };
   const { columns, metadata, labels, files } = checked.value;
 
   if (form.subjectField && !columns.subject) {

@@ -2,7 +2,7 @@
 // also kein öffentlich aufrufbarer Endpunkt. Die Zahl im Menü fragt der Browser selbst ab (AdminShell).
 // Quelle: Tags des öffentlichen Repos. Fehler (offline, Rate-Limit) ergeben keinen Hinweis statt einer Fehlermeldung.
 
-import { CORE_VERSION } from "./changelog";
+import { CORE_VERSION } from "./core-version";
 import { CORE_TAGS_URL, newerVersions } from "./version-compare";
 
 const MAX_AGE_MS = 60 * 60 * 1000;

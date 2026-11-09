@@ -1,12 +1,14 @@
 -- core-cms v0.14.0: Grundschema für ein neues Projekt mit core-cms.
 -- Einmal pro neuem Supabase-Projekt ausführen, danach die übrigen Dateien in sql/ in Versionsreihenfolge
--- (0.9.0_site_popup, 0.12.0_site_popup_options, 0.12.0_legal_documents, bei Bedarf 0.14.0_consent).
--- Bestehende Projekte haben diese Tabellen schon. Die Datei ändert dort nichts (if not exists).
+-- (0.9.0_site_popup, 0.12.0_site_popup_options, 0.12.0_legal_documents, bei Bedarf 0.14.0_consent,
+-- 0.15.0_posteingang, 0.16.0_haertung).
+-- Bestehende Projekte haben diese Tabellen schon. Die Datei legt nichts doppelt an und gibt Besuchern
+-- keine Rechte zurück, die eine spätere Datei entzogen hat (Stand ab v0.15.0: Anfragen nur über den Server).
 --
 -- site_settings:  Name, Logo, Kontakt (öffentlich lesbar), Zeile id = 'general'
 -- email_settings: SMTP-Zugang (nur Admins und Server, nie öffentlich)
 -- media_folders / media_files: Mediathek, Dateien im öffentlichen Bucket „images“
--- submissions:    Posteingang des Kontaktformulars (Besucher dürfen nur einfügen)
+-- submissions:    Posteingang (Besucher haben keinen Zugriff, gespeichert wird über den Server der Website)
 
 create table if not exists public.site_settings (
   id text primary key default 'general',
@@ -61,8 +63,8 @@ create index if not exists media_files_folder_id_idx on public.media_files (fold
 create table if not exists public.submissions (
   id uuid primary key default gen_random_uuid(),
   type text not null default 'Kontakt',
-  name text not null,
-  email text not null,
+  name text,
+  email text,
   phone text,
   company text,
   subject text,
@@ -71,6 +73,7 @@ create table if not exists public.submissions (
   source_url text,
   status text not null default 'Neu',
   metadata jsonb,
+  field_labels jsonb,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -78,12 +81,11 @@ create index if not exists submissions_status_created_idx on public.submissions 
 
 -- Rechte auf Tabellenebene (neuere Supabase-Projekte vergeben sie nicht mehr automatisch)
 grant select on public.site_settings, public.media_folders, public.media_files to anon;
-grant insert on public.submissions to anon;
 grant select, insert, update, delete on public.site_settings, public.email_settings, public.media_folders,
   public.media_files, public.submissions to authenticated;
 grant all on public.site_settings, public.email_settings, public.media_folders, public.media_files,
   public.submissions to service_role;
-revoke all on public.email_settings from anon;
+revoke all on public.email_settings, public.submissions from anon;
 
 alter table public.site_settings enable row level security;
 alter table public.email_settings enable row level security;
@@ -110,7 +112,6 @@ drop policy if exists "Allow authenticated full access on media_files" on public
 create policy "Allow authenticated full access on media_files" on public.media_files for all to authenticated using (true) with check (true);
 
 drop policy if exists "Allow public insert on submissions" on public.submissions;
-create policy "Allow public insert on submissions" on public.submissions for insert to anon, authenticated with check (true);
 drop policy if exists "Allow authenticated full access on submissions" on public.submissions;
 create policy "Allow authenticated full access on submissions" on public.submissions for all to authenticated using (true) with check (true);
 

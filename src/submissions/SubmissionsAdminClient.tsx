@@ -10,26 +10,9 @@ import { createClient } from '../supabase/client'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { Trash2, Mail, ChevronDown, X, Inbox, Paperclip, Download } from 'lucide-react'
-import {
-  Badge,
-  Button,
-  ConfirmDialog,
-  EmptyState,
-  Menu,
-  Note,
-  SearchInput,
-  Segmented,
-  Select,
-  TableCard,
-  buttonClass,
-  cx,
-  iconButtonClass,
-  iconButtonDangerClass,
-  tableClass,
-  tdClass,
-  thClass,
-  trClass,
-} from '../ui'
+import { buttonClass, cx, iconButtonClass, iconButtonDangerClass, tableClass, tdClass, thClass, trClass } from '../ui/styles'
+import { Badge, Button, EmptyState, Menu, Note, SearchInput, Segmented, Select, TableCard } from '../ui/components'
+import { ConfirmDialog } from '../ui/ConfirmDialog'
 
 interface SubmissionsAdminClientProps {
   initialSubmissions: Submission[]

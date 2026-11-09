@@ -26,16 +26,25 @@ export function resetGuard() {
   recent.clear();
 }
 
-export function checkGuard(input: Record<string, unknown>, ip: string): GuardResult {
+export const TOO_MANY_REQUESTS = "Zu viele Anfragen in kurzer Zeit. Bitte versuchen Sie es später erneut.";
+
+/** Nur die Bot-Merkmale aus <FormGuard /> (verstecktes Feld, Zeitmessung), ohne Begrenzung je Adresse. */
+export function checkBotSignals(input: Record<string, unknown>): GuardResult {
   const honeypot = typeof input.website === "string" ? input.website.trim() : "";
   if (honeypot !== "") return { ok: false, silent: true };
   const age = Number(input.form_age);
-  if (!Number.isFinite(age)) {
+  if (input.form_age === undefined || input.form_age === null || input.form_age === "" || !Number.isFinite(age)) {
     return { ok: false, silent: false, error: "Bitte laden Sie die Seite neu und senden Sie das Formular erneut." };
   }
   if (age < MIN_FILL_MS) return { ok: false, silent: true };
-  if (tooManyRequests(ip)) {
-    return { ok: false, silent: false, error: "Zu viele Anfragen in kurzer Zeit. Bitte versuchen Sie es später erneut." };
-  }
+  return { ok: true };
+}
+
+/** Bot-Merkmale und Begrenzung je Adresse in einem Schritt. receiveSubmission zählt erst nach der Prüfung der Felder,
+ *  damit Tippfehler (z. B. eine ungültige E-Mail) nicht das Limit eines echten Besuchers aufbrauchen. */
+export function checkGuard(input: Record<string, unknown>, ip: string): GuardResult {
+  const bot = checkBotSignals(input);
+  if (!bot.ok) return bot;
+  if (tooManyRequests(ip)) return { ok: false, silent: false, error: TOO_MANY_REQUESTS };
   return { ok: true };
 }

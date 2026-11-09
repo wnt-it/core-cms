@@ -1,8 +1,10 @@
 // Admin-Seite: installierte Core-Version + Changelog
 import { ChevronDown } from 'lucide-react'
-import { CORE_CHANGELOG, CORE_VERSION, type ChangeType } from './changelog'
+import { CORE_CHANGELOG, type ChangeType } from './changelog'
+import { CORE_VERSION } from './core-version'
 import { getNewerCoreVersions } from './version-check'
-import { Badge, Card, Note, PageHeader, Section, mutedClass } from '../ui'
+import { mutedClass } from '../ui/styles'
+import { Badge, Card, Note, PageHeader, Section } from '../ui/components'
 
 const TYPE_LABELS: Record<ChangeType, { label: string; tone: 'green' | 'blue' | 'red' | 'neutral' }> = {
   feature: { label: 'Neu', tone: 'green' },

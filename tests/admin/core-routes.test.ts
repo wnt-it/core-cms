@@ -4,6 +4,8 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 // @ts-expect-error reines JavaScript ohne Typen
 import { CORE_ONLY_ADMIN_SLUGS, RETIRED_ADMIN_SLUGS, findCoreRouteConflicts, withCoreCms } from "../../next-config.mjs";
+import { coreAdminNav, RETIRED_ADMIN_PATHS } from "../../src/admin/core-nav";
+import { CORE_VERSION } from "../../src/admin/core-version";
 
 const tmp: string[] = [];
 function projekt(files: string[]) {
@@ -72,11 +74,25 @@ describe("Core-Seiten nur aus dem Core", () => {
   });
 
   it("Liste passt zu coreAdminPages (alle außer Datenschutz und Impressum)", () => {
-    const src = fs.readFileSync(path.join(__dirname, "../../src/admin/core-pages.tsx"), "utf8");
-    const slugs = [...src.matchAll(/\{ slug: "([^"]+)"/g)].map((m) => m[1]);
+    const slugs = coreAdminNav.map((p) => p.slug);
     const erwartet = slugs.filter((s) => s !== "datenschutz" && s !== "impressum").sort();
     expect([...CORE_ONLY_ADMIN_SLUGS].sort()).toEqual(erwartet);
-    const core = fs.readFileSync(path.join(__dirname, "../../src/admin/core-pages.tsx"), "utf8");
-    for (const [alt, neu] of Object.entries(RETIRED_ADMIN_SLUGS)) expect(core).toContain(`${alt}: "${neu}"`);
+    expect(RETIRED_ADMIN_PATHS).toEqual(RETIRED_ADMIN_SLUGS);
+  });
+
+  it("jede Menüseite hat eine Komponente in core-pages.tsx", () => {
+    const src = fs.readFileSync(path.join(__dirname, "../../src/admin/core-pages.tsx"), "utf8");
+    const block = src.slice(src.indexOf("const COMPONENTS"), src.indexOf("};", src.indexOf("const COMPONENTS")));
+    for (const { slug } of coreAdminNav) expect(block).toMatch(new RegExp(`^\\s+${slug}:`, "m"));
+  });
+
+  it("AdminShell lädt keine Server-Seiten und keinen Changelog", () => {
+    const shell = fs.readFileSync(path.join(__dirname, "../../src/ui/AdminShell.tsx"), "utf8");
+    expect(shell).not.toMatch(/from "\.\.\/admin\/(core-pages|changelog)"/);
+  });
+
+  it("Core-Version passt zu package.json", () => {
+    const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, "../../package.json"), "utf8"));
+    expect(CORE_VERSION).toBe(pkg.version);
   });
 });

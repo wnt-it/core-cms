@@ -68,7 +68,7 @@ entfällt Punkt 2 komplett — npm kopiert das Package dann als echten Unterordn
 
 ## Datenbank eines neuen Projekts (ab v0.14.0)
 
-Neues Supabase-Projekt: einmal `sql/0.14.0_basis.sql` im SQL-Editor ausführen (Einstellungen, SMTP, Mediathek mit Bucket `images`, Posteingang, jeweils mit Rechten und Zugriffsregeln), danach die übrigen Dateien in `sql/` der Versionsreihe nach (`0.9.0_site_popup`, `0.12.0_site_popup_options`, `0.12.0_legal_documents`, bei Bedarf `0.14.0_consent`, dann `0.15.0_posteingang`). Bestehende Projekte haben diese Tabellen schon. Danach in Supabase unter Authentication die Registrierung neuer Benutzer ausschalten und den Admin-Benutzer von Hand anlegen.
+Neues Supabase-Projekt: einmal `sql/0.14.0_basis.sql` im SQL-Editor ausführen (Einstellungen, SMTP, Mediathek mit Bucket `images`, Posteingang, jeweils mit Rechten und Zugriffsregeln), danach die übrigen Dateien in `sql/` der Versionsreihe nach (`0.9.0_site_popup`, `0.12.0_site_popup_options`, `0.12.0_legal_documents`, bei Bedarf `0.14.0_consent`, dann `0.15.0_posteingang` und `0.16.0_haertung`). Bestehende Projekte haben diese Tabellen schon. Danach in Supabase unter Authentication die Registrierung neuer Benutzer ausschalten und den Admin-Benutzer von Hand anlegen.
 
 ## Benötigte Umgebungsvariablen im Kundenprojekt
 
@@ -359,11 +359,11 @@ import { FormGuard, sendForm } from "core-cms/src/submissions/client";
 - **Speichern** nur über den Server (Service-Role-Schlüssel). Besucher können Anfragen weder lesen noch direkt eintragen, lesen dürfen nur angemeldete Admins (`sql/0.15.0_posteingang.sql`).
 - **Anhänge:** `sendForm` schickt die Dateien nicht über den Server der Website (Vercel nimmt nur ca. 4,5 MB pro Anfrage), sondern nach der Prüfung über einmalige Upload-Adressen direkt in den privaten Speicherbereich `anfragen`. Danach prüft der Core Größe und echten Dateityp am Inhalt, was nicht passt, wird gelöscht und in `rejectedFiles` gemeldet. Erlaubt sind nur PDF, JPG und PNG. Im Posteingang lädt der Admin Anhänge nach einem Warnhinweis als Datei herunter (Link gilt eine Minute), angezeigt werden sie nie im Browser. Es gibt keinen Virenscanner. Löschen der Anfrage löscht die Anhänge mit. Anhänge zählen zum Speicher-Kontingent und sind im Daten-Export enthalten.
 - **Ohne JavaScript-Helfer:** `receiveSubmission(form, formData)` nimmt auch `FormData` oder ein Objekt aus einem Route Handler, dann ohne Anhänge.
-- **Bestehende Aufrufe** von `submitContactForm` laufen weiter, ohne Pflichtfelder (eine angegebene E-Mail muss gültig sein). Spam-Schutz und Feldbezeichnungen gibt es nur mit `receiveSubmission`.
+- **Bestehende Aufrufe** von `submitContactForm` laufen weiter, ohne Pflichtfelder (eine angegebene E-Mail muss gültig sein). Ab v0.16.0 mit Grund-Spam-Schutz: Längengrenzen, höchstens 5 Links, 5 Anfragen je Adresse in 10 Minuten und die Prüfung von `<FormGuard />`, wenn dessen Felder (`website`, `form_age`) im Payload stehen. Feldbezeichnungen und Anhänge gibt es nur mit `receiveSubmission`.
 
 **Umstellen eines Projekts:**
 
-1. Vorher `sql/0.15.0_posteingang.sql` im Supabase-Projekt ausführen. Ohne die Datei scheitern Formulare mit eigenen Feldern und Anhänge. Danach speichern Formulare nur noch mit `SUPABASE_SERVICE_ROLE_KEY`.
+1. `SUPABASE_SERVICE_ROLE_KEY` in Vercel prüfen, Projekt auf v0.15.0 oder neuer heben und live bringen. **Erst danach** `sql/0.15.0_posteingang.sql` im Supabase-Projekt ausführen: Die Datei entzieht Besuchern das direkte Eintragen, eine Website mit älterem Core bekäme sonst keine Anfragen mehr. Bis dahin speichert v0.15.0 schon, nur Formulare mit eigenen Feldern ohne Name/E-Mail und Anhänge brauchen die Datei.
 2. Löschen: die eigene Posteingang-Seite `admin/(dashboard)/submissions/` und den Menüpunkt `/admin/submissions` in `content` bzw. `system`, dazu die Zählung neuer Anfragen fürs Menü (`newSubmissions`), das macht jetzt die AdminShell. Links auf `/admin/submissions` (Dashboard, AdminLiveBar) auf `/admin/posteingang` ändern, die Umleitung fängt vergessene ab.
 3. Eigenen Spam-Schutz in Kontakt-Routen bzw. Server Actions durch `defineForm` + `receiveSubmission` ersetzen, im Formular `<FormGuard />` statt eigener Felder `website`/`form_age`. Projektspezifische Kennzeichnung (z. B. Abteilung) über `receiveSubmission(form, data, { metadata: { … }, type: "Kontakt · Abteilung" })` (der Filter im Posteingang gruppiert nach dem Teil vor „ · “).
 

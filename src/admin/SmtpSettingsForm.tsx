@@ -1,36 +1,34 @@
 'use client'
 
-// Quelle: template/src/components/admin/SmtpSettingsForm.tsx
-// Import der Server Actions auf core-cms-internen relativen Pfad umgestellt.
+// SMTP-Einstellungen im Admin. Das gespeicherte Passwort kommt nie in den Browser: Das Feld bleibt leer,
+// leer gespeichert bleibt das alte Passwort erhalten. Angezeigt wird nur, ob eines gespeichert ist.
 
 import { useState, useEffect } from 'react'
 import { saveSmtpSettings, getSmtpSettings, sendTestEmail } from './settings-actions'
 import { Send, Save, Eye, EyeOff, Loader2, ChevronDown, Settings2 } from 'lucide-react'
 import { toast } from 'sonner'
-import { Button, Card, CardFooter, Field, FieldGrid, Input, SaveBar, Section, cx, hintClass, iconButtonClass, mutedClass } from '../ui'
+import { cx, hintClass, iconButtonClass, mutedClass } from '../ui/styles'
+import { Button, Card, CardFooter, Field, FieldGrid, Input, Note, SaveBar, Section } from '../ui/components'
+import type { SmtpFormValues } from '../email/smtp-settings'
 
 interface SmtpSettingsFormProps {
-  initialSettings?: {
-    host?: string
-    port?: string
-    user?: string
-    pass?: string
-    fromName?: string
-    fromEmail?: string
-    recipient?: string
-  }
+  initialSettings?: Partial<SmtpFormValues> & { missing?: string[] }
 }
 
+const toForm = (s?: Partial<SmtpFormValues>) => ({
+  host: s?.host || '',
+  port: s?.port || '587',
+  user: s?.user || '',
+  pass: '',
+  fromName: s?.fromName || '',
+  fromEmail: s?.fromEmail || '',
+  recipient: s?.recipient || '',
+})
+
 export default function SmtpSettingsForm({ initialSettings }: SmtpSettingsFormProps) {
-  const [formData, setFormData] = useState({
-    host: initialSettings?.host || '',
-    port: initialSettings?.port || '587',
-    user: initialSettings?.user || '',
-    pass: initialSettings?.pass || '',
-    fromName: initialSettings?.fromName || '',
-    fromEmail: initialSettings?.fromEmail || '',
-    recipient: initialSettings?.recipient || ''
-  })
+  const [formData, setFormData] = useState(() => toForm(initialSettings))
+  const [passStatus, setPassStatus] = useState<SmtpFormValues['passStatus']>(initialSettings?.passStatus ?? 'none')
+  const [missing, setMissing] = useState<string[]>(initialSettings?.missing ?? [])
   const [showPass, setShowPass] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [isTesting, setIsTesting] = useState(false)
@@ -40,15 +38,9 @@ export default function SmtpSettingsForm({ initialSettings }: SmtpSettingsFormPr
   useEffect(() => {
     if (!initialSettings) {
       getSmtpSettings().then((settings) => {
-        setFormData({
-          host: settings.host || '',
-          port: settings.port || '587',
-          user: settings.user || '',
-          pass: settings.pass || '',
-          fromName: (settings as any).fromName || '',
-          fromEmail: (settings as any).fromEmail || '',
-          recipient: (settings as any).recipient || ''
-        })
+        setFormData(toForm(settings))
+        setPassStatus(settings.passStatus)
+        setMissing(settings.missing)
         setIsLoading(false)
       })
     }
@@ -63,8 +55,8 @@ export default function SmtpSettingsForm({ initialSettings }: SmtpSettingsFormPr
       } else {
         toast.error(result.error || 'Test-E-Mail fehlgeschlagen.')
       }
-    } catch (err: any) {
-      toast.error('Verbindungsfehler: ' + (err.message || ''))
+    } catch (err) {
+      toast.error('Verbindungsfehler: ' + ((err as Error).message || ''))
     } finally {
       setIsTesting(false)
     }
@@ -87,11 +79,16 @@ export default function SmtpSettingsForm({ initialSettings }: SmtpSettingsFormPr
       const result = await saveSmtpSettings(form)
       if (result.success) {
         toast.success('SMTP-Einstellungen erfolgreich gespeichert!')
+        // Neuer Stand vom Server (Passwort-Status, was noch fehlt); das eingegebene Passwort leeren
+        const fresh = await getSmtpSettings()
+        setFormData(toForm(fresh))
+        setPassStatus(fresh.passStatus)
+        setMissing(fresh.missing)
       } else {
         toast.error(result.error || 'Fehler beim Speichern.')
       }
-    } catch (err: any) {
-      toast.error('Verbindungsfehler beim Speichern: ' + (err.message || ''))
+    } catch (err) {
+      toast.error('Verbindungsfehler beim Speichern: ' + ((err as Error).message || ''))
     } finally {
       setIsSaving(false)
     }
@@ -110,6 +107,11 @@ export default function SmtpSettingsForm({ initialSettings }: SmtpSettingsFormPr
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col">
+      {missing.length > 0 && (
+        <div className="mb-6"><Note tone="warn">
+          Es geht noch keine E-Mail raus, Anfragen landen nur im Posteingang. Es fehlt: {missing.join(', ')}.
+        </Note></div>
+      )}
       {/* ABSENDER & EMPFÄNGER - für alle Nutzer sichtbar, keine technische Erklärung nötig */}
       <Section
         title="Absender & Empfänger"
@@ -177,8 +179,8 @@ export default function SmtpSettingsForm({ initialSettings }: SmtpSettingsFormPr
 
           {!showAdvanced && (
             <p className={cx(hintClass, 'px-5 pb-5 sm:px-6')}>
-              Normalerweise nicht nötig — nur öffnen, wenn du einen eigenen E-Mail-Server statt der
-              Standard-Konfiguration nutzen möchtest.
+              Zugangsdaten des E-Mail-Postfachs, über das die Website E-Mails verschickt. Ohne sie werden
+              Anfragen nur im Posteingang gespeichert.
             </p>
           )}
 
@@ -216,13 +218,24 @@ export default function SmtpSettingsForm({ initialSettings }: SmtpSettingsFormPr
                   />
                 </Field>
                 {/* div statt label: enthält auch den Anzeigen-Knopf */}
-                <Field as="div" label={<label htmlFor="smtp-pass">Passwort / API-Key</label>} hint="Wird verschlüsselt gespeichert.">
+                <Field
+                  as="div"
+                  label={<label htmlFor="smtp-pass">Passwort / API-Key</label>}
+                  hint={
+                    passStatus === 'saved'
+                      ? 'Gespeichert. Leer lassen, um es zu behalten.'
+                      : passStatus === 'unreadable'
+                        ? 'Das gespeicherte Passwort lässt sich nicht mehr lesen. Bitte neu eingeben.'
+                        : 'Wird verschlüsselt gespeichert.'
+                  }
+                >
                   <span className="relative block">
                     <Input
                       id="smtp-pass"
                       type={showPass ? 'text' : 'password'}
-                      required
-                      placeholder="••••••••••••"
+                      required={passStatus !== 'saved'}
+                      autoComplete="new-password"
+                      placeholder={passStatus === 'saved' ? '•••••••• (gespeichert)' : 'Passwort eingeben'}
                       value={formData.pass}
                       onChange={(e) => setFormData({ ...formData, pass: e.target.value })}
                       className="pr-11"

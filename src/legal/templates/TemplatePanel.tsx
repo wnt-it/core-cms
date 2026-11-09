@@ -16,7 +16,7 @@ import { compareVorlageVersion } from './vorlage-text'
 import {
   DATENSCHUTZ_STANDARD_BAUSTEINE,
   type DatenschutzConfig,
-} from './datenschutz'
+} from './datenschutz-config'
 import { BUNDESLAENDER, aufsichtText } from './aufsichtsbehoerden'
 
 /** Zeigt wortweise, was sich von alt zu neu ändert: Neues grün, Entferntes rot und durchgestrichen. */

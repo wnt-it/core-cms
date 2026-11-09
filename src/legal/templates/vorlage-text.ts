@@ -2,6 +2,7 @@
 // Ohne React und Server. Ungültige Fassungen werden abgelehnt, dann gilt die mitgelieferte.
 
 import { POLICY_LIMITS, isPolicyBlock, type PolicyBlock } from "../policy";
+import { VORLAGE_MARKER, VORLAGE_PLATZHALTER } from "./datenschutz-config";
 
 export interface DatenschutzVorlageText {
   /** z. B. „2026-11-05.3“ (Datum, optional mit laufender Nummer) */
@@ -12,8 +13,8 @@ export interface DatenschutzVorlageText {
 }
 
 const VERSION = /^(\d{4}-\d{2}-\d{2})(?:\.(\d{1,3}))?$/;
-const ERLAUBT = new Set(["domains", "email", "dsEmail", "firma", "ort", "bundesland", "aufsicht"]);
-const MARKER = ["@@ADRESSE@@", "@@ANSPRECHPARTNER@@"];
+const ERLAUBT = new Set<string>(VORLAGE_PLATZHALTER);
+const MARKER = VORLAGE_MARKER;
 
 /** Vergleicht zwei Vorlagen-Versionen: > 0, wenn a neuer ist. Ungültige Angaben gelten als älteste. */
 export function compareVorlageVersion(a: string | null | undefined, b: string | null | undefined): number {

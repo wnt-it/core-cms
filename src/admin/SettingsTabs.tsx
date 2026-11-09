@@ -9,6 +9,7 @@ import { Segmented } from '../ui/components'
 import { ExportPanel } from '../export'
 import GeneralSettingsForm from './GeneralSettingsForm'
 import SmtpSettingsForm from './SmtpSettingsForm'
+import type { SmtpFormValues } from '../email/smtp-settings'
 
 export default function SettingsTabs({
   settings,
@@ -17,7 +18,7 @@ export default function SettingsTabs({
   dataExport,
 }: {
   settings: Partial<SiteSettings>
-  smtp: { host: string; port: string; user: string; pass: string; fromName: string; fromEmail: string; recipient: string }
+  smtp: SmtpFormValues & { missing?: string[] }
   defaultSiteName?: string
   dataExport: boolean
 }) {

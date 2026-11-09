@@ -11,7 +11,7 @@
 // Keine IP-Adresse, kein User-Agent, keine ID.
 
 import { createHash } from "node:crypto";
-import { CORE_VERSION } from "../admin/changelog";
+import { CORE_VERSION } from "../admin/core-version";
 import { createServiceRoleClient } from "../supabase/service-role";
 import { stableStringify, validateEvent } from "./logic";
 import { TEXT_VERSION, TEXTS } from "./texts";

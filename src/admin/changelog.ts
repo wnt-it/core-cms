@@ -217,5 +217,5 @@ export const CORE_CHANGELOG: ChangelogEntry[] = [
   },
 ];
 
-/** Aktuelle Version: immer der oberste Eintrag, kann also nicht abweichen. */
-export const CORE_VERSION = CORE_CHANGELOG[0].version;
+/** Installierte Version (setzt der Release-Befehl, siehe core-version.ts). */
+export { CORE_VERSION } from "./core-version";

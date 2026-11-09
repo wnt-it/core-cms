@@ -5,7 +5,8 @@
 // Auf core-cms-interne relative Imports umgestellt (statt @/utils/supabase/server, @/utils/encryption).
 
 import { createClient } from "../supabase/server";
-import { encrypt, decrypt } from "../supabase/encryption";
+import { encrypt } from "../supabase/encryption";
+import { EMPTY_SMTP_VALUES, loadSmtpSettings, type SmtpFormValues } from "../email/smtp-settings";
 import { revalidatePath } from "next/cache";
 import { SmtpEmailProvider } from "../email/smtp-provider";
 import { dbErrorMessage, smtpErrorMessage } from "../auth/auth-errors";
@@ -106,74 +107,40 @@ export async function updateHeroImageSetting(fieldId: string, url: string | null
   return { success: true };
 }
 
-export async function getSmtpSettings() {
+/** Gespeicherte SMTP-Angaben für das Formular im Admin. Das Passwort verlässt den Server nie,
+ *  nur ob eines gespeichert und lesbar ist (passStatus). Leer gelassen bleibt es beim Speichern erhalten. */
+export async function getSmtpSettings(): Promise<SmtpFormValues & { missing: string[] }> {
   const supabase = await createClient();
-  if (!(await isLoggedIn(supabase))) {
-    return { host: "", port: "587", user: "", pass: "", fromName: "", fromEmail: "", recipient: "" };
-  }
-  const { data, error } = await supabase
-    .from("email_settings")
-    .select("smtp_host, smtp_port, smtp_user, smtp_pass, smtp_from_name, smtp_from_email, smtp_recipient")
-    .eq("id", "general")
-    .maybeSingle();
-
-  if (error || !data) {
-    return { host: "", port: "587", user: "", pass: "", fromName: "", fromEmail: "", recipient: "" };
-  }
-
-  let decryptedPass = "";
-  try {
-    decryptedPass = data.smtp_pass ? decrypt(data.smtp_pass) : "";
-  } catch {
-    // Schlüssel fehlt/stimmt nicht: Passwort muss neu eingegeben werden.
-    decryptedPass = "";
-  }
-
-  return {
-    host: data.smtp_host || "",
-    port: data.smtp_port || "587",
-    user: data.smtp_user || "",
-    pass: decryptedPass,
-    fromName: data.smtp_from_name || "",
-    fromEmail: data.smtp_from_email || "",
-    recipient: data.smtp_recipient || "",
-  };
+  if (!(await isLoggedIn(supabase))) return { ...EMPTY_SMTP_VALUES, missing: [] };
+  const { values, missing } = await loadSmtpSettings(supabase);
+  return { ...values, missing };
 }
 
 /**
- * Sendet eine Test-E-Mail mit den GESPEICHERTEN SMTP-Einstellungen an die
- * Empfänger-Adresse (bzw. ersatzweise die Absender-Adresse). Nur für angemeldete Nutzer.
+ * Sendet eine Test-E-Mail mit den GESPEICHERTEN SMTP-Einstellungen an den Empfänger für Anfragen.
+ * Gleiche Prüfung wie der echte Versand (loadSmtpSettings): Klappt der Test, gehen auch Anfragen raus.
  */
-export async function sendTestEmail() {
+export async function sendTestEmail(): Promise<{ success: true; to: string } | { success: false; error: string }> {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) {
-    return { success: false, error: "Nicht angemeldet." };
-  }
+  if (!(await isLoggedIn(supabase))) return { success: false, error: "Nicht angemeldet." };
 
-  const s = await getSmtpSettings();
-  if (!s.host || !s.user || !s.pass || !s.fromEmail) {
-    return { success: false, error: "SMTP-Einstellungen unvollständig (Server, Benutzer, Passwort und Absender-Adresse nötig). Bitte zuerst speichern." };
+  const { config, missing } = await loadSmtpSettings(supabase);
+  if (!config) {
+    return { success: false, error: `Noch nicht vollständig, es fehlt: ${missing.join(", ")}. Ohne diese Angaben werden Anfragen nur im Posteingang gespeichert. Bitte ergänzen und speichern.` };
   }
-  const to = s.recipient || s.fromEmail;
 
   try {
-    const provider = new SmtpEmailProvider({
-      host: s.host,
-      port: parseInt(String(s.port), 10) || 587,
-      user: s.user,
-      pass: s.pass,
-    });
+    const provider = new SmtpEmailProvider({ host: config.host, port: config.port, user: config.user, pass: config.pass });
     await provider.send({
-      to,
+      to: config.recipient,
       subject: "Test-E-Mail aus dem Admin",
-      html: "<p>Diese Test-E-Mail bestätigt, dass die E-Mail-Einstellungen funktionieren.</p>",
-      fromName: s.fromName || undefined,
-      fromEmail: s.fromEmail,
+      html: "<p>Diese Test-E-Mail bestätigt, dass die E-Mail-Einstellungen funktionieren. Neue Anfragen kommen genauso an diese Adresse.</p>",
+      fromName: config.fromName || undefined,
+      fromEmail: config.fromEmail,
     });
-    return { success: true, to };
-  } catch (err: any) {
+    return { success: true, to: config.recipient };
+  } catch (err) {
     console.error("SMTP test failed:", err);
-    return { success: false, error: smtpErrorMessage(err) };
+    return { success: false, error: smtpErrorMessage(err as Error) };
   }
 }

@@ -15,7 +15,8 @@ import MediaLibraryModal from '../media/MediaLibraryModal'
 import { saveGeneralSettings } from './settings-actions'
 import { Image as ImageIcon, Trash2, Save, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
-import { Button, Card, Field, FieldGrid, Input, SaveBar, Section, Textarea, cx, hintClass, iconButtonDangerClass } from '../ui'
+import { cx, hintClass, iconButtonDangerClass } from '../ui/styles'
+import { Button, Card, Field, FieldGrid, Input, SaveBar, Section, Textarea } from '../ui/components'
 
 export interface GeneralSettingsFormProps {
   settings: Partial<SiteSettings> | null | undefined

@@ -4,7 +4,7 @@
 import { createClient } from '../supabase/server'
 import SubmissionsAdminClient from './SubmissionsAdminClient'
 import type { Submission, SubmissionFile } from '../supabase/types'
-import { Note, PageHeader } from '../ui'
+import { Note, PageHeader } from '../ui/components'
 
 export interface AdminSubmissionsPageProps {
   heading?: string

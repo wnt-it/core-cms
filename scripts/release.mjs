@@ -50,7 +50,7 @@ if (git("branch", "--show-current") !== BRANCH) errors.push(`Release nur vom Bra
 if (git("rev-list", "--count", `HEAD..origin/${BRANCH}`) !== "0") errors.push(`origin/${BRANCH} enthält neuere Commits. Bitte zuerst abgleichen.`);
 
 // Der Release committet nur diese Dateien. Offener Code käme sonst nicht mit und ginge unbemerkt verloren.
-const RELEASE_FILES = ["src/admin/changelog.ts", "package.json", "package-lock.json"];
+const RELEASE_FILES = ["src/admin/changelog.ts", "src/admin/core-version.ts", "package.json", "package-lock.json"];
 const CODE = /^(src|sql|scripts)\/|^(next-config\.mjs|tsconfig\.json)$/;
 const dirty = execFileSync("git", ["status", "--porcelain", "--untracked-files=all"], { cwd: ROOT, encoding: "utf8" })
   .split("\n")
@@ -99,6 +99,11 @@ const setVersion = (file, count) => {
 setVersion("package.json", 1);
 // In der Lockfile steht die eigene Version zweimal ganz oben
 setVersion("package-lock.json", 2);
+// Version für AdminShell und Einwilligungsprotokoll, ohne den Changelog zu laden
+{
+  const path = join(ROOT, "src/admin/core-version.ts");
+  writeFileSync(path, readFileSync(path, "utf8").replace(/CORE_VERSION = "[^"]*"/, `CORE_VERSION = "${version}"`));
+}
 
 git("add", "--", ...RELEASE_FILES);
 if (git("diff", "--cached", "--name-only")) git("commit", "-m", `chore: Release ${tag}`);

@@ -6,8 +6,9 @@
 
 import { createClient } from "../supabase/server";
 import { createServiceRoleClient } from "../supabase/service-role";
-import { decrypt } from "../supabase/encryption";
-import { getEmailProvider, type EmailProvider } from "../email";
+import { getEmailProvider } from "../email";
+import type { EmailProvider } from "../email/provider";
+import { loadSmtpSettings } from "../email/smtp-settings";
 import type { ColumnField } from "./form";
 
 // Eingaben aus dem öffentlichen Formular dürfen nie als HTML in die Mail gelangen.
@@ -100,43 +101,30 @@ export async function insertSubmission(input: SaveInput, id: string = crypto.ran
 /** Schickt die Benachrichtigung. Fehler werden nur protokolliert, die Anfrage ist ja schon gespeichert. */
 export async function notifySubmission(input: SaveInput, options: NotifyOptions = {}): Promise<void> {
   try {
+    // SMTP ausschließlich aus email_settings (im Admin gepflegt), über den Service-Role-Client, weil die
+    // Tabelle Zugangsdaten enthält. Dieselbe Prüfung wie die Test-E-Mail im Admin (loadSmtpSettings).
+    const service = createServiceRoleClient();
+    if (!service) {
+      console.warn("[submissions] SUPABASE_SERVICE_ROLE_KEY fehlt, keine E-Mail gesendet.");
+      return;
+    }
+    const smtp = await loadSmtpSettings(service);
     let provider = options.emailProvider;
-    let fromName = "";
-    let fromEmail = "";
-    let recipientEmail = "";
+    const { fromName, fromEmail, recipient: recipientEmail } = smtp.values;
 
     if (!provider) {
-      // SMTP ausschließlich aus email_settings (im Admin gepflegt), über den Service-Role-Client, weil die
-      // Tabelle Zugangsdaten enthält. Ist etwas nicht gepflegt, geht keine E-Mail raus.
-      const service = createServiceRoleClient();
-      if (!service) {
-        console.warn("[submissions] SUPABASE_SERVICE_ROLE_KEY fehlt, keine E-Mail gesendet.");
+      if (!smtp.config) {
+        console.warn(`[submissions] SMTP im Admin nicht vollständig eingerichtet (fehlt: ${smtp.missing.join(", ")}), keine E-Mail gesendet.`);
         return;
       }
-      const { data: s } = await service
-        .from("email_settings")
-        .select("smtp_host, smtp_port, smtp_user, smtp_pass, smtp_from_name, smtp_from_email, smtp_recipient")
-        .eq("id", "general")
-        .maybeSingle();
-      let pass = "";
-      if (s?.smtp_pass) {
-        try {
-          pass = decrypt(s.smtp_pass);
-        } catch {
-          pass = "";
-        }
-      }
-      const port = Number(s?.smtp_port);
-      if (!(s?.smtp_host && port > 0 && s.smtp_user && pass && s.smtp_from_email && s.smtp_recipient)) {
-        console.warn("[submissions] SMTP im Admin nicht vollständig eingerichtet, keine E-Mail gesendet.");
-        return;
-      }
-      fromName = s.smtp_from_name || "";
-      fromEmail = s.smtp_from_email;
-      recipientEmail = s.smtp_recipient;
-      provider = getEmailProvider({ type: "smtp", config: { host: s.smtp_host, port, user: s.smtp_user, pass } });
+      const { host, port, user, pass } = smtp.config;
+      provider = getEmailProvider({ type: "smtp", config: { host, port, user, pass } });
     }
-    if (!provider || !recipientEmail) return;
+    // Eigener Provider (z. B. Resend): Empfänger und Absender kommen trotzdem aus den Einstellungen
+    if (!recipientEmail) {
+      console.warn("[submissions] Kein Empfänger für Anfragen eingetragen, keine E-Mail gesendet.");
+      return;
+    }
 
     const color = safeColor(options.brandColor);
     const siteLabel = esc(options.siteName || fromName);

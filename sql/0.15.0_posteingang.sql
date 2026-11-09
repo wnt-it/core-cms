@@ -1,6 +1,9 @@
 -- core-cms v0.15.0: Posteingang ohne Pflichtfelder, kein direkter Zugriff für Besucher, Anhänge
 --
--- Einmal je Projekt im SQL-Editor von Supabase ausführen, VOR dem Update auf v0.15.0.
+-- Einmal je Projekt im SQL-Editor von Supabase ausführen, NACHDEM die Website mit v0.15.0 (oder neuer) live ist.
+-- Grund: Teil 3 entzieht Besuchern das direkte Eintragen. Eine Website mit älterem Core speichert noch auf diesem Weg
+-- und bekäme bis zum Update keine Anfragen mehr. v0.15.0 speichert über den Server und braucht diese Datei erst
+-- für Anhänge und Formulare ohne Name/E-Mail. Voraussetzung: SUPABASE_SERVICE_ROLE_KEY ist in Vercel gesetzt.
 -- Kann gefahrlos mehrfach laufen. Bestehende Anfragen bleiben unverändert.
 --
 -- 1. Name und E-Mail sind keine Pflicht mehr, welche Felder Pflicht sind, legt das Formular fest.

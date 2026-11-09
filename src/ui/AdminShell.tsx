@@ -10,8 +10,8 @@ import { useEffect, useState, useTransition, type ComponentType, type CSSPropert
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { ExternalLink, ImageIcon, LogOut, Menu, Package, X } from "lucide-react";
-import { CORE_VERSION } from "../admin/changelog";
-import { coreAdminPages, RETIRED_ADMIN_PATHS } from "../admin/core-pages";
+import { CORE_VERSION } from "../admin/core-version";
+import { coreAdminNav as coreAdminPages, RETIRED_ADMIN_PATHS } from "../admin/core-nav";
 import { createClient } from "../supabase/client";
 import { CORE_TAGS_URL, newerVersions } from "../admin/version-compare";
 
