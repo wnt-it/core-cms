@@ -263,13 +263,10 @@ export default function MediaLibraryModal({
               <div className="min-w-0">
                 <h2 id="media-library-title" className="text-[16px] font-semibold text-[#0F172A]">Mediathek</h2>
                 <p className="mt-0.5 text-[13px] text-[#64748B]">
-                  Bilder hochladen oder vorhandene Medien auswählen.
+                  Bilder hochladen oder vorhandene Medien auswählen. Alle Dateien hier sind öffentlich abrufbar, bitte keine vertraulichen Unterlagen hochladen.
                 </p>
-                <p className="mt-1 text-[12.5px] text-[#92400E]">
-                  Alle Dateien hier sind öffentlich abrufbar. Keine vertraulichen Unterlagen hochladen.
-                </p>
-                <StorageUsage refreshKey={storageRefresh} className="mt-2" />
               </div>
+              <StorageUsage refreshKey={storageRefresh} className="ml-auto" />
               <button type="button" onClick={onClose} className={cx(iconButtonClass, '-mr-2 -mt-1')} aria-label="Schließen">
                 <X size={18} strokeWidth={1.75} />
               </button>

@@ -17,6 +17,16 @@ export interface ChangelogEntry {
 /** Neueste Version zuerst. */
 export const CORE_CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.15.1",
+    date: "2026-11-09",
+    changes: [
+      { type: "fix", text: "Die Speicheranzeige in der Mediathek ist jetzt ein kleiner Ring mit Prozentzahl oben rechts, daneben „belegt von verfügbar“. Die Mediathek öffnet sich ruhig, ohne dass etwas nachträglich verrutscht. Beim erneuten Öffnen steht der Stand sofort da." },
+      { type: "fix", text: "Im Posteingang gleitet eine geöffnete Anfrage sanft herein und beim Schließen wieder hinaus." },
+      { type: "fix", text: "Der Hinweis, dass Dateien in der Mediathek öffentlich sind, steht jetzt unauffällig in der Beschreibung." },
+    ],
+    releaseNotes: "StorageUsage: kompakter Ring (SVG) mit Prozent, fester Platz von Anfang an (Platzhalter beim Laden), letzter Stand im Modul zwischengespeichert, Warnhinweis im Tooltip statt als eigene Zeile. In MediaLibraryModal rechts im Kopf neben „Schließen“, Öffentlich-Hinweis grau in der Beschreibung. SubmissionsAdminClient: Detailansicht mit Ein- und Ausblend-Animation (panelOpen, motion-reduce beachtet). Keine SQL-Migration, keine Änderung in den Projekten.",
+  },
+  {
     version: "0.15.0",
     date: "2026-11-09",
     changes: [

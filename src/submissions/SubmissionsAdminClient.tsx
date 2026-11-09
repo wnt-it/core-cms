@@ -4,7 +4,7 @@
 // ihrer Bezeichnung aus field_labels, Anhänge liegen im privaten Speicherbereich und werden nur über kurz
 // gültige Links und nach einem Warnhinweis heruntergeladen.
 
-import { useState, useTransition, useEffect, useCallback, type KeyboardEvent as ReactKeyboardEvent } from 'react'
+import { useState, useTransition, useEffect, useCallback, useRef, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import type { Submission, SubmissionFile } from '../supabase/types'
 import { createClient } from '../supabase/client'
 import { useRouter } from 'next/navigation'
@@ -37,6 +37,8 @@ interface SubmissionsAdminClientProps {
 }
 
 const ATTACHMENT_BUCKET = 'anfragen'
+// Fester Standardwert: ein neues [] bei jedem Render würde den Abgleich-Effekt endlos auslösen
+const NO_FILES: SubmissionFile[] = []
 
 // Anzeigename: Name, sonst E-Mail, sonst Hinweis
 const senderOf = (s: Submission) => s.name?.trim() || s.email?.trim() || 'Ohne Namen'
@@ -70,7 +72,7 @@ const formatDate = (iso: string) =>
     minute: '2-digit',
   })
 
-export default function SubmissionsAdminClient({ initialSubmissions, initialFiles = [] }: SubmissionsAdminClientProps) {
+export default function SubmissionsAdminClient({ initialSubmissions, initialFiles = NO_FILES }: SubmissionsAdminClientProps) {
   const [submissions, setSubmissions] = useState<Submission[]>(initialSubmissions)
   const [files, setFiles] = useState<SubmissionFile[]>(initialFiles)
   // Anhang, dessen Herunterladen gerade bestätigt werden soll
@@ -80,6 +82,23 @@ export default function SubmissionsAdminClient({ initialSubmissions, initialFile
   const [statusFilter, setStatusFilter] = useState('all')
   const [isPending, startTransition] = useTransition()
   const [activeSubmission, setActiveSubmission] = useState<Submission | null>(null)
+  // Detailansicht gleitet herein und wieder hinaus: erst nach dem Einhängen öffnen, beim Schließen erst nach der Animation aushängen
+  const [panelOpen, setPanelOpen] = useState(false)
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const closePanel = useCallback(() => {
+    setPanelOpen(false)
+    if (closeTimer.current) clearTimeout(closeTimer.current)
+    closeTimer.current = setTimeout(() => setActiveSubmission(null), 260)
+  }, [])
+  const showSubmission = (sub: Submission) => {
+    if (closeTimer.current) clearTimeout(closeTimer.current)
+    setActiveSubmission(sub)
+    // Zwei Frames warten, damit die Ansicht erst geschlossen gezeichnet wird und dann hereingleitet
+    requestAnimationFrame(() => requestAnimationFrame(() => setPanelOpen(true)))
+  }
+  useEffect(() => () => {
+    if (closeTimer.current) clearTimeout(closeTimer.current)
+  }, [])
   // Eintrag, dessen Löschen gerade bestätigt werden soll
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null)
 
@@ -99,11 +118,11 @@ export default function SubmissionsAdminClient({ initialSubmissions, initialFile
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return
-      if (!deleteTarget && !downloadTarget) setActiveSubmission(null)
+      if (!deleteTarget && !downloadTarget) closePanel()
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [deleteTarget, downloadTarget])
+  }, [deleteTarget, downloadTarget, closePanel])
 
   // Vorhandene Formulare mit Anzahl, für den Filter
   const formTypes = Object.entries(
@@ -153,11 +172,11 @@ export default function SubmissionsAdminClient({ initialSubmissions, initialFile
   // Eintrag öffnen: neue Anfragen gelten damit als gesehen (Status „In Bearbeitung“)
   const openSubmission = (sub: Submission) => {
     if (sub.status !== 'Neu') {
-      setActiveSubmission(sub)
+      showSubmission(sub)
       return
     }
     const seen = { ...sub, status: 'In Bearbeitung' as const }
-    setActiveSubmission(seen)
+    showSubmission(seen)
     setSubmissions((prev) => prev.map((s) => (s.id === sub.id ? seen : s)))
     startTransition(async () => {
       const { error } = await supabase
@@ -182,7 +201,7 @@ export default function SubmissionsAdminClient({ initialSubmissions, initialFile
     setDeleteTarget(null)
 
     setSubmissions((prev) => prev.filter((s) => s.id !== id))
-    if (activeSubmission?.id === id) setActiveSubmission(null)
+    if (activeSubmission?.id === id) closePanel()
     const paths = filesOf(id).map((f) => f.path)
     setFiles((prev) => prev.filter((f) => f.submission_id !== id))
 
@@ -420,8 +439,11 @@ export default function SubmissionsAdminClient({ initialSubmissions, initialFile
       {activeSubmission && (
         <div className="fixed inset-0 z-50">
           <div
-            onClick={() => setActiveSubmission(null)}
-            className="absolute inset-0 bg-[rgba(15,23,42,.28)]"
+            onClick={closePanel}
+            className={cx(
+              'absolute inset-0 bg-[rgba(15,23,42,.28)] transition-opacity duration-200 ease-out motion-reduce:transition-none',
+              panelOpen ? 'opacity-100' : 'opacity-0',
+            )}
             aria-hidden="true"
           />
 
@@ -429,7 +451,11 @@ export default function SubmissionsAdminClient({ initialSubmissions, initialFile
             role="dialog"
             aria-modal="true"
             aria-labelledby="submission-title"
-            className="absolute inset-y-0 right-0 flex w-full max-w-[520px] flex-col border-l border-[#E2E8F0] bg-white shadow-[-12px_0_40px_rgba(15,23,42,.08)]"
+            className={cx(
+              'absolute inset-y-0 right-0 flex w-full max-w-[520px] flex-col border-l border-[#E2E8F0] bg-white shadow-[-12px_0_40px_rgba(15,23,42,.08)]',
+              'transition-[transform,opacity] duration-[260ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none',
+              panelOpen ? 'translate-x-0 opacity-100' : 'translate-x-8 opacity-0',
+            )}
           >
             {/* Kopf */}
             <div className="flex items-center gap-3 border-b border-[#F1F5F9] px-4 py-4 sm:px-6">
@@ -448,7 +474,7 @@ export default function SubmissionsAdminClient({ initialSubmissions, initialFile
               </button>
               <button
                 type="button"
-                onClick={() => setActiveSubmission(null)}
+                onClick={closePanel}
                 className={iconButtonClass}
                 aria-label="Schließen (Esc)"
                 title="Schließen (Esc)"
@@ -588,7 +614,7 @@ export default function SubmissionsAdminClient({ initialSubmissions, initialFile
 
             {/* Fuß */}
             <div className="flex items-center justify-end gap-2 border-t border-[#F1F5F9] bg-[#FAFAFC] px-4 py-3.5 sm:px-6">
-              <Button variant="ghost" onClick={() => setActiveSubmission(null)}>
+              <Button variant="ghost" onClick={closePanel}>
                 Schließen
               </Button>
               {mailtoHref(activeSubmission) && (
