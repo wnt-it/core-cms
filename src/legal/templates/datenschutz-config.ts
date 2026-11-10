@@ -4,7 +4,7 @@
 import { AUFSICHTSBEHOERDEN } from "./aufsichtsbehoerden";
 
 export interface DatenschutzConfig {
-  /** Kurzname für den Titel, z. B. „Alb-Naturenergie“ → „Datenschutzerklärung Alb-Naturenergie Webseiten“ */
+  /** Kurzname für den Titel, z. B. „Muster Energie“ → „Datenschutzerklärung Muster Energie Webseiten“ */
   kurzname: string;
   /** Fassung (Datum) unter dem Titel, z. B. „04.11.2026“. Leer: heutiges Datum beim Erzeugen. */
   fassung: string;
@@ -18,7 +18,7 @@ export interface DatenschutzConfig {
   datenschutzEmail: string;
   /** Name und Anschrift des Datenschutzbeauftragten, falls bestellt (sonst leer: Platzhalter im Text) */
   datenschutzbeauftragter: string;
-  /** Alle Domains der Webseiten, z. B. „alb-naturenergie.com und alb-naturenergie.de“ */
+  /** Alle Domains der Webseiten, z. B. „muster-energie.com und muster-energie.de“ */
   domains: string;
   /** Bundesland des Sitzes: bestimmt die Aufsichtsbehörde im Text (siehe aufsichtsbehoerden.ts) */
   bundesland: string;

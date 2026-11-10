@@ -588,7 +588,7 @@ import { defineBulk, defineBulkRegistry } from "core-cms/src/bulk/types";
 export const BULK = defineBulkRegistry({
   products: defineBulk({
     table: "products",
-    scope: { abteilung: "richardprinz" },          // gilt bei jedem Lesen und Schreiben
+    scope: { abteilung: "shop" },                  // gilt bei jedem Lesen und Schreiben
     label: { one: "Produkt", many: "Produkte" },
     fields: {
       brand_id: { label: "Marke", type: "select", options: { table: "brands", label: "name" }, required: true },
@@ -646,6 +646,6 @@ Siehe Kommentare in den jeweiligen `src/*/index.ts`-Dateien für den Stand pro M
 | 2 | Auth (Login, Passwort vergessen/ändern, Account) | ✅ erledigt |
 | 3 | Media Library + Site-Settings | ✅ erledigt |
 | 4 | Submissions + E-Mail-Adapter (Resend/SMTP) | ✅ erledigt |
-| 5 | Pilotprojekt migrieren (richardprinz) | ✅ erledigt |
-| 6 | Restliche Projekte migrieren | ✅ alb-naturenergie (v0.8.0), veee (v0.6.0, Update offen) |
+| 5 | Pilotprojekt migrieren | ✅ erledigt |
+| 6 | Restliche Projekte migrieren | ✅ erledigt |
 | 7 | sync-core.ps1 abschalten | ✅ erledigt (Skript und `template` entfernt, 2026-10-19) |

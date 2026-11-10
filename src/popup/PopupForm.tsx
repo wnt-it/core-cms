@@ -142,8 +142,8 @@ export default function PopupForm({ initial, placement }: { initial: SitePopupSe
             </Select>
           </Field>
           {pages === 'custom' && (
-            <Field label="Seiten" hint="Eine Adresse pro Zeile, z. B. /richardprinz. Mit * am Ende gilt es auch für alles darunter, z. B. /pw/*.">
-              <Textarea value={paths} onChange={(e) => setPaths(e.target.value)} rows={4} placeholder={'/\n/richardprinz'} />
+            <Field label="Seiten" hint="Eine Adresse pro Zeile, z. B. /angebote. Mit * am Ende gilt es auch für alles darunter, z. B. /aktionen/*.">
+              <Textarea value={paths} onChange={(e) => setPaths(e.target.value)} rows={4} placeholder={'/\n/angebote'} />
             </Field>
           )}
           {pathsMissing && <Note tone="warn">Bitte mindestens eine Seite eintragen.</Note>}

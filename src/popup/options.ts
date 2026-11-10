@@ -22,7 +22,7 @@ export const POPUP_PAGES_LABELS: Record<PopupPages, string> = {
 export const POPUP_MAX_DELAY = 60;
 export const POPUP_MAX_PATHS = 20;
 
-/** Eine Adresse pro Zeile, z. B. „/richardprinz“ oder „/pw/*“ (alles darunter). Ungültiges wird verworfen. */
+/** Eine Adresse pro Zeile, z. B. „/angebote“ oder „/aktionen/*“ (alles darunter). Ungültiges wird verworfen. */
 export function parsePopupPaths(text: string | null | undefined): string[] {
   return String(text ?? "")
     .split(/\r?\n/)
@@ -31,7 +31,7 @@ export function parsePopupPaths(text: string | null | undefined): string[] {
     .slice(0, POPUP_MAX_PATHS);
 }
 
-/** Passt die aktuelle Adresse zu einem Eintrag? „/pw/*“ trifft /pw und alles darunter, sonst genau diese Adresse. */
+/** Passt die aktuelle Adresse zu einem Eintrag? „/aktionen/*“ trifft /aktionen und alles darunter, sonst genau diese Adresse. */
 function pathMatches(pathname: string, pattern: string): boolean {
   const clean = (p: string) => (p.length > 1 ? p.replace(/\/+$/, "") : p);
   if (pattern.endsWith("*")) {

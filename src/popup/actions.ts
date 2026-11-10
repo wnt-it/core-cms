@@ -42,7 +42,7 @@ export async function savePopupSettings(input: {
   const delay = Math.round(Number(input.delaySeconds ?? 0));
   if (!Number.isFinite(delay) || delay < 0 || delay > POPUP_MAX_DELAY) return { success: false, error: `Die Verzögerung kann 0 bis ${POPUP_MAX_DELAY} Sekunden betragen.` };
   const paths = parsePopupPaths(input.paths);
-  if (pages === "custom" && paths.length === 0) return { success: false, error: "Bitte mindestens eine Seite eintragen, z. B. /richardprinz." };
+  if (pages === "custom" && paths.length === 0) return { success: false, error: "Bitte mindestens eine Seite eintragen, z. B. /angebote." };
 
   const { error } = await supabase
     .from("site_settings")

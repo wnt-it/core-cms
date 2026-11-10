@@ -58,15 +58,9 @@ Der Text wird in Abschnitte geteilt (Überschrift bis zur nächsten Überschrift
 - Unser Unternehmen (WNT-IT) wird nicht namentlich genannt, nur als „Auftragsverarbeiter“.
 - Hosting bei allen gleich: Vercel (Funktionen und Edge Network, Region Frankfurt `fra1`), Supabase (Datenbank, Region je Projekt), IP-Adressen in Logfiles 24 Stunden, Drittländer USA und Singapur, Standardvertragsklauseln und DPF.
 
-## Übersicht: welches Projekt steht wo (bitte nach jedem Rollout pflegen)
+## Übersicht: welches Projekt steht wo
 
-Stand: 05.11.2026. Aktuelle Vorlagenversion: **2026-11-05.3**.
-
-| Projekt | core-cms | Datenschutz im Admin (Vorlage) | Stand der Vorlage im Projekt | Impressum-Formular | Bemerkung |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| alb-naturenergie | v0.13.0 (lokal angehoben, noch nicht committet) | ja | Text in der Datenbank beruht auf der Fassung vom 04.11.2026 mit eigenen Änderungen, noch nicht mit der Vorlage abgeglichen. Das Mietverwaltungsformular braucht vor dem ersten Holen einen eigenen Abschnitt | ja | Vercel-Region `fra1` per `vercel.json` und Projekteinstellung (nach Deployment prüfen) |
-| richardprinz | v0.10.0 | noch nicht (eigener Text im Projekt) | – | noch nicht | Supabase-Region Frankfurt. Vor dem Einsatz der Vorlage Vercel-Region `fra1` setzen und prüfen (die Vorlage sagt „Frankfurt“) |
-| veee | v0.8.0 | noch nicht (eigener Text im Projekt) | – | noch nicht | Supabase-Region Irland. Vor dem Einsatz der Vorlage Vercel-Region `fra1` setzen und prüfen (die Vorlage sagt „Frankfurt“) |
+Der Stand je Kundenprojekt (Core-Version, Vorlagenstand, Impressum-Formular, Region) steht in `OFFENE_PUNKTE.md` im Workspace, nicht in diesem öffentlichen Repo. Bitte dort nach jedem Rollout pflegen.
 
 ## Checkliste neues Kundenprojekt mit Admin
 
