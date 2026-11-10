@@ -7,12 +7,20 @@ import type { SiteSettings } from '../supabase/types'
 import { PageHeader } from '../ui/components'
 import { getSmtpSettings } from './settings-actions'
 import SettingsTabs from './SettingsTabs'
+import type { FormDefinition } from '../submissions/form'
 
 export interface EinstellungenOptions {
   /** Website-Name, der gespeichert wird, wenn das Feld leer bleibt */
   defaultSiteName?: string
   /** false: Tab „Daten-Export“ ausblenden (Standard: sichtbar) */
   dataExport?: boolean
+  /**
+   * Alle Formulare des Projekts, damit sie unter „Empfänger je Formular“ schon vor ihrer ersten Anfrage stehen.
+   * Am besten dieselben Definitionen, mit denen die Formulare senden (defineForm-Ergebnisse oder Formular-Arten
+   * aus src/forms.ts), dann können Liste und gesendeter Name nicht auseinanderlaufen.
+   * Ohne Angabe erscheint jedes Formular mit seiner ersten Anfrage.
+   */
+  forms?: Array<string | Pick<FormDefinition, 'type'>>
 }
 
 async function loadSiteSettings(): Promise<Partial<SiteSettings>> {
@@ -35,6 +43,7 @@ export default async function SettingsPage({ options = {} }: { options?: Einstel
         smtp={smtp}
         defaultSiteName={options.defaultSiteName}
         dataExport={options.dataExport !== false}
+        forms={(options.forms ?? []).map((f) => (typeof f === 'string' ? f : f.type))}
       />
     </>
   )

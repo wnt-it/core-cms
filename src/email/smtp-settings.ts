@@ -7,6 +7,7 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { decrypt } from "../supabase/encryption";
+import { normalizeFormRecipients, type FormRecipients } from "./form-recipients";
 
 export interface SmtpConfig {
   host: string;
@@ -87,6 +88,27 @@ export function evaluateSmtpRow(row: Row | null | undefined, decryptPass: (v: st
     ? null
     : { host: values.host, port, user: values.user, pass, fromName: values.fromName, fromEmail: values.fromEmail, recipient: values.recipient };
   return { values, config, missing };
+}
+
+export interface FormRecipientsLoadResult {
+  recipients: FormRecipients;
+  /** false: Spalte form_recipients fehlt (sql/0.17.0_empfaenger_je_formular.sql noch nicht ausgeführt) */
+  available: boolean;
+}
+
+const missingColumn = (error: { message?: string } | null) => /form_recipients/.test(error?.message ?? "");
+
+/**
+ * Empfänger je Formular (ab v0.17.0). Eigene Abfrage, damit eine fehlende Spalte den Versand nie stört:
+ * Dann gilt für alle Formulare der „Empfänger für Anfragen“.
+ */
+export async function loadFormRecipients(client: SupabaseClient): Promise<FormRecipientsLoadResult> {
+  const { data, error } = await client.from("email_settings").select("form_recipients").eq("id", "general").maybeSingle();
+  if (error) {
+    if (!missingColumn(error)) console.error("[email] Empfänger je Formular nicht lesbar", error);
+    return { recipients: {}, available: !missingColumn(error) };
+  }
+  return { recipients: normalizeFormRecipients((data as { form_recipients?: unknown } | null)?.form_recipients), available: true };
 }
 
 export async function loadSmtpSettings(client: SupabaseClient): Promise<SmtpLoadResult> {

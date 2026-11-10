@@ -11,7 +11,8 @@ import { createClient } from "../supabase/server";
 import { createServiceRoleClient } from "../supabase/service-role";
 import { getEmailProvider } from "../email";
 import type { EmailProvider } from "../email/provider";
-import { loadSmtpSettings } from "../email/smtp-settings";
+import { loadFormRecipients, loadSmtpSettings } from "../email/smtp-settings";
+import { recipientFor } from "../email/form-recipients";
 import type { ColumnField } from "./form";
 
 // Eingaben aus dem öffentlichen Formular dürfen nie als HTML in die Mail gelangen.
@@ -113,9 +114,11 @@ export async function notifySubmission(input: SaveInput, options: NotifyOptions 
       console.warn("[submissions] SUPABASE_SERVICE_ROLE_KEY fehlt, keine E-Mail gesendet.");
       return;
     }
-    const smtp = await loadSmtpSettings(service);
+    const [smtp, forms] = await Promise.all([loadSmtpSettings(service), loadFormRecipients(service)]);
     let provider = options.emailProvider;
-    const { fromName, fromEmail, recipient: recipientEmail } = smtp.values;
+    const { fromName, fromEmail, recipient: generalRecipient } = smtp.values;
+    // Empfänger je Formular (ab v0.17.0), sonst der „Empfänger für Anfragen“
+    const recipientEmail = generalRecipient ? recipientFor(input.type, forms.recipients, generalRecipient) : "";
 
     if (!provider) {
       if (!smtp.config) {

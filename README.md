@@ -68,7 +68,7 @@ entfällt Punkt 2 komplett — npm kopiert das Package dann als echten Unterordn
 
 ## Datenbank eines neuen Projekts (ab v0.14.0)
 
-Neues Supabase-Projekt: einmal `sql/0.14.0_basis.sql` im SQL-Editor ausführen (Einstellungen, SMTP, Mediathek mit Bucket `images`, Posteingang, jeweils mit Rechten und Zugriffsregeln), danach die übrigen Dateien in `sql/` der Versionsreihe nach (`0.9.0_site_popup`, `0.12.0_site_popup_options`, `0.12.0_legal_documents`, bei Bedarf `0.14.0_consent`, dann `0.15.0_posteingang` und `0.16.0_haertung`). Bestehende Projekte haben diese Tabellen schon. Danach in Supabase unter Authentication die Registrierung neuer Benutzer ausschalten und den Admin-Benutzer von Hand anlegen.
+Neues Supabase-Projekt: einmal `sql/0.14.0_basis.sql` im SQL-Editor ausführen (Einstellungen, SMTP, Mediathek mit Bucket `images`, Posteingang, jeweils mit Rechten und Zugriffsregeln), danach die übrigen Dateien in `sql/` der Versionsreihe nach (`0.9.0_site_popup`, `0.12.0_site_popup_options`, `0.12.0_legal_documents`, bei Bedarf `0.14.0_consent`, dann `0.15.0_posteingang`, `0.16.0_haertung` und `0.17.0_empfaenger_je_formular`). Bestehende Projekte haben diese Tabellen schon. Danach in Supabase unter Authentication die Registrierung neuer Benutzer ausschalten und den Admin-Benutzer von Hand anlegen.
 
 ## Benötigte Umgebungsvariablen im Kundenprojekt
 
@@ -378,6 +378,18 @@ import { FormGuard, sendForm } from "core-cms/src/submissions/client";
 2. Löschen: die eigene Posteingang-Seite `admin/(dashboard)/submissions/` und den Menüpunkt `/admin/submissions` in `content` bzw. `system`, dazu die Zählung neuer Anfragen fürs Menü (`newSubmissions`), das macht jetzt die AdminShell. Links auf `/admin/submissions` (Dashboard, AdminLiveBar) auf `/admin/posteingang` ändern, die Umleitung fängt vergessene ab.
 3. Eigenen Spam-Schutz in Kontakt-Routen bzw. Server Actions durch `defineForm` + `receiveSubmission` ersetzen, im Formular `<FormGuard />` statt eigener Felder `website`/`form_age`. Projektspezifische Kennzeichnung (z. B. Abteilung) über `receiveSubmission(form, data, { metadata: { … }, type: "Kontakt · Abteilung" })` (der Filter im Posteingang gruppiert nach dem Teil vor „ · “).
 
+## Empfänger je Formular (ab v0.17.0)
+
+Ein Mailserver pro Website bleibt. Nur die Adresse, **an die** eine Anfrage geht, kann je Formular abweichen, z. B. Bewerbungen an die Personalabteilung oder Kontaktanfragen je Abteilung an eigene Postfächer. Eingestellt wird das vom Kunden im Admin, nicht im Code: Einstellungen → E-Mail & SMTP → „Empfänger je Formular“.
+
+- **Formulare erscheinen von selbst.** Die Liste besteht aus den Formular-Arten im Posteingang (`submissions.type`) und den schon eingetragenen. Ein neues Formular steht dort spätestens nach seiner ersten Anfrage, ohne Eintrag im Projekt. Gilt für `receiveSubmission` und `submitContactForm` gleichermaßen.
+- **Leer heißt Standard.** Ohne Eintrag geht die Anfrage an den „Empfänger für Anfragen“. Reihenfolge beim Versand: genaue Formular-Art (`Kontakt · Abteilung Nord`), dann ihre Gruppe vor „ · “ (`Kontakt`), dann der allgemeine Empfänger. Ungültige gespeicherte Werte werden ignoriert, eine Anfrage geht nie wegen eines falschen Eintrags verloren.
+- **Mehrere Adressen** mit Komma trennen (höchstens 10). Geprüft wird beim Speichern, der Fehler nennt das Formular.
+- **Test je Formular:** Der Knopf „Test“ schickt die Test-E-Mail an den gespeicherten Empfänger dieses Formulars (`sendTestEmail(formType)`).
+- **Datenbank:** einmal `sql/0.17.0_empfaenger_je_formular.sql` (Spalte `email_settings.form_recipients`, nie öffentlich, nie im Export). Ohne die Datei läuft alles wie bisher, die Einstellungsseite zeigt einen Hinweis.
+- **Formulare schon vor der ersten Anfrage anzeigen (empfohlen):** Alle Formulare des Projekts stehen in `src/forms.ts`, und der Catch-all gibt sie weiter: `options.einstellungen.forms = [bewerbung, kontakt]` (defineForm-Ergebnisse) oder Formular-Arten als Text. Wichtig: dieselbe Quelle, aus der das Formular beim Absenden seinen Namen bekommt, nie ein zweites Mal von Hand getippt. Sonst stehen in den Einstellungen Namen, die nie gesendet werden. Ohne Angabe erscheint jedes Formular mit seiner ersten Anfrage.
+- Logik ohne Datenbank in `src/email/form-recipients.ts` (`recipientFor`, `validateFormRecipients`, `listFormTypes`), getestet in `tests/email/form-recipients.test.ts`.
+
 ## Absicherung und Aufräumen (ab v0.16.0)
 
 **Beim Update eines Projekts:**
@@ -385,7 +397,7 @@ import { FormGuard, sendForm } from "core-cms/src/submissions/client";
 1. `sql/0.16.0_haertung.sql` im Supabase-Projekt ausführen (vor oder nach dem Update, beides geht). Die Datei gibt dem Server-Zugang Leserechte auf die Rechtstexte (Daten-Export), verhindert Ordner-Kreise in der Mediathek, pflegt `updated_at` automatisch und legt `core_storage_usage()` für die Speicheranzeige an. Außerdem kommen Indizes für Posteingang und Einwilligungen dazu, und die Dateiliste des Buckets `images` ist nur noch für Admins sichtbar (die Dateien selbst bleiben öffentlich abrufbar).
 2. Empfohlen: `NEXT_PUBLIC_SITE_URL` (z. B. `https://www.example.org`) in Vercel setzen. Links in Passwort-E-Mails nutzen dann immer diese Adresse. Ohne die Variable gilt: der Host der Anfrage, wenn er zum Deployment gehört, sonst die Produktions-Domain von Vercel.
 3. Optional, aber empfohlen: Fehler- und Ladeseite für den Admin. Die Dateien im Projekt bestehen nur aus einem Re-Export:
-   - `app/admin/(dashboard)/error.tsx`: `export { default } from "core-cms/src/admin/AdminError";`
+   - `app/admin/(dashboard)/error.tsx`: `"use client"; export { default } from "core-cms/src/admin/AdminError";` (ohne `"use client"` bricht der Build ab, Fehlerseiten müssen Client-Komponenten sein)
    - `app/admin/(dashboard)/loading.tsx`: `export { default } from "core-cms/src/admin/AdminLoading";`
 4. Prüfen, dass in Supabase unter Authentication die Registrierung neuer Benutzer und anonyme Anmeldungen aus sind. Jeder angemeldete Benutzer ist Admin.
 

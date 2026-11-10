@@ -52,7 +52,7 @@ export default function ForgotPasswordForm() {
             name="email"
             required
             autoComplete="email"
-            placeholder="name@firma.de"
+            placeholder="name@example.com"
             aria-invalid={errorMsg ? true : undefined}
           />
         </label>

@@ -34,7 +34,7 @@ export default async function LoginPage(props: LoginPageProps) {
             name="email"
             required
             autoComplete="username"
-            placeholder="name@firma.de"
+            placeholder="name@example.com"
             aria-invalid={error ? true : undefined}
           />
         </label>

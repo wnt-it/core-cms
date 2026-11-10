@@ -74,7 +74,7 @@ function EmailSection({ currentEmail }: { currentEmail: string }) {
                 autoComplete="email"
                 value={newEmail}
                 onChange={(e) => setNewEmail(e.target.value)}
-                placeholder="neue@adresse.de"
+                placeholder="neue.adresse@example.com"
               />
             </Field>
             <Field label="Aktuelles Passwort zur Bestätigung">

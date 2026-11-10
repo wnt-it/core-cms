@@ -10,10 +10,15 @@ import { toast } from 'sonner'
 import { cx, hintClass, iconButtonClass, mutedClass } from '../ui/styles'
 import { Button, Card, CardFooter, Field, FieldGrid, Input, Note, SaveBar, Section } from '../ui/components'
 import type { SmtpFormValues } from '../email/smtp-settings'
+import { listFormTypes, type FormRecipientsInfo } from '../email/form-recipients'
 
 interface SmtpSettingsFormProps {
-  initialSettings?: Partial<SmtpFormValues> & { missing?: string[] }
+  initialSettings?: Partial<SmtpFormValues> & { missing?: string[]; forms?: FormRecipientsInfo }
+  /** Formulare, die das Projekt schon vor der ersten Anfrage anzeigen will (Optionen der Einstellungsseite) */
+  declaredForms?: string[]
 }
+
+const NO_FORMS: FormRecipientsInfo = { types: [], recipients: {}, available: true }
 
 const toForm = (s?: Partial<SmtpFormValues>) => ({
   host: s?.host || '',
@@ -25,8 +30,12 @@ const toForm = (s?: Partial<SmtpFormValues>) => ({
   recipient: s?.recipient || '',
 })
 
-export default function SmtpSettingsForm({ initialSettings }: SmtpSettingsFormProps) {
+export default function SmtpSettingsForm({ initialSettings, declaredForms = [] }: SmtpSettingsFormProps) {
   const [formData, setFormData] = useState(() => toForm(initialSettings))
+  const [forms, setForms] = useState<FormRecipientsInfo>(initialSettings?.forms ?? NO_FORMS)
+  const [formRecipients, setFormRecipients] = useState<Record<string, string>>(() => ({ ...(initialSettings?.forms?.recipients ?? {}) }))
+  const [testingForm, setTestingForm] = useState<string | null>(null)
+  const formTypes = listFormTypes(declaredForms, forms.types)
   const [passStatus, setPassStatus] = useState<SmtpFormValues['passStatus']>(initialSettings?.passStatus ?? 'none')
   const [missing, setMissing] = useState<string[]>(initialSettings?.missing ?? [])
   const [showPass, setShowPass] = useState(false)
@@ -41,15 +50,19 @@ export default function SmtpSettingsForm({ initialSettings }: SmtpSettingsFormPr
         setFormData(toForm(settings))
         setPassStatus(settings.passStatus)
         setMissing(settings.missing)
+        setForms(settings.forms)
+        setFormRecipients({ ...settings.forms.recipients })
         setIsLoading(false)
       })
     }
   }, [initialSettings])
 
-  const handleTest = async () => {
-    setIsTesting(true)
+  // formType: Test an den Empfänger dieses Formulars (gespeicherter Stand)
+  const handleTest = async (formType?: string) => {
+    if (formType) setTestingForm(formType)
+    else setIsTesting(true)
     try {
-      const result = await sendTestEmail()
+      const result = await sendTestEmail(formType)
       if (result.success) {
         toast.success(`Test-E-Mail gesendet an ${result.to}.`)
       } else {
@@ -59,6 +72,7 @@ export default function SmtpSettingsForm({ initialSettings }: SmtpSettingsFormPr
       toast.error('Verbindungsfehler: ' + ((err as Error).message || ''))
     } finally {
       setIsTesting(false)
+      setTestingForm(null)
     }
   }
 
@@ -74,6 +88,7 @@ export default function SmtpSettingsForm({ initialSettings }: SmtpSettingsFormPr
     form.append('smtp_from_name', formData.fromName)
     form.append('smtp_from_email', formData.fromEmail)
     form.append('smtp_recipient', formData.recipient)
+    if (forms.available) form.append('form_recipients', JSON.stringify(formRecipients))
 
     try {
       const result = await saveSmtpSettings(form)
@@ -84,6 +99,8 @@ export default function SmtpSettingsForm({ initialSettings }: SmtpSettingsFormPr
         setFormData(toForm(fresh))
         setPassStatus(fresh.passStatus)
         setMissing(fresh.missing)
+        setForms(fresh.forms)
+        setFormRecipients({ ...fresh.forms.recipients })
       } else {
         toast.error(result.error || 'Fehler beim Speichern.')
       }
@@ -129,7 +146,7 @@ export default function SmtpSettingsForm({ initialSettings }: SmtpSettingsFormPr
           <Field label="Absender E-Mail">
             <Input
               type="email"
-              placeholder="z.B. noreply@domain.de"
+              placeholder="z.B. noreply@example.com"
               value={formData.fromEmail}
               onChange={(e) => setFormData({ ...formData, fromEmail: e.target.value })}
             />
@@ -137,12 +154,55 @@ export default function SmtpSettingsForm({ initialSettings }: SmtpSettingsFormPr
           <Field label="Empfänger für Anfragen" className="sm:col-span-2">
             <Input
               type="email"
-              placeholder="z.B. info@domain.de"
+              placeholder="z.B. info@example.com"
               value={formData.recipient}
               onChange={(e) => setFormData({ ...formData, recipient: e.target.value })}
             />
           </Field>
         </FieldGrid>
+      </Section>
+
+      {/* EMPFÄNGER JE FORMULAR (ab v0.17.0) - jedes Formular erscheint automatisch, leer = Empfänger für Anfragen */}
+      <Section
+        title="Empfänger je Formular"
+        description="Jedes Formular der Website erscheint hier von selbst, spätestens mit seiner ersten Anfrage. Leer gelassen gehen Anfragen an den Empfänger für Anfragen. Mehrere Adressen mit Komma trennen."
+      >
+        {!forms.available ? (
+          <Note tone="warn">
+            Dafür fehlt noch die Datenbank-Aktualisierung für core-cms v0.17.0. Bis dahin gehen alle Anfragen an den Empfänger für Anfragen.
+          </Note>
+        ) : formTypes.length === 0 ? (
+          <p className={hintClass}>Noch keine Formulare bekannt. Sobald eine Anfrage eingeht, erscheint ihr Formular hier.</p>
+        ) : (
+          <div className="flex flex-col gap-4">
+            {formTypes.map((type) => {
+              const saved = (forms.recipients[type] ?? '') === (formRecipients[type] ?? '')
+              return (
+                <div key={type} className="grid items-end gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+                  <Field label={type}>
+                    <Input
+                      type="text"
+                      inputMode="email"
+                      autoComplete="off"
+                      placeholder="z.B. kontakt@example.com"
+                      value={formRecipients[type] ?? ''}
+                      onChange={(e) => setFormRecipients({ ...formRecipients, [type]: e.target.value })}
+                    />
+                  </Field>
+                  <Button
+                    size="sm"
+                    onClick={() => handleTest(type)}
+                    disabled={!saved || testingForm !== null || isSaving}
+                    title={saved ? `Test-E-Mail an den Empfänger von „${type}“` : 'Erst speichern, dann testen'}
+                  >
+                    {testingForm === type ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
+                    <span>Test</span>
+                  </Button>
+                </div>
+              )
+            })}
+          </div>
+        )}
       </Section>
 
       {/* SERVER-DATEN + ZUGANGSDATEN - technische Details, standardmäßig eingeklappt */}
@@ -212,7 +272,7 @@ export default function SmtpSettingsForm({ initialSettings }: SmtpSettingsFormPr
                   <Input
                     type="text"
                     required
-                    placeholder="z.B. resend, apikey oder info@domain.de"
+                    placeholder="z.B. resend, apikey oder info@example.com"
                     value={formData.user}
                     onChange={(e) => setFormData({ ...formData, user: e.target.value })}
                   />
@@ -256,7 +316,7 @@ export default function SmtpSettingsForm({ initialSettings }: SmtpSettingsFormPr
 
           <CardFooter>
             <span className={hintClass}>Die Test-E-Mail geht an den Empfänger für Anfragen.</span>
-            <Button size="sm" onClick={handleTest} disabled={isTesting || isSaving}>
+            <Button size="sm" onClick={() => handleTest()} disabled={isTesting || isSaving}>
               {isTesting ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
               <span>Test-E-Mail senden</span>
             </Button>

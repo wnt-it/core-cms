@@ -35,7 +35,8 @@ export class ResendEmailProvider implements EmailProvider {
 
     const { error } = await this.client.emails.send({
       from: message.fromName ? `${message.fromName} <${message.fromEmail}>` : message.fromEmail,
-      to: message.to,
+      // Mehrere Empfänger (Empfänger je Formular, „a@x.de, b@x.de“) erwartet Resend als Liste
+      to: message.to.split(",").map((a) => a.trim()).filter(Boolean),
       subject: message.subject,
       html: message.html,
       ...(message.replyTo ? { replyTo: formatReplyTo(message.replyTo) } : {}),

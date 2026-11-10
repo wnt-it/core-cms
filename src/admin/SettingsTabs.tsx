@@ -9,18 +9,21 @@ import { Segmented } from '../ui/components'
 import { ExportPanel } from '../export'
 import GeneralSettingsForm from './GeneralSettingsForm'
 import SmtpSettingsForm from './SmtpSettingsForm'
-import type { SmtpFormValues } from '../email/smtp-settings'
+import type { SmtpSettingsData } from '../email/form-recipients'
 
 export default function SettingsTabs({
   settings,
   smtp,
   defaultSiteName,
   dataExport,
+  forms,
 }: {
   settings: Partial<SiteSettings>
-  smtp: SmtpFormValues & { missing?: string[] }
+  smtp: SmtpSettingsData
   defaultSiteName?: string
   dataExport: boolean
+  /** Formulare, die schon vor der ersten Anfrage unter „Empfänger je Formular“ stehen sollen */
+  forms?: string[]
 }) {
   const router = useRouter()
   const [active, setActive] = useState('general')
@@ -37,7 +40,7 @@ export default function SettingsTabs({
         <Segmented label="Bereich der Einstellungen" value={active} onChange={setActive} options={options} />
       </div>
       {active === 'general' && <GeneralSettingsForm settings={settings} refreshSettings={() => router.refresh()} defaultSiteName={defaultSiteName} />}
-      {active === 'smtp' && <SmtpSettingsForm initialSettings={smtp} />}
+      {active === 'smtp' && <SmtpSettingsForm initialSettings={smtp} declaredForms={forms} />}
       {active === 'export' && dataExport && <ExportPanel />}
     </>
   )

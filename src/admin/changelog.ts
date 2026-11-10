@@ -17,6 +17,15 @@ export interface ChangelogEntry {
 /** Neueste Version zuerst. */
 export const CORE_CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.17.0",
+    date: "2026-11-10",
+    changes: [
+      { type: "feature", text: "Empfänger je Formular: Unter Einstellungen → E-Mail & SMTP kannst du für jedes Formular eine eigene Empfängeradresse eintragen, z. B. Bewerbungen an die Personalabteilung. Neue Formulare erscheinen dort von selbst, spätestens mit ihrer ersten Anfrage. Leer gelassen geht alles wie bisher an den Empfänger für Anfragen. Mehrere Adressen trennst du mit Komma, mit „Test“ prüfst du jede Zeile einzeln." },
+      { type: "fix", text: "Beispieladressen in leeren Eingabefeldern (Login, Konto, Einstellungen) sind jetzt neutral (…@example.com) und zeigen keine echten Adressen mehr." },
+    ],
+    releaseNotes: "**Für Entwickler:** Einmal je Projekt `sql/0.17.0_empfaenger_je_formular.sql` ausführen (Spalte `email_settings.form_recipients`, jsonb). Vor oder nach dem Update, ohne die Spalte gehen alle Anfragen wie bisher an `smtp_recipient`. Kein Code im Projekt nötig. Versand: genaue Formular-Art, dann Gruppe vor „ · “, dann `smtp_recipient` (`recipientFor` in `src/email/form-recipients.ts`). `getSmtpSettings()` liefert zusätzlich `forms` (`types`, `recipients`, `available`), `sendTestEmail(formType?)` testet den Empfänger eines Formulars. `CoreAdminOptions.einstellungen.forms` (defineForm-Ergebnisse oder Formular-Arten, am besten aus `src/forms.ts` des Projekts) zeigt Formulare schon vor ihrer ersten Anfrage. Resend-Provider schickt mehrere Empfänger als Liste.",
+  },
+  {
     version: "0.16.0",
     date: "2026-11-10",
     changes: [

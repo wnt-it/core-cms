@@ -5,7 +5,8 @@
 
 import { createClient } from "../supabase/server";
 import { encrypt } from "../supabase/encryption";
-import { EMPTY_SMTP_VALUES, loadSmtpSettings, type SmtpFormValues } from "../email/smtp-settings";
+import { EMPTY_SMTP_VALUES, loadFormRecipients, loadSmtpSettings } from "../email/smtp-settings";
+import { listFormTypes, recipientFor, validateFormRecipients, type FormRecipients, type SmtpSettingsData } from "../email/form-recipients";
 import { isAllowedImageSettingColumn, sanitizeGeneralSettings, type GeneralSettingsField } from "./general-settings";
 import { revalidatePath } from "next/cache";
 import { SmtpEmailProvider } from "../email/smtp-provider";
@@ -29,6 +30,21 @@ export async function saveSmtpSettings(formData: FormData) {
   const fromName = formData.get("smtp_from_name")?.toString() || "";
   const fromEmail = formData.get("smtp_from_email")?.toString() || "";
   const recipient = formData.get("smtp_recipient")?.toString() || "";
+
+  // Empfänger je Formular (ab v0.17.0): vor dem Speichern prüfen, damit nichts halb gespeichert wird
+  let formRecipients: FormRecipients | null = null;
+  const rawForms = formData.get("form_recipients")?.toString();
+  if (rawForms) {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(rawForms);
+    } catch {
+      return { success: false, error: "Empfänger je Formular: ungültige Eingabe." };
+    }
+    const checked = validateFormRecipients(parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>) : {});
+    if (!checked.ok) return { success: false, error: `Empfänger je Formular: ${checked.error}` };
+    formRecipients = checked.value;
+  }
 
   const updatePayload: Record<string, string | null> = {
     id: "general",
@@ -59,6 +75,21 @@ export async function saveSmtpSettings(formData: FormData) {
   if (error) {
     console.error("Failed to save SMTP settings to email_settings:", error);
     return { success: false, error: dbErrorMessage(error, "Speichern der SMTP-Einstellungen") };
+  }
+
+  // Eigenes Update: Fehlt die Spalte (sql/0.17.0 nicht ausgeführt), bleiben die SMTP-Daten trotzdem gespeichert
+  if (formRecipients) {
+    const { error: formsError } = await supabase.from("email_settings").update({ form_recipients: formRecipients }).eq("id", "general");
+    if (formsError) {
+      console.error("Failed to save form recipients:", formsError);
+      revalidatePath("/admin/einstellungen");
+      return {
+        success: false,
+        error: /form_recipients/.test(formsError.message ?? "")
+          ? "SMTP-Daten gespeichert. Empfänger je Formular brauchen noch die Datenbank-Aktualisierung für core-cms v0.17.0 (sql/0.17.0_empfaenger_je_formular.sql)."
+          : dbErrorMessage(formsError, "Speichern der Empfänger je Formular"),
+      };
+    }
   }
 
   revalidatePath("/admin/einstellungen");
@@ -116,36 +147,49 @@ export async function updateHeroImageSetting(fieldId: string, url: string | null
 
 /** Gespeicherte SMTP-Angaben für das Formular im Admin. Das Passwort verlässt den Server nie,
  *  nur ob eines gespeichert und lesbar ist (passStatus). Leer gelassen bleibt es beim Speichern erhalten. */
-export async function getSmtpSettings(): Promise<SmtpFormValues & { missing: string[] }> {
+export async function getSmtpSettings(): Promise<SmtpSettingsData> {
   const supabase = await createClient();
-  if (!(await isLoggedIn(supabase))) return { ...EMPTY_SMTP_VALUES, missing: [] };
-  const { values, missing } = await loadSmtpSettings(supabase);
-  return { ...values, missing };
+  if (!(await isLoggedIn(supabase))) return { ...EMPTY_SMTP_VALUES, missing: [], forms: { types: [], recipients: {}, available: true } };
+  const [{ values, missing }, forms, seen] = await Promise.all([loadSmtpSettings(supabase), loadFormRecipients(supabase), loadSubmissionTypes(supabase)]);
+  return { ...values, missing, forms: { types: listFormTypes(seen, Object.keys(forms.recipients)), recipients: forms.recipients, available: forms.available } };
+}
+
+/** Formular-Arten, die schon im Posteingang vorkommen (neueste 2000 Anfragen reichen, um alle Formulare zu finden). */
+async function loadSubmissionTypes(supabase: Awaited<ReturnType<typeof createClient>>): Promise<string[]> {
+  const { data, error } = await supabase.from("submissions").select("type").order("created_at", { ascending: false }).limit(2000);
+  if (error) {
+    console.error("Failed to load submission types:", error);
+    return [];
+  }
+  return (data ?? []).map((r: { type: string | null }) => r.type ?? "");
 }
 
 /**
- * Sendet eine Test-E-Mail mit den GESPEICHERTEN SMTP-Einstellungen an den Empfänger für Anfragen.
+ * Sendet eine Test-E-Mail mit den GESPEICHERTEN SMTP-Einstellungen an den Empfänger für Anfragen,
+ * mit `formType` an den Empfänger dieses Formulars (Empfänger je Formular, ab v0.17.0).
  * Gleiche Prüfung wie der echte Versand (loadSmtpSettings): Klappt der Test, gehen auch Anfragen raus.
  */
-export async function sendTestEmail(): Promise<{ success: true; to: string } | { success: false; error: string }> {
+export async function sendTestEmail(formType?: string): Promise<{ success: true; to: string } | { success: false; error: string }> {
   const supabase = await createClient();
   if (!(await isLoggedIn(supabase))) return { success: false, error: "Nicht angemeldet." };
 
-  const { config, missing } = await loadSmtpSettings(supabase);
+  const [{ config, missing }, forms] = await Promise.all([loadSmtpSettings(supabase), loadFormRecipients(supabase)]);
   if (!config) {
     return { success: false, error: `Noch nicht vollständig, es fehlt: ${missing.join(", ")}. Ohne diese Angaben werden Anfragen nur im Posteingang gespeichert. Bitte ergänzen und speichern.` };
   }
+  const to = typeof formType === "string" && formType ? recipientFor(formType, forms.recipients, config.recipient) : config.recipient;
+  const what = typeof formType === "string" && formType ? `Neue Anfragen aus „${formType}“` : "Neue Anfragen";
 
   try {
     const provider = new SmtpEmailProvider({ host: config.host, port: config.port, user: config.user, pass: config.pass });
     await provider.send({
-      to: config.recipient,
+      to,
       subject: "Test-E-Mail aus dem Admin",
-      html: "<p>Diese Test-E-Mail bestätigt, dass die E-Mail-Einstellungen funktionieren. Neue Anfragen kommen genauso an diese Adresse.</p>",
+      html: `<p>Diese Test-E-Mail bestätigt, dass die E-Mail-Einstellungen funktionieren. ${what.replace(/[<>&]/g, "")} kommen genauso an diese Adresse.</p>`,
       fromName: config.fromName || undefined,
       fromEmail: config.fromEmail,
     });
-    return { success: true, to: config.recipient };
+    return { success: true, to };
   } catch (err) {
     console.error("SMTP test failed:", err);
     return { success: false, error: smtpErrorMessage(err as Error) };

@@ -159,7 +159,7 @@ export default function GeneralSettingsForm({ settings, refreshSettings, default
                 type="email"
                 value={formData.contact_email || ''}
                 onChange={(e) => setFormData({ ...formData, contact_email: e.target.value })}
-                placeholder="info@domain.de"
+                placeholder="info@example.com"
               />
             </Field>
             <Field label="Telefonnummer">
