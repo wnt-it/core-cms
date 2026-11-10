@@ -17,8 +17,8 @@ export default function AdminError({ error, reset }: { error: Error & { digest?:
       <div className="flex flex-col gap-4">
         <h1 className="text-[18px] font-semibold text-[#0F172A]">Diese Seite konnte nicht geladen werden</h1>
         <Note tone="error">
-          Bitte versuchen Sie es erneut. Bleibt der Fehler, melden Sie sich bitte bei WNT-IT
-          {error.digest ? <> und nennen Sie die Kennung <code className="font-mono">{error.digest}</code></> : null}.
+          Bitte versuch es erneut. Bleibt der Fehler, melde dich bitte bei WNT-IT
+          {error.digest ? <> und nenne die Kennung <code className="font-mono">{error.digest}</code></> : null}.
         </Note>
         <div>
           <Button variant="primary" onClick={reset}>

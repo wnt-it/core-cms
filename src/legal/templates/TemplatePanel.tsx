@@ -145,7 +145,7 @@ export default function TemplatePanel({
             {outdated && (
               <Note tone="warn">
                 <strong>Neue Vorlage vom {vorlageVersion}</strong>
-                {appliedAt ? ` (Ihr Text beruht auf der Vorlage vom ${version})` : ''}. Was sich geändert hat:
+                {appliedAt ? ` (dein Text beruht auf der Vorlage vom ${version})` : ''}. Was sich geändert hat:
                 <ul className="mt-1 list-disc pl-5">
                   {news.map((c) => (
                     <li key={c.version}>
@@ -244,7 +244,7 @@ export default function TemplatePanel({
                   <h3 className="text-[14px] font-semibold text-[#0F172A]">Das ändert sich</h3>
                   <p className="mt-1 text-[12.5px] text-[#64748B]">
                     {vorschau.aenderungen.length === 0
-                      ? 'Die Abschnitte der Vorlage entsprechen bereits Ihrem Text.'
+                      ? 'Die Abschnitte der Vorlage entsprechen bereits deinem Text.'
                       : `${vorschau.aenderungen.length} ${vorschau.aenderungen.length === 1 ? 'Abschnitt ändert' : 'Abschnitte ändern'} sich. Neuer Text ist grün, entfernter rot und durchgestrichen.`}
                   </p>
                 </div>

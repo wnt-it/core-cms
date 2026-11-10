@@ -17,7 +17,7 @@ import { ConfirmDialog } from '../ui/ConfirmDialog'
 import { SUBMISSIONS_PAGE } from './paging'
 import SubmissionsList from './SubmissionsList'
 import SubmissionDetail from './SubmissionDetail'
-import { ATTACHMENT_BUCKET, STATUS_OPTIONS, appendUnique, countFormTypes, filterSubmissions, type StatusValue } from './submission-view'
+import { ATTACHMENT_BUCKET, STATUS_OPTIONS, appendUnique, countFormTypes, filterSubmissions, notifySubmissionsChanged, type StatusValue } from './submission-view'
 
 interface SubmissionsAdminClientProps {
   initialSubmissions: Submission[]
@@ -132,9 +132,10 @@ export default function SubmissionsAdminClient({ initialSubmissions, initialFile
       if (error) {
         toast.error('Fehler beim Aktualisieren: ' + error.message)
         router.refresh()
-      } else if (notify) {
-        toast.success(`Status auf „${status}“ gesetzt`)
+        return
       }
+      notifySubmissionsChanged()
+      if (notify) toast.success(`Status auf „${status}“ gesetzt`)
     })
   }
   const updateStatus = (id: string, status: StatusValue) => saveStatus(id, status, true)
@@ -175,6 +176,7 @@ export default function SubmissionsAdminClient({ initialSubmissions, initialFile
         toast.error('Fehler beim Löschen: ' + error.message)
         router.refresh()
       } else {
+        notifySubmissionsChanged()
         toast.success('Eintrag gelöscht')
       }
     })
@@ -281,8 +283,8 @@ export default function SubmissionsAdminClient({ initialSubmissions, initialFile
       >
         <Note tone="warn">
           Dieser Anhang wurde von einer fremden Person über ein Formular der Website geschickt und ist nicht auf Viren
-          geprüft. Öffnen Sie ihn nur, wenn Sie ihn erwarten, und lassen Sie ihn vorher vom Virenschutz Ihres Rechners
-          prüfen. Für alles, was beim Öffnen auf Ihrem Rechner passiert, sind Sie selbst verantwortlich.
+          geprüft. Öffne ihn nur, wenn du ihn erwartest, und lass ihn vorher vom Virenschutz deines Rechners
+          prüfen. Für alles, was beim Öffnen auf deinem Rechner passiert, bist du selbst verantwortlich.
         </Note>
       </ConfirmDialog>
     </>

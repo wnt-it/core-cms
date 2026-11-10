@@ -9,7 +9,7 @@ export default function UpdatePasswordPage() {
   return (
     <AuthCardShell
       title="Neues Passwort festlegen"
-      subtitle="Bitte vergeben Sie ein neues Passwort für Ihren Zugang."
+      subtitle="Bitte vergib ein neues Passwort für deinen Zugang."
       footer={
         <Link href="/admin/login" className="text-[#64748B] transition-colors hover:text-[#0F172A]">
           &larr; Zurück zum Login

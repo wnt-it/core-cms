@@ -20,7 +20,7 @@ export async function login(formData: FormData) {
   const password = formData.get('password') as string
 
   if (!email || !password) {
-    redirect('/admin/login?error=Bitte geben Sie E-Mail und Passwort ein')
+    redirect('/admin/login?error=Bitte gib E-Mail und Passwort ein')
   }
 
   const { error } = await supabase.auth.signInWithPassword({
@@ -43,7 +43,7 @@ export async function requestPasswordReset(formData: FormData) {
   const email = formData.get('email') as string
 
   if (!email) {
-    return { error: 'Bitte geben Sie eine E-Mail-Adresse ein.' }
+    return { error: 'Bitte gib eine E-Mail-Adresse ein.' }
   }
 
   const origin = await requestOrigin()

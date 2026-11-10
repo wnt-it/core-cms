@@ -244,6 +244,17 @@ Das Projekt liefert nur Logo und Menüpunkte.
 - **Bildfelder:** `ImageUpload` (ein Bild) und `GalleryField` (mehrere Bilder, erstes = Hauptbild,
   Sortieren per Ziehen oder Pfeilen, optional `name` für ein verstecktes Feld mit JSON-Liste).
 
+### Anrede in Texten (verbindlich)
+
+- **Admin, Changelog und E-Mails an Kunden: immer „du“.** Kunden sind die Menschen, die im Admin arbeiten.
+  Also „Bitte prüfe deinen Posteingang“, „Möchtest du …“, „deine Website“, nie „Sie/Ihre“ und auch nicht „ihr/euch“.
+  Das gilt für alle Hinweise, Fehlermeldungen, Rückfragen, Platzhalter und den Changelog (`src/admin/changelog.ts`).
+- **Texte für Besucher der Website bleiben beim „Sie“:** Fehlermeldungen von Formularen (`submissions/form.ts`,
+  `guard.ts`, `receive.ts`), Cookie-Banner (`src/consent/`), Rechtstexte und ihre Vorlagen. Sie sprechen im Namen
+  des Kunden zu dessen Besuchern.
+- Vor einem Release prüfen, z. B. mit `grep -rnE "\b(Sie|Ihnen|Ihre[mnrs]?|Ihr)\b" src`: Treffer dürfen nur in
+  Besucher-Texten oder Code-Kommentaren stehen.
+
 ## Einstellungen (ab v0.14.0)
 
 `/admin/einstellungen` ist eine Core-Seite (`coreAdminPages`, Gruppe „System“) und erscheint in jedem Projekt automatisch im Menü, ohne Datei und Menüeintrag im Projekt. Tabs: **Website & Branding** (`site_settings`: Name, Untertitel, Beschreibung, Logo, Favicon, Kontakt, Anschrift), **E-Mail & SMTP** (`email_settings`) und **Daten-Export** (`ExportPanel`). Die Seite lädt und speichert selbst, ein projekteigener `SiteSettingsContext` wird dafür nicht gebraucht. Tabellen wie in `sql/0.14.0_basis.sql`, keine neue SQL-Datei.
@@ -386,7 +397,8 @@ import { FormGuard, sendForm } from "core-cms/src/submissions/client";
 - **`saveGeneralSettings`** speichert nur die Felder aus `GENERAL_SETTINGS_FIELDS` (`src/admin/general-settings.ts`). **`updateHeroImageSetting`** lehnt Kern-Spalten ab (`id`, Name, Logo, `popup_*` …).
 - **`submitContactForm`** hat Grund-Spam-Schutz (siehe Posteingang). `receiveSubmission` zählt die Begrenzung je Adresse erst nach der Feldprüfung.
 - **Mediathek:** `useMediaLibrary({ enabled })` lädt nur, solange das Fenster offen ist. `MoveModal` nimmt `excludeFolderIds`, `bucket` ist überflüssig. Typen `MediaItem`, `MediaFileItem`, `MediaFolderItem` in `src/media/folder-tree.ts`. `formatBytes` liegt in `src/ui/format.ts` (deutsch, „1,5 MB“), der Export aus `core-cms/src/media` bleibt.
-- **Posteingang** lädt 100 Anfragen, ältere per „Ältere laden“. Nie fertig hochgeladene Anhänge (älter als 3 Stunden) räumt der Core beim Öffnen des Posteingangs und nach neuen Anfragen weg.
+- **Posteingang** lädt 100 Anfragen, ältere per „Ältere laden“. Nie fertig hochgeladene Anhänge (älter als 3 Stunden) räumt der Core beim Öffnen des Posteingangs und nach neuen Anfragen weg. Nach Statuswechsel oder Löschen sendet er das Fenster-Ereignis `core-cms:submissions-changed`, die Zahl neuer Anfragen im Menü zählt dann sofort neu.
+- **Meldungen (Toaster):** AdminShell bringt einen `<Toaster>` von sonner mit (`src/ui/AdminToaster.tsx`), der nur erscheint, wenn die Seite noch keinen hat. Ein eigener `<Toaster>` im Root-Layout des Projekts kann bleiben (dann zeigt der Core keinen zweiten) oder entfallen, wenn er nur fürs Admin da war.
 - **Einwilligungen:** zusätzlich höchstens 30 Einträge je Absender in 10 Minuten (`createConsentHandler(config, { maxPerSender })`), gezählt nur im Arbeitsspeicher.
 - **Favicon-Sperre** in `withCoreCms` meldet `icons:` nur noch in Dateien mit Metadaten (`export const metadata`, `generateMetadata`, `withSiteBranding`).
 

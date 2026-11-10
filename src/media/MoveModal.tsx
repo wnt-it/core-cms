@@ -106,7 +106,7 @@ export default function MoveModal({
         <div className="flex min-h-0 flex-col gap-3 px-5 pb-4 pt-5">
           <h2 id="move-modal-title" className="text-[16px] font-semibold text-[#0F172A]">Verschieben</h2>
           <p className="text-[14px] leading-relaxed text-[#475569]">
-            Wählen Sie den Zielordner aus, in den {itemsCount === 1 ? 'das Element verschoben werden soll' : `die ${itemsCount} Elemente verschoben werden sollen`}.
+            Wähle den Zielordner aus, in den {itemsCount === 1 ? 'das Element verschoben werden soll' : `die ${itemsCount} Elemente verschoben werden sollen`}.
           </p>
 
           {fetchError && <p className="text-[13px] text-[#B91C1C]" role="alert">{fetchError}</p>}

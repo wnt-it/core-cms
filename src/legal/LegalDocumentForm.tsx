@@ -388,7 +388,7 @@ export default function LegalDocumentForm({
         )}
         {fixedRefs > 0 && (
           <Note tone="warn">
-            Im Text gibt es {fixedRefs} fest getippte Verweis{fixedRefs === 1 ? '' : 'e'} auf Nummern (z. B. „siehe 2.5 Kontaktformulare“). Diese passen sich nicht automatisch an. Ersetzen Sie sie über „Verweis einfügen“ bei den Abschnitten.
+            Im Text gibt es {fixedRefs} fest getippte Verweis{fixedRefs === 1 ? '' : 'e'} auf Nummern (z. B. „siehe 2.5 Kontaktformulare“). Diese passen sich nicht automatisch an. Ersetze sie über „Verweis einfügen“ bei den Abschnitten.
           </Note>
         )}
       </Section>

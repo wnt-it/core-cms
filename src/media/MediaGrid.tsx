@@ -108,7 +108,7 @@ export function MediaGrid({
           </p>
           <p className="text-[13.5px] text-[#64748B]">
             {isSearchActive
-              ? 'Versuchen Sie einen anderen Suchbegriff.'
+              ? 'Versuch es mit einem anderen Suchbegriff.'
               : 'oder klicken, um Bilder und Dokumente vom Computer auszuwählen'}
           </p>
           <p className="pt-1 text-[12.5px] text-[#94A3B8]">

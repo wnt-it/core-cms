@@ -70,3 +70,9 @@ export function appendUnique<T extends { id: string }>(prev: T[], more: T[]): T[
   const seen = new Set(prev.map((p) => p.id))
   return [...prev, ...more.filter((m) => !seen.has(m.id))]
 }
+
+/** Signal an das Admin-Gerüst, die Zahl neuer Anfragen im Menü neu zu zählen (nach Statuswechsel oder Löschen) */
+export const SUBMISSIONS_CHANGED_EVENT = 'core-cms:submissions-changed'
+export function notifySubmissionsChanged() {
+  if (typeof window !== 'undefined') window.dispatchEvent(new Event(SUBMISSIONS_CHANGED_EVENT))
+}

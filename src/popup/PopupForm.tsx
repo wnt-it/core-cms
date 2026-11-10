@@ -76,7 +76,7 @@ export default function PopupForm({ initial, placement }: { initial: SitePopupSe
     <form onSubmit={save} className="flex flex-col">
       <Section
         title="Pop-up"
-        description={placement ?? 'Erscheint beim Öffnen der Website. Wann, wie oft und auf welchen Seiten, stellt ihr unten ein.'}
+        description={placement ?? 'Erscheint beim Öffnen der Website. Wann, wie oft und auf welchen Seiten, stellst du unten ein.'}
       >
         <div className="flex flex-col gap-5">
           <SwitchRow
@@ -103,7 +103,7 @@ export default function PopupForm({ initial, placement }: { initial: SitePopupSe
             <Field label="Anzeigen ab" optional hint="Erster Tag. Leer: gleich nach dem Speichern.">
               <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
             </Field>
-            <Field label="Anzeigen bis" optional hint="Letzter Tag, danach verschwindet es von selbst. Leer: bis ihr es ausschaltet.">
+            <Field label="Anzeigen bis" optional hint="Letzter Tag, danach verschwindet es von selbst. Leer: bis du es ausschaltest.">
               <Input type="date" value={until} onChange={(e) => setUntil(e.target.value)} />
             </Field>
           </FieldGrid>

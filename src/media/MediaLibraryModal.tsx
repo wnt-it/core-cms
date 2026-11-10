@@ -33,10 +33,19 @@ interface MediaLibraryModalProps {
 }
 
 /** Text der Rückfrage: Bei Ordnern auch, dass Unterordner und Dateien darin mit gelöscht werden. */
-function deleteDescription({ folders, files }: { folders: number; subfolders: number; files: number }) {
-  if (!folders) return `Möchten Sie ${files === 1 ? 'die ausgewählte Datei' : `die ${files} ausgewählten Dateien`} wirklich dauerhaft löschen?`
-  const was = [files && (files === 1 ? '1 Datei' : `${files} Dateien`), folders === 1 ? '1 Ordner' : `${folders} Ordner`].filter(Boolean).join(' und ')
-  return `${was} ${files + folders === 1 ? 'wird' : 'werden'} dauerhaft gelöscht, Ordner mit allen Unterordnern und allen Dateien darin. Das lässt sich nicht rückgängig machen.`
+function deleteDescription({ folders, subfolders, files }: { folders: number; subfolders: number; files: number }) {
+  if (!folders) return `Möchtest du ${files === 1 ? 'die ausgewählte Datei' : `die ${files} ausgewählten Dateien`} wirklich dauerhaft löschen?`
+  // „folders“ zählt die Unterordner mit; genannt werden die ausgewählten Ordner, die Unterordner extra
+  const selected = folders - subfolders
+  const was = [files && (files === 1 ? '1 Datei' : `${files} Dateien`), selected === 1 ? '1 Ordner' : `${selected} Ordner`].filter(Boolean).join(' und ')
+  const inside = subfolders ? `mit ${subfolders === 1 ? '1 Unterordner' : `${subfolders} Unterordnern`} und allen Dateien darin` : 'mit allen Dateien darin'
+  return `${was} ${files + selected === 1 ? 'wird' : 'werden'} dauerhaft gelöscht, ${inside}. Das lässt sich nicht rückgängig machen.`
+}
+
+function deleteTitle({ folders, subfolders, files }: { folders: number; subfolders: number; files: number }) {
+  const count = folders - subfolders + files
+  if (count !== 1) return `${count} Elemente wirklich löschen?`
+  return files ? 'Datei wirklich löschen?' : 'Ordner wirklich löschen?'
 }
 
 /** Elemente der Mediathek, die per Ziehen mitgegeben wurden (MediaItemCard setzt sie), sonst null */
@@ -303,7 +312,7 @@ export default function MediaLibraryModal({ isOpen, onClose, onSelect, bucket = 
               void Promise.resolve(lib.confirmDelete()).finally(refreshStorage)
               closeDialog()
             }}
-            title="Elemente wirklich löschen?"
+            title={deleteTitle(lib.deletePreview())}
             description={deleteDescription(lib.deletePreview())}
           />
         </div>

@@ -6,7 +6,7 @@
 // coreAdminPages erscheinen automatisch (Gruppe laut page.group, Standard „System“).
 // Mein Konto öffnet sich über den Benutzer unten, die Core-Version über die Versionsangabe darüber.
 
-import { useEffect, useRef, useState, useTransition, type ComponentType, type CSSProperties, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, useTransition, type ComponentType, type CSSProperties, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { ExternalLink, ImageIcon, LogOut, Menu, Package, X } from "lucide-react";
@@ -39,6 +39,8 @@ async function countCoreUpdates(): Promise<number> {
   return n;
 }
 import MediaLibraryModal from "../media/MediaLibraryModal";
+import { AdminToaster } from "./AdminToaster";
+import { SUBMISSIONS_CHANGED_EVENT } from "../submissions/submission-view";
 import { cx, iconButtonClass, WNT_COLORS } from "./styles";
 
 export interface AdminNavItem {
@@ -123,16 +125,23 @@ export function AdminShell({ logo, accent = WNT_COLORS.accent, content, system =
   // Neue Anfragen für die Zahl am Posteingang (nur angemeldete Admins dürfen lesen). Höchstens alle 30 Sekunden
   // beim Seitenwechsel neu, im Posteingang selbst immer (dort ändert sich die Zahl beim Öffnen von Anfragen).
   const countAt = useRef(0);
-  useEffect(() => {
-    const now = Date.now();
-    if (now - countAt.current < 30_000 && !pathname.startsWith("/admin/posteingang")) return;
-    countAt.current = now;
+  const countNewSubmissions = useCallback(() => {
+    countAt.current = Date.now();
     createClient()
       .from("submissions")
       .select("id", { count: "exact", head: true })
       .eq("status", "Neu")
       .then(({ count }) => setNewSubmissions(count ?? 0), () => {});
-  }, [pathname]);
+  }, []);
+  useEffect(() => {
+    if (Date.now() - countAt.current < 30_000 && !pathname.startsWith("/admin/posteingang")) return;
+    countNewSubmissions();
+  }, [pathname, countNewSubmissions]);
+  // Der Posteingang meldet Statuswechsel und Löschen, damit die Zahl nicht bis zum nächsten Seitenwechsel stehen bleibt
+  useEffect(() => {
+    window.addEventListener(SUBMISSIONS_CHANGED_EVENT, countNewSubmissions);
+    return () => window.removeEventListener(SUBMISSIONS_CHANGED_EVENT, countNewSubmissions);
+  }, [countNewSubmissions]);
   useEffect(() => {
     countCoreUpdates().then(setUpdates).catch(() => {});
   }, []);
@@ -299,6 +308,7 @@ export function AdminShell({ logo, accent = WNT_COLORS.accent, content, system =
       </div>
 
       <MediaLibraryModal isOpen={mediaOpen} onClose={() => setMediaOpen(false)} onSelect={() => setMediaOpen(false)} multiSelect />
+      <AdminToaster />
     </div>
   );
 }
