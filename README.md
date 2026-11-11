@@ -70,6 +70,18 @@ entfällt Punkt 2 komplett — npm kopiert das Package dann als echten Unterordn
 
 Neues Supabase-Projekt: einmal `sql/0.14.0_basis.sql` im SQL-Editor ausführen (Einstellungen, SMTP, Mediathek mit Bucket `images`, Posteingang, jeweils mit Rechten und Zugriffsregeln), danach die übrigen Dateien in `sql/` der Versionsreihe nach (`0.9.0_site_popup`, `0.12.0_site_popup_options`, `0.12.0_legal_documents`, bei Bedarf `0.14.0_consent`, dann `0.15.0_posteingang`, `0.16.0_haertung` und `0.17.0_empfaenger_je_formular`). Bestehende Projekte haben diese Tabellen schon. Danach in Supabase unter Authentication die Registrierung neuer Benutzer ausschalten und den Admin-Benutzer von Hand anlegen.
 
+### Datenbank-Änderungen bei Live-Seiten (verbindlich)
+
+Jedes Projekt hat **eine** Supabase-Datenbank. Vorschau (`dev`) und Live-Seite (`live`) lesen und schreiben dieselben Daten, es gibt keine Test-Datenbank. Jede SQL-Datei wirkt deshalb sofort auf der Live-Seite, auch wenn der passende Code erst auf `dev` liegt. Regeln:
+
+1. **Nur abwärtsverträglich ändern.** Der Code, der gerade live ist, muss nach der Änderung weiterlaufen: Spalten und Tabellen hinzufügen, mit Standardwert oder `null` erlaubt. Nichts umbenennen, löschen oder zur Pflicht machen, solange der alte Code es noch braucht.
+2. **Rechte zuletzt entziehen.** Was Besuchern oder dem alten Code Zugriff nimmt (Policies löschen, `revoke`), erst ausführen, wenn der neue Code live ist. Solche Dateien sagen das in ihrer ersten Zeile (Beispiel: `0.15.0_posteingang.sql`).
+3. **Erst lesen, dann ändern.** Vor dem Ausführen den Ist-Stand der betroffenen Tabellen, Rechte und Policies abfragen. SQL-Dateien so schreiben, dass sie mehrfach laufen können (`if not exists`, `drop policy if exists`).
+4. **Kundendaten nie per SQL anfassen**, außer der Kunde hat es ausdrücklich so beauftragt. Vorher eine Sicherung ziehen (Admin → Sicherung oder Supabase-Backup).
+5. **Jede ausgeführte Datei ins Projekt** unter `supabase/migrations/` legen, damit der Stand der Datenbank im Repo nachvollziehbar bleibt.
+
+Bei Seiten, die noch nicht live sind, gilt Regel 2 nicht.
+
 ## Benötigte Umgebungsvariablen im Kundenprojekt
 
 Werden **niemals** im Admin-Backend eingetragen/gespeichert (Sicherheitsrisiko + zirkuläre
