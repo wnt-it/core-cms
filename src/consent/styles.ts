@@ -6,7 +6,11 @@
 export const CONSENT_CSS = `
 .wnt-consent-root{--wnt-c-accent:#1d4ed8;--wnt-c-radius:8px;font-family:inherit;color:#111827;line-height:1.5;font-size:15px;color-scheme:light;text-align:left}
 .wnt-consent-root *,.wnt-consent-root *::before,.wnt-consent-root *::after{box-sizing:border-box}
-.wnt-consent-banner{position:fixed;z-index:2147483000;background:#fff;color:#111827;border:1px solid #d1d5db;box-shadow:0 10px 40px rgba(0,0,0,.25);padding:20px;max-height:85vh;overflow:auto;border-radius:var(--wnt-c-radius)}
+.wnt-consent-banner{position:fixed;z-index:2147483000;background:#fff;color:#111827;border:1px solid #d1d5db;box-shadow:0 10px 40px rgba(0,0,0,.25);max-height:85vh;display:flex;flex-direction:column;overflow:hidden;border-radius:var(--wnt-c-radius)}
+.wnt-consent-bbody{overflow:auto;padding:20px 20px 6px;flex:1 1 auto;min-height:0}
+.wnt-consent-bfoot{flex:none;padding:12px 20px 14px;border-top:1px solid #e5e7eb;background:#fff}
+.wnt-consent-bfoot .wnt-consent-actions{margin-top:0}
+.wnt-consent-bfoot .wnt-consent-links{margin-top:8px}
 .wnt-consent-banner[data-placement="leiste-unten"]{left:12px;right:12px;bottom:12px;max-width:1100px;margin:0 auto}
 .wnt-consent-banner[data-placement="karte-links"]{left:12px;bottom:12px;width:min(440px,calc(100vw - 24px))}
 .wnt-consent-banner[data-placement="dialog-mitte"]{left:50%;top:50%;transform:translate(-50%,-50%);width:min(560px,calc(100vw - 24px))}

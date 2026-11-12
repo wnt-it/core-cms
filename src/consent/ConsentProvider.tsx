@@ -270,6 +270,8 @@ function Banner({
 
   return (
     <section className="wnt-consent-banner" data-placement={config.design.platzierung} role="region" aria-labelledby="wnt-consent-h" data-testid="consent-banner">
+      {/* Nur die Angaben scrollen, die Buttons stehen fest unten: immer ohne Scrollen erreichbar, auch bei vielen Diensten */}
+      <div className="wnt-consent-bbody">
       <h2 id="wnt-consent-h" className="wnt-consent-h">
         {TEXTS.bannerHeadline}
       </h2>
@@ -302,12 +304,15 @@ function Banner({
       )}
       {hasThirdCountry && <p className="wnt-consent-p wnt-consent-small">{TEXTS.drittland}</p>}
       <p className="wnt-consent-p wnt-consent-small">{TEXTS.freiwillig}</p>
-      <Buttons
-        onAllow={() => onChoose(allChoices(open, true))}
-        onReject={() => onChoose(allChoices(open, false))}
-        third={{ label: TEXTS.btnEinstellungen, onClick: onSettings }}
-      />
-      <Links config={config} />
+      </div>
+      <div className="wnt-consent-bfoot">
+        <Buttons
+          onAllow={() => onChoose(allChoices(open, true))}
+          onReject={() => onChoose(allChoices(open, false))}
+          third={{ label: TEXTS.btnEinstellungen, onClick: onSettings }}
+        />
+        <Links config={config} />
+      </div>
     </section>
   );
 }
