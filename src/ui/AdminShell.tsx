@@ -4,13 +4,43 @@
 // optionaler Umschalter (z. B. Abteilungen), Konto unten, Handy-Menü.
 // Projekte übergeben nur Logo, Akzent und ihre Menüpunkte. Core-Seiten aus
 // coreAdminPages erscheinen automatisch (Gruppe laut page.group, Standard „System“).
+// Mein Konto öffnet sich über den Benutzer unten, die Core-Version über die Versionsangabe darüber.
 
-import { useEffect, useState, useTransition, type ComponentType, type CSSProperties, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, useTransition, type ComponentType, type CSSProperties, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { ExternalLink, ImageIcon, LogOut, Menu, X } from "lucide-react";
-import { coreAdminPages } from "../admin/core-pages";
+import { ExternalLink, ImageIcon, LogOut, Menu, Package, X } from "lucide-react";
+import { CORE_VERSION } from "../admin/core-version";
+import { coreAdminNav as coreAdminPages, RETIRED_ADMIN_PATHS } from "../admin/core-nav";
+import { createClient } from "../supabase/client";
+import { CORE_TAGS_URL, newerVersions } from "../admin/version-compare";
+
+const UPDATES_KEY = "core-cms-updates";
+
+/** Anzahl neuerer Core-Versionen, einmal pro Browser-Sitzung von GitHub. Blockiert keine Server Actions. Fehler: keine Zahl. */
+async function countCoreUpdates(): Promise<number> {
+  try {
+    const saved = sessionStorage.getItem(UPDATES_KEY);
+    if (saved) {
+      const { v, n } = JSON.parse(saved) as { v: string; n: number };
+      if (v === CORE_VERSION && typeof n === "number") return n;
+    }
+  } catch {
+    // Speicher nicht verfügbar
+  }
+  const res = await fetch(CORE_TAGS_URL, { signal: AbortSignal.timeout(5000) });
+  if (!res.ok) return 0;
+  const n = newerVersions(((await res.json()) as { name: string }[]).map((t) => t.name), CORE_VERSION).length;
+  try {
+    sessionStorage.setItem(UPDATES_KEY, JSON.stringify({ v: CORE_VERSION, n }));
+  } catch {
+    // Speicher nicht verfügbar
+  }
+  return n;
+}
 import MediaLibraryModal from "../media/MediaLibraryModal";
+import { AdminToaster } from "./AdminToaster";
+import { SUBMISSIONS_CHANGED_EVENT } from "../submissions/submission-view";
 import { cx, iconButtonClass, WNT_COLORS } from "./styles";
 
 export interface AdminNavItem {
@@ -21,6 +51,8 @@ export interface AdminNavItem {
   exact?: boolean;
   /** Zahl rechts, z. B. neue Anfragen. */
   count?: number;
+  /** Erklärung zur Zahl (Tooltip und Screenreader), z. B. „2 Updates verfügbar“. */
+  countLabel?: string;
 }
 
 export interface AdminSwitcher {
@@ -35,8 +67,10 @@ export interface AdminShellProps {
   /** Akzentfarbe (Fokus, aktiver Menüpunkt, Schalter). Standard: WNT-IT-Orange. */
   accent?: string;
   content: AdminNavItem[];
-  /** Eigene System-Punkte des Projekts (z. B. Backup). Medien und Core-Seiten kommen dazu. */
+  /** Eigene System-Punkte des Projekts (z. B. Einstellungen). Medien und Core-Seiten kommen dazu. */
   system?: AdminNavItem[];
+  /** Optionale Core-Seiten, die im Menü erscheinen sollen (z. B. ["einwilligungen"], wenn das Projekt den Cookie-Banner nutzt). */
+  optionalPages?: string[];
   switcher?: AdminSwitcher;
   userEmail: string;
   logoutAction: () => Promise<void>;
@@ -68,7 +102,7 @@ function NavLink({ item, pathname }: { item: AdminNavItem; pathname: string }) {
       <Icon {...ICON} />
       <span className="min-w-0 flex-1 truncate">{item.label}</span>
       {item.count ? (
-        <span className="min-w-5 rounded-full bg-[color-mix(in_srgb,var(--admin-accent)_14%,white)] px-1.5 text-center text-[11px] font-semibold leading-5 text-[color-mix(in_srgb,var(--admin-accent)_55%,black)]">{item.count}</span>
+        <span title={item.countLabel} aria-label={item.countLabel} className="min-w-5 rounded-full bg-[color-mix(in_srgb,var(--admin-accent)_14%,white)] px-1.5 text-center text-[11px] font-semibold leading-5 text-[color-mix(in_srgb,var(--admin-accent)_55%,black)]">{item.count}</span>
       ) : null}
     </Link>
   );
@@ -78,18 +112,72 @@ function NavLabel({ children }: { children: ReactNode }) {
   return <p className="px-2.5 pb-1 text-[12px] font-medium text-[#94A3B8]">{children}</p>;
 }
 
-export function AdminShell({ logo, accent = WNT_COLORS.accent, content, system = [], switcher, userEmail, logoutAction, siteUrl = "/", children }: AdminShellProps) {
+export function AdminShell({ logo, accent = WNT_COLORS.accent, content, system = [], optionalPages = [], switcher, userEmail, logoutAction, siteUrl = "/", children }: AdminShellProps) {
   const pathname = usePathname();
   const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
   const [mediaOpen, setMediaOpen] = useState(false);
   const [switching, startSwitch] = useTransition();
+  const [updates, setUpdates] = useState(0);
+  const [newSubmissions, setNewSubmissions] = useState(0);
 
   useEffect(() => setMenuOpen(false), [pathname]);
+  // Neue Anfragen für die Zahl am Posteingang (nur angemeldete Admins dürfen lesen). Höchstens alle 30 Sekunden
+  // beim Seitenwechsel neu, im Posteingang selbst immer (dort ändert sich die Zahl beim Öffnen von Anfragen).
+  const countAt = useRef(0);
+  const countNewSubmissions = useCallback(() => {
+    countAt.current = Date.now();
+    createClient()
+      .from("submissions")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "Neu")
+      .then(({ count }) => setNewSubmissions(count ?? 0), () => {});
+  }, []);
+  useEffect(() => {
+    if (Date.now() - countAt.current < 30_000 && !pathname.startsWith("/admin/posteingang")) return;
+    countNewSubmissions();
+  }, [pathname, countNewSubmissions]);
+  // Der Posteingang meldet Statuswechsel und Löschen, damit die Zahl nicht bis zum nächsten Seitenwechsel stehen bleibt
+  useEffect(() => {
+    window.addEventListener(SUBMISSIONS_CHANGED_EVENT, countNewSubmissions);
+    return () => window.removeEventListener(SUBMISSIONS_CHANGED_EVENT, countNewSubmissions);
+  }, [countNewSubmissions]);
+  useEffect(() => {
+    countCoreUpdates().then(setUpdates).catch(() => {});
+  }, []);
 
-  const toItem = (p: (typeof coreAdminPages)[number]): AdminNavItem => ({ href: `/admin/${p.slug}`, label: p.label, icon: p.icon });
-  const contentItems = [...content, ...coreAdminPages.filter((p) => p.group === "content").map(toItem)];
-  const systemItems = [...system, ...coreAdminPages.filter((p) => p.group !== "content").map(toItem)];
+  const toItem = (p: (typeof coreAdminPages)[number]): AdminNavItem => ({
+    href: `/admin/${p.slug}`,
+    label: p.label,
+    icon: p.icon,
+    ...(p.slug === "posteingang" ? { count: newSubmissions, countLabel: newSubmissions === 1 ? "1 neue Anfrage" : `${newSubmissions} neue Anfragen` } : {}),
+  });
+  const menuPages = coreAdminPages.filter((p) => p.inMenu !== false && (!p.optional || optionalPages.includes(p.slug)));
+  // Core-Seiten gibt es nur einmal, aus dem Core. Ein Projekt-Menüpunkt mit derselben Adresse ist ein Fehler:
+  // in der Entwicklung bricht die Seite mit Hinweis ab, live wird er weggelassen (die Website soll nicht ausfallen).
+  const coreHrefs = new Set([...coreAdminPages.map((p) => p.slug), ...Object.keys(RETIRED_ADMIN_PATHS)].map((slug) => `/admin/${slug}`));
+  const doppelt = [...content, ...system].filter((item) => coreHrefs.has(item.href)).map((item) => item.href);
+  if (doppelt.length > 0) {
+    const meldung = `[core-cms] Diese Menüpunkte kommen aus dem Core und dürfen nicht im Projekt-Menü (content/system der AdminShell) stehen: ${doppelt.join(", ")}. Bitte dort entfernen.`;
+    if (process.env.NODE_ENV !== "production") throw new Error(meldung);
+    console.error(meldung);
+  }
+  const ohneCore = (items: AdminNavItem[]) => items.filter((item) => !coreHrefs.has(item.href));
+  // Seiten mit top stehen ganz oben in ihrer Gruppe (in „Inhalte“ nach dem Dashboard /admin), die übrigen Core-Seiten am Ende
+  const group = (items: AdminNavItem[], pages: typeof menuPages) => {
+    const own = ohneCore(items);
+    const lead = own[0]?.href === "/admin" ? 1 : 0;
+    return [...own.slice(0, lead), ...pages.filter((p) => p.top).map(toItem), ...own.slice(lead), ...pages.filter((p) => !p.top).map(toItem)];
+  };
+  const contentItems = group(content, menuPages.filter((p) => p.group === "content"));
+  const systemItems = group(system, menuPages.filter((p) => p.group !== "content"));
+  const versionItem: AdminNavItem = {
+    href: "/admin/version",
+    label: `Core v${CORE_VERSION}`,
+    icon: Package,
+    count: updates,
+    countLabel: updates === 1 ? "1 Update verfügbar" : `${updates} Updates verfügbar`,
+  };
 
   const style = {
     "--admin-accent": accent,
@@ -157,6 +245,7 @@ export function AdminShell({ logo, accent = WNT_COLORS.accent, content, system =
       </nav>
 
       <div className="flex flex-col gap-1 border-t border-[#F1F5F9] pt-3">
+        <NavLink item={versionItem} pathname={pathname} />
         <a
           href={siteUrl}
           target="_blank"
@@ -166,13 +255,21 @@ export function AdminShell({ logo, accent = WNT_COLORS.accent, content, system =
           <ExternalLink {...ICON} />
           Website ansehen
         </a>
-        <div className="flex items-center gap-2.5 pl-2.5 pt-1">
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#F1F5F9] text-[12px] font-semibold uppercase text-[#334155]" aria-hidden="true">
-            {userEmail.slice(0, 2)}
-          </span>
-          <span className="min-w-0 flex-1 truncate text-[13px] text-[#475569]" title={userEmail}>
-            {userEmail}
-          </span>
+        <div className="flex items-center gap-1 pt-1">
+          <Link
+            href="/admin/konto"
+            aria-current={pathname === "/admin/konto" ? "page" : undefined}
+            title={`Mein Konto (${userEmail})`}
+            className={cx(
+              "flex min-w-0 flex-1 items-center gap-2.5 rounded-lg py-1 pl-2.5 pr-1.5 transition-colors",
+              pathname === "/admin/konto" ? "bg-[color-mix(in_srgb,var(--admin-accent)_12%,white)]" : "hover:bg-[#F1F5F9]",
+            )}
+          >
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#F1F5F9] text-[12px] font-semibold uppercase text-[#334155]" aria-hidden="true">
+              {userEmail.slice(0, 2)}
+            </span>
+            <span className="min-w-0 flex-1 truncate text-[13px] text-[#475569]">{userEmail}</span>
+          </Link>
           <form action={logoutAction}>
             <button type="submit" className={iconButtonClass} aria-label="Ausloggen" title="Ausloggen">
               <LogOut {...ICON} />
@@ -211,6 +308,7 @@ export function AdminShell({ logo, accent = WNT_COLORS.accent, content, system =
       </div>
 
       <MediaLibraryModal isOpen={mediaOpen} onClose={() => setMediaOpen(false)} onSelect={() => setMediaOpen(false)} multiSelect />
+      <AdminToaster />
     </div>
   );
 }

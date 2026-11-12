@@ -2,17 +2,18 @@
 
 Zentrales, versioniertes CMS-Core-Package für WNT-IT Next.js/Supabase-Projekte.
 
-Ersetzt das bisherige Datei-Kopier-Skript `scripts/sync-core.ps1`: statt Core-Dateien
-1:1 in jedes Projekt zu kopieren, installiert jedes Projekt dieses Package als
-versionierte Dependency (`package.json`) und importiert daraus.
+Einzige zentrale Stelle für den Core: Projekte mit Admin/Backend installieren dieses Package
+als versionierte Dependency (`package.json`) und binden die Teile per Re-Export ein.
+Das frühere Datei-Kopier-Skript `scripts/sync-core.ps1` und das Repo `template` gibt es
+nicht mehr (entfernt am 2026-10-19). Projekte ohne Admin/Backend brauchen keinen Core.
 
 ## Scope
 
 **Core CMS enthält:**
-- Auth (Login, Registrierung, Passwort vergessen, Passwort ändern)
+- Auth (Login, Passwort vergessen, Passwort ändern; keine Registrierung, Admins werden in Supabase angelegt)
 - Admin-Dashboard-Shell + Site-Settings
 - Media Library + Upload
-- E-Mail-Versand (Resend als Standard-Provider, SMTP als Fallback)
+- E-Mail-Versand über SMTP aus den Einstellungen (ohne SMTP werden Anfragen nur im Posteingang gespeichert)
 - Submissions/Posteingang (generisch, siehe `src/submissions`)
 - Supabase-Client-Factory + zentrale Typen
 
@@ -65,6 +66,22 @@ Konsequenzen, die im Kundenprojekt (nicht in core-cms selbst) nachgezogen werden
 entfällt Punkt 2 komplett — npm kopiert das Package dann als echten Unterordner in
 `node_modules/core-cms`, kein Symlink mehr, normale Node-Modulauflösung greift wieder.
 
+## Datenbank eines neuen Projekts (ab v0.14.0)
+
+Neues Supabase-Projekt: einmal `sql/0.14.0_basis.sql` im SQL-Editor ausführen (Einstellungen, SMTP, Mediathek mit Bucket `images`, Posteingang, jeweils mit Rechten und Zugriffsregeln), danach die übrigen Dateien in `sql/` der Versionsreihe nach (`0.9.0_site_popup`, `0.12.0_site_popup_options`, `0.12.0_legal_documents`, bei Bedarf `0.14.0_consent`, dann `0.15.0_posteingang`, `0.16.0_haertung` und `0.17.0_empfaenger_je_formular`). Bestehende Projekte haben diese Tabellen schon. Danach in Supabase unter Authentication die Registrierung neuer Benutzer ausschalten und den Admin-Benutzer von Hand anlegen.
+
+### Datenbank-Änderungen bei Live-Seiten (verbindlich)
+
+Jedes Projekt hat **eine** Supabase-Datenbank. Vorschau (`dev`) und Live-Seite (`live`) lesen und schreiben dieselben Daten, es gibt keine Test-Datenbank. Jede SQL-Datei wirkt deshalb sofort auf der Live-Seite, auch wenn der passende Code erst auf `dev` liegt. Regeln:
+
+1. **Nur abwärtsverträglich ändern.** Der Code, der gerade live ist, muss nach der Änderung weiterlaufen: Spalten und Tabellen hinzufügen, mit Standardwert oder `null` erlaubt. Nichts umbenennen, löschen oder zur Pflicht machen, solange der alte Code es noch braucht.
+2. **Rechte zuletzt entziehen.** Was Besuchern oder dem alten Code Zugriff nimmt (Policies löschen, `revoke`), erst ausführen, wenn der neue Code live ist. Solche Dateien sagen das in ihrer ersten Zeile (Beispiel: `0.15.0_posteingang.sql`).
+3. **Erst lesen, dann ändern.** Vor dem Ausführen den Ist-Stand der betroffenen Tabellen, Rechte und Policies abfragen. SQL-Dateien so schreiben, dass sie mehrfach laufen können (`if not exists`, `drop policy if exists`).
+4. **Kundendaten nie per SQL anfassen**, außer der Kunde hat es ausdrücklich so beauftragt. Vorher eine Sicherung ziehen (Admin → Sicherung oder Supabase-Backup).
+5. **Jede ausgeführte Datei ins Projekt** unter `supabase/migrations/` legen, damit der Stand der Datenbank im Repo nachvollziehbar bleibt.
+
+Bei Seiten, die noch nicht live sind, gilt Regel 2 nicht.
+
 ## Benötigte Umgebungsvariablen im Kundenprojekt
 
 Werden **niemals** im Admin-Backend eingetragen/gespeichert (Sicherheitsrisiko + zirkuläre
@@ -76,7 +93,19 @@ SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=  # Pflicht ab v0.3.1 - siehe unten
 ENCRYPTION_KEY=          # Pflicht ab v0.7.0 - verschlüsselt das SMTP-Passwort
 RESEND_API_KEY=          # falls Resend als Provider gewählt wird
+STORAGE_QUOTA_GB=        # optional ab v0.14.0 - nur für Sonderfälle, sonst kommt das Kontingent automatisch
 ```
+
+**Speicheranzeige (ab v0.14.0):** Die Mediathek zeigt den belegten Speicher aller Buckets, mit
+Kontingent zusätzlich als Balken (Warnung ab 80 %, Hinweis ab 100 %). Das ist nur eine Anzeige,
+Hochladen bleibt möglich. Das Kontingent kommt **automatisch** aus dem zentralen Kundenregister
+von WNT-IT: core-cms fragt `https://www.wnt-it.com/api/kontingent` mit dem Repo-Namen und der
+Produktions-Domain, die Vercel jedem Projekt selbst bereitstellt (`VERCEL_GIT_REPO_SLUG`,
+`VERCEL_PROJECT_PRODUCTION_URL`; bei Vercel muss „Automatically expose System Environment Variables“
+an sein, das ist Standard). Die Antwort enthält nur die Zahl und wird eine Stunde zwischengespeichert.
+`STORAGE_QUOTA_GB` überschreibt das, `CORE_KONTINGENT_URL` ändert die Adresse. Ist das Register nicht
+erreichbar, zeigt die Mediathek nur den belegten Speicher. Nutzt `SUPABASE_SERVICE_ROLE_KEY`; fehlt
+der Schlüssel, entfällt die Anzeige.
 
 **`ENCRYPTION_KEY` (ab v0.7.0 Pflicht):** Zufälliger, geheimer Wert (mind. 32 Zeichen, z.B.
 `openssl rand -hex 32`), pro Projekt in Vercel setzen. Es gibt keinen Ersatzschlüssel mehr
@@ -159,7 +188,7 @@ Optional: `dashboardHref` (Standard `/admin`) und projektspezifische Schnellzugr
 <AdminLiveBar
   links={[
     { href: "/admin/termine", label: "Termine", icon: <CalendarDays size={16} /> },
-    { href: "/admin/inbox", label: "Posteingang", icon: <Inbox size={16} /> },
+    { href: "/admin/posteingang", label: "Posteingang", icon: <Inbox size={16} /> },
   ]}
 />
 ```
@@ -219,12 +248,191 @@ Das Projekt liefert nur Logo und Menüpunkte.
 
 - **Gerüst:** `AdminShell` aus `core-cms/src/ui` (Seitenleiste „Inhalte“/„System“, Umschalter,
   Konto, Handy-Menü). Core-Seiten aus `coreAdminPages` erscheinen automatisch, `group: "content"`
-  unter „Inhalte“, sonst unter „System“.
+  unter „Inhalte“, sonst unter „System“, mit `inMenu: false` ohne Menüpunkt. Mein Konto öffnet sich über den Benutzer unten,
+  die Core-Version über die Versionsangabe darüber (mit Zahl, wenn neuere Versionen veröffentlicht sind).
 - **Bausteine:** `PageHeader`, `Section`, `Card`, `Field`, `Input`, `Select`, `SwitchRow`, `Button`,
   `SaveBar`, `Badge`, `Note`, `EmptyState`, `TableCard`, `ConfirmDialog` u. a. aus `core-cms/src/ui`.
 - **Schrift:** Das Projekt setzt die CSS-Variable `--font-admin` (z. B. Inter über `next/font`).
 - **Bildfelder:** `ImageUpload` (ein Bild) und `GalleryField` (mehrere Bilder, erstes = Hauptbild,
   Sortieren per Ziehen oder Pfeilen, optional `name` für ein verstecktes Feld mit JSON-Liste).
+
+### Anrede in Texten (verbindlich)
+
+- **Admin, Changelog und E-Mails an Kunden: immer „du“.** Kunden sind die Menschen, die im Admin arbeiten.
+  Also „Bitte prüfe deinen Posteingang“, „Möchtest du …“, „deine Website“, nie „Sie/Ihre“ und auch nicht „ihr/euch“.
+  Das gilt für alle Hinweise, Fehlermeldungen, Rückfragen, Platzhalter und den Changelog (`src/admin/changelog.ts`).
+- **Texte für Besucher der Website bleiben beim „Sie“:** Fehlermeldungen von Formularen (`submissions/form.ts`,
+  `guard.ts`, `receive.ts`), Cookie-Banner (`src/consent/`), Rechtstexte und ihre Vorlagen. Sie sprechen im Namen
+  des Kunden zu dessen Besuchern.
+- Vor einem Release prüfen, z. B. mit `grep -rnE "\b(Sie|Ihnen|Ihre[mnrs]?|Ihr)\b" src`: Treffer dürfen nur in
+  Besucher-Texten oder Code-Kommentaren stehen.
+
+## Einstellungen (ab v0.14.0)
+
+`/admin/einstellungen` ist eine Core-Seite (`coreAdminPages`, Gruppe „System“) und erscheint in jedem Projekt automatisch im Menü, ohne Datei und Menüeintrag im Projekt. Tabs: **Website & Branding** (`site_settings`: Name, Untertitel, Beschreibung, Logo, Favicon, Kontakt, Anschrift), **E-Mail & SMTP** (`email_settings`) und **Daten-Export** (`ExportPanel`). Die Seite lädt und speichert selbst, ein projekteigener `SiteSettingsContext` wird dafür nicht gebraucht. Tabellen wie in `sql/0.14.0_basis.sql`, keine neue SQL-Datei.
+
+Auf der Seite stehen nur Core-Funktionen. Projektspezifisches wie Kopfbilder oder Startseiten-Inhalte ist eine eigene Projektseite unter „Inhalte“ (Menü `content`), nie ein Tab in den Einstellungen. Über Optionen im Catch-all lässt sich nur Folgendes einstellen (alles optional):
+
+```tsx
+// app/admin/(dashboard)/[...core]/page.tsx
+import { CoreAdminRoute, type CoreAdminOptions } from "core-cms/src/admin";
+export { generateCoreAdminMetadata as generateMetadata } from "core-cms/src/admin";
+
+const options: CoreAdminOptions = {
+  einstellungen: {
+    defaultSiteName: "Muster GmbH",                       // gespeichert, wenn das Feld leer bleibt
+    // dataExport: false,                                 // Tab „Daten-Export“ ausblenden
+  },
+};
+
+export default function Page(props: { params: Promise<{ core?: string[] }> }) {
+  return <CoreAdminRoute {...props} options={options} />;
+}
+```
+
+Ohne Optionen bleibt der Catch-all wie bisher (`export { CoreAdminRoute as default, … }`).
+
+**Umstellen eines Projekts, das die Seite bisher selbst hat:**
+
+0. Vorher prüfen, dass nichts verloren geht: (a) SMTP-Daten liegen in `email_settings`. Projekte, die vor v0.10.0 eingerichtet wurden, haben sie eventuell noch in den Spalten `smtp_*` von `site_settings`: dann vor dem Update nach `email_settings` (id `general`) kopieren. (b) Der Standard-Seitenname des alten Wrappers (`defaultSiteName`) kommt in die Optionen. (c) Weitere Tabs oder Felder der alten Seite, die nicht aus dem Core kommen (z. B. Kopfbilder), werden eine eigene Seite unter „Inhalte“.
+1. Löschen: `admin/(dashboard)/einstellungen/` komplett (`page.tsx`, `actions.ts`, ggf. `AdminSettingsClient.tsx`).
+2. Löschen: die Wrapper `src/components/admin/GeneralSettingsForm.tsx` und `src/components/admin/SmtpSettingsForm.tsx`, wenn sie sonst nirgends importiert werden.
+3. Den Menüpunkt `{ href: '/admin/einstellungen', … }` aus `system` in der AdminShell entfernen.
+4. Nur bei Bedarf Optionen wie oben. Projekteigene Formulare, die aus der gelöschten `einstellungen/actions.ts` importieren (z. B. `updateHeroImageSetting`), ziehen mit ihrer neuen Seite unter „Inhalte“ um und bekommen dort eine eigene `"use server"`-Datei.
+
+**Einstellungen gibt es nur einmal, aus dem Core.** Ein Projekt kann keine eigene Einstellungsseite anlegen:
+
+- **Eigene Route:** `withCoreCms` (next.config) bricht `next dev` und `next build` mit Hinweis ab, wenn es unter `app/` bzw. `src/app/` eine Route `/admin/einstellungen` gibt (Routengruppen wie `(dashboard)` zählen nicht). Gilt für alle Core-Seiten außer Datenschutzerklärung und Impressum (`CORE_ONLY_ADMIN_SLUGS` in `next-config.mjs`).
+- **Eigener Menüpunkt:** Steht im `content` oder `system` der AdminShell die Adresse einer Core-Seite, bricht die Seite in der Entwicklung mit Hinweis ab. Live wird der Punkt nur weggelassen und ein Fehler protokolliert, damit der Admin nicht ausfällt.
+
+Die Schritte 0–3 gehören deshalb in denselben Commit wie das Update auf v0.14.0, sonst startet das Projekt nicht.
+
+## Logo und Favicon (ab v0.14.0)
+
+Logo, Favicon und Name der Website stehen nur in den Einstellungen (Admin → Einstellungen → Website & Branding, Bilder aus der Mediathek). Das Projekt legt sie nicht selbst fest.
+
+```tsx
+// app/layout.tsx: Favicon aus den Einstellungen, eigene icons werden ignoriert
+import { withSiteBranding, SiteLogo } from "core-cms/src/branding";
+export const generateMetadata = withSiteBranding({ title: "…", description: "…" });
+
+// Logo (Server Component). In Client-Komponenten als fertiges Element über eine Prop hineinreichen:
+<Navbar logo={<SiteLogo className="h-9 w-auto" priority />} />
+```
+
+- Ohne hinterlegtes Logo zeigt `<SiteLogo />` den Namen aus den Einstellungen (`fallback="none"` blendet ihn aus). Ohne Favicon gibt es keins.
+- `getSiteBranding()` liefert Name, Logo und Favicon für Sonderfälle (z. B. strukturierte Daten). Gelesen wird ohne Cookies, statische Seiten bleiben statisch. Speichern in den Einstellungen erneuert die Seiten sofort.
+- Login- und Passwort-Seiten nutzen dieselbe Quelle.
+- **Sperre:** `withCoreCms` bricht `next dev` und `next build` ab, wenn das Projekt ein eigenes Favicon festlegt: `app/favicon.ico`, `app/icon.*`, `app/apple-icon.*`, `public/favicon.*` oder `icons:` in einem Layout oder einer Seite. Ein fest eingebautes Logo-Bild lässt sich technisch nicht sicher erkennen, dafür gilt die Regel: immer `<SiteLogo />`.
+
+## Posteingang und Formulare (ab v0.15.0)
+
+`/admin/posteingang` ist eine Core-Seite (ganz oben unter „System“, wie alle Core-Seiten, mit Zahl der neuen Anfragen). Die alte Adresse `/admin/submissions` leitet `withCoreCms` dorthin um, eine eigene Seite oder ein eigener Menüpunkt dafür bricht `next dev`/`next build` ab (wie bei „Einstellungen“).
+
+**Der Core gibt keine Pflichtfelder vor.** Jedes Formular des Projekts legt mit `defineForm` fest, welche Felder es hat und welche Pflicht sind. Der Core bringt Speichern, Spam-Schutz, E-Mail-Benachrichtigung, Posteingang und Anhänge mit.
+
+```ts
+// src/forms.ts (Projekt)
+import { defineForm } from "core-cms/src/submissions";
+
+export const bewerbung = defineForm({
+  type: "Bewerbung",                                   // Formular-Art im Posteingang
+  fields: {
+    name: { label: "Name", required: true },           // name, email, phone, company, subject, message: eigene Spalten
+    email: { label: "E-Mail", required: true },        // kind "email" automatisch, Format wird geprüft
+    stelle: { label: "Stelle", required: true },       // alles andere: metadata, mit Bezeichnung im Posteingang
+    eintritt: { label: "Frühester Eintritt" },
+    message: { label: "Anschreiben" },                 // kind "long" automatisch (5000 Zeichen)
+  },
+  subjectField: "stelle",                              // optional: Betreff im Posteingang
+  attachments: { types: ["pdf"], maxSizeMb: 10, maxFiles: 3 }, // optional, ohne: keine Anhänge
+  notify: { siteName: "Muster GmbH", brandColor: "#102d42" },   // optional, false: keine E-Mail
+});
+```
+
+```ts
+// src/app/actions/bewerbung.ts (Projekt)
+"use server";
+import { receiveSubmission } from "core-cms/src/submissions/server";
+import { bewerbung } from "@/forms";
+
+export async function sendeBewerbung(data: Record<string, unknown>) {
+  return receiveSubmission(bewerbung, data);
+}
+```
+
+```tsx
+// Formular (Client-Komponente im Projekt)
+import { FormGuard, sendForm } from "core-cms/src/submissions/client";
+
+<form onSubmit={async (e) => {
+  e.preventDefault();
+  const result = await sendForm(sendeBewerbung, e.currentTarget);
+  // result.success, result.error, result.field, result.rejectedFiles
+}}>
+  <FormGuard />
+  <input name="name" /> <input name="email" type="email" /> <input name="stelle" />
+  <textarea name="message" />
+  <input type="file" name="unterlagen" accept=".pdf" multiple />
+</form>
+```
+
+- **Felder:** Nur Felder aus `fields` werden gespeichert, alles andere ignoriert. Mehrfachauswahl (Checkboxen mit gleichem Namen) wird mit Komma verbunden. Höchstlängen: text 200, long 5000, email 254, phone 40, je Feld mit `maxLength` änderbar. Mehr als 5 Links in einem Feld werden abgelehnt.
+- **Spam-Schutz:** `<FormGuard />` gehört in jedes Formular (verstecktes Feld, Zeitmessung, Herkunftsseite). Bots bekommen eine Erfolgsmeldung, ohne dass etwas gespeichert wird. Dazu höchstens 5 Anfragen je Adresse in 10 Minuten. Die Vercel-Firewall bleibt die Hauptsperre.
+- **Speichern** nur über den Server (Service-Role-Schlüssel). Besucher können Anfragen weder lesen noch direkt eintragen, lesen dürfen nur angemeldete Admins (`sql/0.15.0_posteingang.sql`).
+- **Anhänge:** `sendForm` schickt die Dateien nicht über den Server der Website (Vercel nimmt nur ca. 4,5 MB pro Anfrage), sondern nach der Prüfung über einmalige Upload-Adressen direkt in den privaten Speicherbereich `anfragen`. Danach prüft der Core Größe und echten Dateityp am Inhalt, was nicht passt, wird gelöscht und in `rejectedFiles` gemeldet. Erlaubt sind nur PDF, JPG und PNG. Im Posteingang lädt der Admin Anhänge nach einem Warnhinweis als Datei herunter (Link gilt eine Minute), angezeigt werden sie nie im Browser. Es gibt keinen Virenscanner. Löschen der Anfrage löscht die Anhänge mit. Anhänge zählen zum Speicher-Kontingent und sind im Daten-Export enthalten.
+- **Ohne JavaScript-Helfer:** `receiveSubmission(form, formData)` nimmt auch `FormData` oder ein Objekt aus einem Route Handler, dann ohne Anhänge.
+- **Bestehende Aufrufe** von `submitContactForm` laufen weiter, ohne Pflichtfelder (eine angegebene E-Mail muss gültig sein). Ab v0.16.0 mit Grund-Spam-Schutz: Längengrenzen, höchstens 5 Links, 5 Anfragen je Adresse in 10 Minuten und die Prüfung von `<FormGuard />`, wenn dessen Felder (`website`, `form_age`) im Payload stehen. Feldbezeichnungen und Anhänge gibt es nur mit `receiveSubmission`.
+
+**Umstellen eines Projekts:**
+
+1. `SUPABASE_SERVICE_ROLE_KEY` in Vercel prüfen, Projekt auf v0.15.0 oder neuer heben und live bringen. **Erst danach** `sql/0.15.0_posteingang.sql` im Supabase-Projekt ausführen: Die Datei entzieht Besuchern das direkte Eintragen, eine Website mit älterem Core bekäme sonst keine Anfragen mehr. Bis dahin speichert v0.15.0 schon, nur Formulare mit eigenen Feldern ohne Name/E-Mail und Anhänge brauchen die Datei.
+2. Löschen: die eigene Posteingang-Seite `admin/(dashboard)/submissions/` und den Menüpunkt `/admin/submissions` in `content` bzw. `system`, dazu die Zählung neuer Anfragen fürs Menü (`newSubmissions`), das macht jetzt die AdminShell. Links auf `/admin/submissions` (Dashboard, AdminLiveBar) auf `/admin/posteingang` ändern, die Umleitung fängt vergessene ab.
+3. Eigenen Spam-Schutz in Kontakt-Routen bzw. Server Actions durch `defineForm` + `receiveSubmission` ersetzen, im Formular `<FormGuard />` statt eigener Felder `website`/`form_age`. Projektspezifische Kennzeichnung (z. B. Abteilung) über `receiveSubmission(form, data, { metadata: { … }, type: "Kontakt · Abteilung" })` (der Filter im Posteingang gruppiert nach dem Teil vor „ · “).
+
+## Empfänger je Formular (ab v0.17.0)
+
+Ein Mailserver pro Website bleibt. Nur die Adresse, **an die** eine Anfrage geht, kann je Formular abweichen, z. B. Bewerbungen an die Personalabteilung oder Kontaktanfragen je Abteilung an eigene Postfächer. Eingestellt wird das vom Kunden im Admin, nicht im Code: Einstellungen → E-Mail & SMTP → „Empfänger je Formular“.
+
+- **Formulare erscheinen von selbst.** Die Liste besteht aus den Formular-Arten im Posteingang (`submissions.type`) und den schon eingetragenen. Ein neues Formular steht dort spätestens nach seiner ersten Anfrage, ohne Eintrag im Projekt. Gilt für `receiveSubmission` und `submitContactForm` gleichermaßen.
+- **Leer heißt Standard.** Ohne Eintrag geht die Anfrage an den „Empfänger für Anfragen“. Reihenfolge beim Versand: genaue Formular-Art (`Kontakt · Abteilung Nord`), dann ihre Gruppe vor „ · “ (`Kontakt`), dann der allgemeine Empfänger. Ungültige gespeicherte Werte werden ignoriert, eine Anfrage geht nie wegen eines falschen Eintrags verloren.
+- **Mehrere Adressen** mit Komma trennen (höchstens 10). Geprüft wird beim Speichern, der Fehler nennt das Formular.
+- **Test je Formular:** Der Knopf „Test“ schickt die Test-E-Mail an den gespeicherten Empfänger dieses Formulars (`sendTestEmail(formType)`).
+- **Datenbank:** einmal `sql/0.17.0_empfaenger_je_formular.sql` (Spalte `email_settings.form_recipients`, nie öffentlich, nie im Export). Ohne die Datei läuft alles wie bisher, die Einstellungsseite zeigt einen Hinweis.
+- **Formulare schon vor der ersten Anfrage anzeigen (empfohlen):** Alle Formulare des Projekts stehen in `src/forms.ts`, und der Catch-all gibt sie weiter: `options.einstellungen.forms = [bewerbung, kontakt]` (defineForm-Ergebnisse) oder Formular-Arten als Text. Wichtig: dieselbe Quelle, aus der das Formular beim Absenden seinen Namen bekommt, nie ein zweites Mal von Hand getippt. Sonst stehen in den Einstellungen Namen, die nie gesendet werden. Ohne Angabe erscheint jedes Formular mit seiner ersten Anfrage.
+- Logik ohne Datenbank in `src/email/form-recipients.ts` (`recipientFor`, `validateFormRecipients`, `listFormTypes`), getestet in `tests/email/form-recipients.test.ts`.
+
+## Absicherung und Aufräumen (ab v0.16.0)
+
+**Beim Update eines Projekts:**
+
+1. `sql/0.16.0_haertung.sql` im Supabase-Projekt ausführen (vor oder nach dem Update, beides geht). Die Datei gibt dem Server-Zugang Leserechte auf die Rechtstexte (Daten-Export), verhindert Ordner-Kreise in der Mediathek, pflegt `updated_at` automatisch und legt `core_storage_usage()` für die Speicheranzeige an. Außerdem kommen Indizes für Posteingang und Einwilligungen dazu, und die Dateiliste des Buckets `images` ist nur noch für Admins sichtbar (die Dateien selbst bleiben öffentlich abrufbar).
+2. Empfohlen: `NEXT_PUBLIC_SITE_URL` (z. B. `https://www.example.org`) in Vercel setzen. Links in Passwort-E-Mails nutzen dann immer diese Adresse. Ohne die Variable gilt: der Host der Anfrage, wenn er zum Deployment gehört, sonst die Produktions-Domain von Vercel.
+3. Optional, aber empfohlen: Fehler- und Ladeseite für den Admin. Die Dateien im Projekt bestehen nur aus einem Re-Export:
+   - `app/admin/(dashboard)/error.tsx`: `"use client"; export { default } from "core-cms/src/admin/AdminError";` (ohne `"use client"` bricht der Build ab, Fehlerseiten müssen Client-Komponenten sein)
+   - `app/admin/(dashboard)/loading.tsx`: `export { default } from "core-cms/src/admin/AdminLoading";`
+4. Prüfen, dass in Supabase unter Authentication die Registrierung neuer Benutzer und anonyme Anmeldungen aus sind. Jeder angemeldete Benutzer ist Admin.
+
+**Was sich für Entwickler ändert:**
+
+- **Server-Module** (`supabase/service-role`, `email/smtp-settings`, `submissions/save`, `receive`, `cleanup`, `export/discover`) enthalten `import "server-only"`. Ein Import aus einer Client-Komponente bricht den Build mit klarer Meldung ab.
+- **AdminShell** lädt keine Server-Seiten und keinen Changelog mehr. Das Menü kommt aus `src/admin/core-nav.ts`, die installierte Version aus `src/admin/core-version.ts` (setzt `npm run release`). Eine neue Core-Seite braucht einen Eintrag in `core-nav.ts` und ihre Komponente in `core-pages.tsx`.
+- **SMTP:** `getSmtpSettings()` liefert das Passwort nicht mehr, sondern `passStatus` (`none`, `saved`, `unreadable`) und `missing`. Ein leer gelassenes Passwortfeld behält das gespeicherte. Test-E-Mail und Benachrichtigung prüfen gleich (`email/smtp-settings.ts`), beide gehen an den „Empfänger für Anfragen“.
+- **`saveGeneralSettings`** speichert nur die Felder aus `GENERAL_SETTINGS_FIELDS` (`src/admin/general-settings.ts`). **`updateHeroImageSetting`** lehnt Kern-Spalten ab (`id`, Name, Logo, `popup_*` …).
+- **`submitContactForm`** hat Grund-Spam-Schutz (siehe Posteingang). `receiveSubmission` zählt die Begrenzung je Adresse erst nach der Feldprüfung.
+- **Mediathek:** `useMediaLibrary({ enabled })` lädt nur, solange das Fenster offen ist. `MoveModal` nimmt `excludeFolderIds`, `bucket` ist überflüssig. Typen `MediaItem`, `MediaFileItem`, `MediaFolderItem` in `src/media/folder-tree.ts`. `formatBytes` liegt in `src/ui/format.ts` (deutsch, „1,5 MB“), der Export aus `core-cms/src/media` bleibt.
+- **Posteingang** lädt 100 Anfragen, ältere per „Ältere laden“. Nie fertig hochgeladene Anhänge (älter als 3 Stunden) räumt der Core beim Öffnen des Posteingangs und nach neuen Anfragen weg. Nach Statuswechsel oder Löschen sendet er das Fenster-Ereignis `core-cms:submissions-changed`, die Zahl neuer Anfragen im Menü zählt dann sofort neu.
+- **Meldungen (Toaster):** AdminShell bringt einen `<Toaster>` von sonner mit (`src/ui/AdminToaster.tsx`), der nur erscheint, wenn die Seite noch keinen hat. Ein eigener `<Toaster>` im Root-Layout des Projekts kann bleiben (dann zeigt der Core keinen zweiten) oder entfallen, wenn er nur fürs Admin da war.
+- **Einwilligungen:** zusätzlich höchstens 30 Einträge je Absender in 10 Minuten (`createConsentHandler(config, { maxPerSender })`), gezählt nur im Arbeitsspeicher.
+- **Favicon-Sperre** in `withCoreCms` meldet `icons:` nur noch in Dateien mit Metadaten (`export const metadata`, `generateMetadata`, `withSiteBranding`).
+
+## Daten-Export (ab v0.13.0)
+
+`ExportPanel` lädt Inhalte und Medien der Website als ZIP (`daten/<tabelle>.json`, `medien/<bucket>/<pfad>`, `LIES-MICH.txt`). Ab v0.14.0 ist es ein Tab der Core-Seite „Einstellungen“ (siehe oben); einzeln einbinden geht weiter (`import { ExportPanel } from "core-cms/src/export"`):
+
+- **Tabellen** werden aus der Schnittstellen-Beschreibung (OpenAPI, Service-Role-Schlüssel) ermittelt, neue Tabellen sind also beim nächsten Export dabei. Nie enthalten: `email_settings` und Tabellen, deren Name secret, token, credential, password oder smtp enthält (`src/export/discover.ts`).
+- **Medien**: alle Buckets, rekursiv. Die Dateien werden mit kurzlebigen Adressen direkt aus dem Browser geladen und dort gezippt (Chrome/Edge schreiben direkt in die Datei, andere Browser sammeln im Arbeitsspeicher, Grenze 1,5 GB).
+- Braucht `SUPABASE_SERVICE_ROLE_KEY`. Eine eigene Backup-Seite im Projekt (`.../admin/.../backup/page.tsx`) samt Menüeintrag löschen.
 
 ## Pop-up (ab v0.9.0)
 
@@ -233,7 +441,7 @@ Ein Bild als Hinweis beim Öffnen der Website (z. B. Aktionen, Betriebsferien), 
 1. **Datenbank:** einmal pro Projekt `sql/0.9.0_site_popup.sql` ausführen (Spalten `popup_enabled`,
    `popup_image_url`, `popup_image_alt` in `site_settings`). Ohne Migration bleibt das Pop-up aus,
    die Website läuft weiter.
-2. **Verwaltung:** `/admin/popup` erscheint automatisch über `coreAdminPages` unter „Inhalte“.
+2. **Verwaltung:** `/admin/popup` erscheint automatisch über `coreAdminPages` unter „System“.
 3. **Website:** dort einbinden, wo es erscheinen soll (liest ohne Cookies, Seite bleibt statisch):
 
 ```tsx
@@ -245,6 +453,203 @@ return <>{popup && <SitePopup {...popup} />} …</>;
 
 Kein Cookie, nur `sessionStorage` im Browser. Für automatische Tests blendet
 `sessionStorage.setItem("site-popup-gesehen", "*")` das Pop-up aus.
+
+**Für die ganze Website (ab v0.12.0, empfohlen):** `<SitePopupHost />` einmal im Root-Layout der öffentlichen Seiten
+(`import { SitePopupHost } from "core-cms/src/popup"`), dann überall und ohne Seiten-Code. Einzelne `SitePopup`-Einbindungen
+auf Seiten dann entfernen, sonst erscheint es doppelt. Zeitraum, Häufigkeit, Verzögerung und Seiten stellt der Kunde unter
+`/admin/popup` ein; dafür einmal `sql/0.12.0_site_popup_options.sql` ausführen (ohne sie gilt das bisherige Verhalten). „Einmal pro Tag/Woche“
+speichert Bild und Zeitpunkt im `localStorage` des Besuchers (nur „pro Besuch“ nutzt `sessionStorage`). Das gilt als technisch notwendig, braucht
+keine Einwilligung, sollte aber in der Datenschutzerklärung stehen, z. B.: „Zum Merken, dass ein Hinweisfenster (Pop-up) bereits angezeigt wurde, nutzen
+wir den Session Storage bzw. Local Storage Ihres Browsers; gespeichert werden nur die Adresse des Hinweisbildes und der Zeitpunkt, es erfolgt keine Übermittlung.“ Bei mehreren Root-Layouts (z. B. zwei Abteilungen) in jedes öffentliche Layout.
+
+## Einwilligungen: Cookie-Banner und Zwei-Klick-Lösung (ab v0.14.0)
+
+Ein Feature für alle Projekte: Eingebettete Inhalte (Karten, Videos, Terminbuchung) laden erst nach Zustimmung, optional mit globalem
+Banner. Texte, Gestaltung und Verhalten gibt der Core fest vor (gleichwertige Buttons, Pflichtangaben, Widerruf). Das Projekt trägt nur die
+Dienste ein. Konzept, Begründung und Rechtsgrundlagen: [docs/COOKIE_BANNER_KONZEPT.md](docs/COOKIE_BANNER_KONZEPT.md),
+Maßstab: [docs/REFERENZ_LFDI_BW_COOKIES_TRACKING.md](docs/REFERENZ_LFDI_BW_COOKIES_TRACKING.md).
+
+**Einrichtung im Projekt (6 Handgriffe):**
+
+1. **Datenbank:** `sql/0.14.0_consent.sql` einmal im Supabase-SQL-Editor ausführen (Tabellen `consent_configs`, `consent_events`).
+   Braucht `SUPABASE_SERVICE_ROLE_KEY` (wie die E-Mail-Einstellungen).
+2. **Konfiguration** `consent.config.ts` (Dienste aus dem Katalog `src/consent/catalog.ts`, sonst vollständiges `ConsentService`-Objekt):
+
+```ts
+import { defineConsentConfig, dienst } from "core-cms/src/consent";
+
+export const consentConfig = defineConsentConfig({
+  dienste: [dienst("google-maps"), dienst("youtube")],
+  design: { akzent: "#1f6f3f", platzierung: "leiste-unten" }, // nur Farbe, Rundung, Platzierung
+});
+```
+
+3. **Protokoll-Route** `app/api/consent/route.ts`:
+
+```ts
+import { createConsentHandler } from "core-cms/src/consent/server";
+import { consentConfig } from "@/consent.config";
+export const dynamic = "force-dynamic";
+export const POST = createConsentHandler(consentConfig);
+```
+
+4. **Layout** (öffentliche Seiten): `<ConsentProvider config={consentConfig}>{children}</ConsentProvider>`
+5. **Einbettungen** umschließen: `<ConsentGate service="google-maps"><iframe … /></ConsentGate>` (ersetzt eigene `ConsentEmbed`-Komponenten).
+   Footer-Link optional: `<ConsentSettingsLink />` (bei `einstellungenButton: "footer"` Pflicht).
+6. **Admin:** `<AdminShell optionalPages={["einwilligungen"]} …>`, dann erscheint „Einwilligungen“ unter „System“ (Protokoll, CSV-Export, Prüfstand der Dienste).
+
+**Dienst-Katalog (aktuell):** `google-maps`, `youtube`, `microsoft-bookings` (je Zwei-Klick-Einbettung, mit Anbieter, Zweck, Daten, Drittland-Grundlage und Prüfdatum),
+ab v0.18.0 zusätzlich `google-analytics` (Statistik) und `google-ads` (Marketing, Conversion-Messung) als seitenweite Skripte (siehe „Google Analytics und Google Ads“).
+Der Katalog steht nur im Code (`src/consent/catalog.ts`), nicht im Admin: Welche Dienste ein Projekt nutzt, legt WNT-IT in `consent.config.ts` fest.
+Im Admin „Einwilligungen“ erscheinen nur die Dienste, die das Projekt tatsächlich eingetragen hat. Neuer Dienst oder geänderte Angaben (Anbieter, Daten, Drittland):
+im Katalog ergänzen bzw. `revision` und `geprueftAm` erhöhen, neuen Core-Tag veröffentlichen. Besucher werden dann nur zu diesem Dienst erneut gefragt.
+
+**Modus** (`modus`, automatisch gewählt): `einbettung` = nur Zwei-Klick am Inhalt, kein globaler Banner (Standard bei reinen Einbettungen);
+`banner` = globaler Banner (nötig bei seitenweiten Skripten); `aus` = keine einwilligungspflichtigen Dienste. Der Core verweigert einen
+Banner ohne einwilligungspflichtigen Dienst. Auf `/datenschutz` und `/impressum` und im Admin erscheint nie ein Banner.
+
+**Datenschutz:** Im Browser liegt nur Ja/Nein je Dienst mit Ablaufdatum (12 Monate, `localStorage` „cms_consent“), keine ID. Das Protokoll
+(Serverzeit, Auswahl, Textstand, Seitenpfad) enthält weder IP-Adresse noch Kennung und lässt sich keiner Person zuordnen. Es belegt das Verfahren
+und den Wortlaut je Fassung. Aufbewahrung: laufendes Jahr plus 3 Jahre (`consent_cleanup()`, im Admin auslösbar). Die Datenschutz-Vorlage
+(v. 2026-11-06) beschreibt das; erst übernehmen, wenn das Projekt auf dem neuen Banner läuft.
+
+**Prüfen:**
+
+```bash
+npm test                                                   # Logik, Server-Endpunkt, Oberfläche, Vorlage
+npm run consent:check -- https://projekt.example --out=bericht.json   # Browser-Prüfung gegen eine laufende Seite
+```
+
+`consent:check` startet einen frischen Browser und prüft: keine Fremdanfragen und kein unnötiger Speicher vor der Entscheidung und nach „Alle ablehnen“,
+gleich gestaltete Buttons, Überschrift nicht auf der Liste der FAQ, kein Banner auf den Rechtsseiten. Bei jedem Heben der Core-Version je Projekt
+ausführen und den Bericht beim Release ablegen. Braucht Playwright mit Browser (`npx playwright install chromium` oder `--channel=msedge`/`chrome`).
+
+### Google Analytics und Google Ads (ab v0.18.0)
+
+Google nur über den Core-Baustein einbinden, nie mit eigenem `<script>` oder `@next/third-parties`. Er lädt **vor der Einwilligung nichts** von Google
+(auch keine cookielosen Meldungen) und setzt Google Consent Mode v2 in der vorgeschriebenen Reihenfolge (erst alles `denied`, dann `update` je erlaubtem Dienst).
+
+```ts
+// consent.config.ts: Skripte erzwingen den Modus „banner“
+export const consentConfig = defineConsentConfig({
+  dienste: [dienst("google-analytics"), dienst("google-ads")],
+  rechtsseiten: ["/datenschutzerklaerung", "/impressum"], // nur nötig, wenn die Rechtsseiten anders heißen
+  datenschutzUrl: "/datenschutzerklaerung",
+});
+```
+
+```tsx
+// Root-Layout, INNERHALB des Providers
+import { ConsentProvider, GoogleTag } from "core-cms/src/consent";
+<ConsentProvider config={consentConfig}>
+  {children}
+  <GoogleTag gtmId={process.env.NEXT_PUBLIC_GTM_ID} />   {/* oder gaId="G-…" / adsId="AW-…" ohne Tag Manager */}
+</ConsentProvider>
+
+// Conversion melden (nur wenn Google mit Einwilligung läuft, keine personenbezogenen Daten übergeben):
+import { pushGoogleEvent } from "core-cms/src/consent";
+pushGoogleEvent("anfrage_gesendet", { anfrage_typ: "datenschutz-check" });
+```
+
+| Dienst erlaubt | Consent-Mode-Signale |
+| :--- | :--- |
+| `google-analytics` | `analytics_storage` |
+| `google-ads` | `ad_storage`, `ad_user_data` (`ad_personalization` nur mit `<GoogleTag remarketing />`, erst wenn Banner und Datenschutzerklärung Remarketing nennen) |
+
+- Ohne ID (z. B. lokal) bleibt `GoogleTag` still. Ungültige IDs werden nie geladen, sondern mit Fehler in der Konsole gemeldet.
+- **Tag Manager einrichten:** GA4-Tag mit „Zusätzliche Einwilligung erforderlich: `analytics_storage`“, Google-Ads-Tags und Conversion-Linker mit `ad_storage`.
+  Sonst schicken Google-Tags auch ohne die jeweilige Einwilligung cookielose Meldungen (das wollen wir nicht). Bei gtag.js (`gaId`/`adsId`) erledigt das der Core selbst.
+- Widerruf: Der Provider löscht `_ga`, `_ga_*`, `_gcl_au`, `_gcl_aw` (auch auf der Hauptdomain) und lädt die Seite neu.
+- Prüfen: `npm run consent:check -- https://vorschau.example --legal=/datenschutzerklaerung,/impressum --expect=www.googletagmanager.com`
+  (ohne Fremdanfragen vor der Entscheidung und nach „Alle ablehnen“, nach „Alle zulassen“ muss der Tag Manager laden).
+- Vor dem ersten Live-Einsatz: Katalogtexte und Datenschutz-Abschnitt (Entwurf in `docs/DATENSCHUTZ_BAUSTEINE_SPAETER.md`) juristisch gegenlesen.
+
+**Neuen Dienst aufnehmen:** Erst die Vorprüfung (Konzept, Abschnitt 3a: Geht es ohne Dritten? Alternative? Drittland-Grundlage? AV-Vertrag?), dann ein Eintrag in
+`src/consent/catalog.ts` mit allen Pflichtfeldern. `revision` nur bei wesentlichen Änderungen erhöhen (löst eine neue Frage aus). Texte in `src/consent/texts.ts`
+sind rechtlich relevant: `TEXT_VERSION` erhöhen, juristisch gegenlesen, Release.
+
+## Rechtstexte bearbeiten (ab v0.12.0)
+
+Datenschutzerklärung u. Ä. im Admin bearbeiten: Überschriften mit ihren Texten als aufklappbare Gruppen,
+Nummern (1. / 1.1 / 1.1.1) automatisch nach der Stelle, Inhaltsverzeichnis aus den Überschriften 1 und 2,
+Verweise („siehe 2.5 …“) wandern bei Änderungen mit, Hinweis auf offene Platzhalter `[● …]`.
+
+**Datenschutz-Vorlage für alle Projekte:** Die Grundtexte der Datenschutzerklärung liefert der Core
+(`src/legal/templates/datenschutz.ts`): Allgemeines, Hosting, E-Mail, Cookies, Kontaktformular und Rechte. Diese Abschnitte
+sind im Editor gesperrt. Im Admin unter „Datenschutzerklärung“ trägt das Projekt Firma und Kontakt ein. „Text aus
+Vorlage holen“ zeigt zuerst wortweise die Änderungen und ersetzt nur diese Abschnitte, alles andere trägt das Projekt als eigenen Abschnitt ein und das bleibt erhalten.
+Bei einer neuen Vorlagenversion zeigt der Admin „Neue Vorlage verfügbar“ mit der Liste der Änderungen.
+Ablauf, Regelwerk und die Übersicht, welches Projekt auf welcher Vorlagenversion steht: [docs/RECHTSTEXTE.md](docs/RECHTSTEXTE.md).
+
+**Standard (empfohlen): alles kommt aus dem Core.**
+
+1. **Datenbank:** einmal pro Projekt `sql/0.12.0_legal_documents.sql` ausführen (Tabelle `legal_documents`, nur die Inhalte
+   sind öffentlich lesbar, keine E-Mail-Adresse des Bearbeiters). Die Datei kann gefahrlos erneut ausgeführt werden.
+   Ohne Migration und ohne Vorlage im Projekt liefert die Seite „nicht gefunden“.
+2. **Website:** einmalig eine Route anlegen, z. B. `app/[legal]/page.tsx` (in der Route-Gruppe mit dem passenden Layout):
+
+```tsx
+export { LegalRoute as default, generateLegalMetadata as generateMetadata, generateLegalStaticParams as generateStaticParams } from "core-cms/src/legal";
+export const dynamicParams = false; // nur /datenschutz und /impressum
+```
+
+   Das Aussehen der Seiten gibt der Core vor (einheitlich, keine Optionen pro Projekt). Nur Vorlagen für die Zeit vor dem ersten Speichern kann das Projekt in einer eigenen Route-Datei mitgeben:
+
+```tsx
+import { renderLegalPage, generateLegalMetadata, generateLegalStaticParams } from "core-cms/src/legal";
+export const generateMetadata = generateLegalMetadata;
+export const generateStaticParams = generateLegalStaticParams;
+export const dynamicParams = false;
+export default function Page(props: { params: Promise<{ legal?: string | string[] }> }) {
+  return renderLegalPage(props, { templates: { datenschutz: { title, version, blocks }, impressum: { anbieter: { na: false, v: { name: "…" } } } } });
+}
+```
+
+3. **Admin:** „Datenschutzerklärung“ und „Impressum“ erscheinen über `coreAdminPages` (Menü und Catch-all) automatisch unter „System“. Nicht zusätzlich im Menü des Projekts eintragen, sonst stehen sie doppelt dort.
+   Die Kennungen sind fest: `datenschutz` (Text) und `impressum` (Formular, eigene Spalte `data`). Das Impressum kann nicht über
+   den Text-Editor gespeichert werden, damit sich beide Wege nie überschreiben.
+
+**Alternativ: eigene Admin-Seite mit Vorlage** (eigene Route, hat Vorrang vor dem Catch-all, der Menüpunkt kommt weiter aus dem Core), z. B. `app/admin/(dashboard)/datenschutz/page.tsx`:
+
+```tsx
+import { LegalDocumentPage } from "core-cms/src/legal";
+export default function Page() {
+  return <LegalDocumentPage slug="datenschutz" label="Datenschutzerklärung" publicPath="/datenschutz"
+    template={{ title, version, blocks }} />; // Vorlage: Liste { t: "h1"|"h2"|"h3"|"p"|"li", text, ref? }
+}
+```
+
+**Website komplett selbst gestalten:** Text lesen und Verweise einsetzen, dann selbst rendern
+(`groupPolicyBlocks`, `policyToc`, `policyAnchor` helfen dabei):
+
+```tsx
+import { getLegalDocument, resolvePolicyRefs } from "core-cms/src/legal";
+const doc = await getLegalDocument("datenschutz", template);
+const blocks = resolvePolicyRefs(doc.blocks);
+```
+
+Für schlichte Texte ohne Nummern, Inhaltsverzeichnis und Verweise `numbered={false}` und ggf. `showVersion={false}` setzen; `slug` ist frei wählbar, nur „impressum“ ist für das Impressum-Formular reserviert.
+
+**Impressum als Formular:** Das Impressum ist kein freier Text, sondern ein festes Formular mit den Pflichtangaben nach
+§ 5 DDG (je Abschnitt mit Gesetzesstelle; Abschnitte, die nicht zutreffen, als „Nicht anwendbar“ markierbar, Vorschau,
+Prüfung der Pflichtfelder). Es nutzt dieselbe Tabelle (Spalte `data`). Einbindung:
+
+```tsx
+// Admin: app/admin/(dashboard)/impressum/page.tsx
+import { ImpressumPage } from "core-cms/src/legal";
+export default async function Page() {
+  return <ImpressumPage slug="impressum" publicPath="/impressum"
+    template={{ anbieter: { na: false, v: { name: "…", street: "…" } }, register: { na: true, v: {} } }} />; // Vorbelegung, Fehlendes wird leer ergänzt
+}
+
+// Website: app/impressum/page.tsx
+import { getImpressum, impressumToBlocks } from "core-cms/src/legal";
+const doc = await getImpressum("impressum", template);
+const blocks = impressumToBlocks(doc.data); // Absätze und Überschriften, selbst rendern
+```
+
+Überschriften, auf die verwiesen wird, tragen `ref: "kennung"`; im Text steht `{{ref:kennung}}`
+(im Editor über „Verweis einfügen“). Platzhalter-Format `[● …]`; ein Verweis ohne Ziel erscheint als „[● Verweis fehlt]“.
 
 ## Mehrfachbearbeitung (ab v0.10.0)
 
@@ -260,7 +665,7 @@ import { defineBulk, defineBulkRegistry } from "core-cms/src/bulk/types";
 export const BULK = defineBulkRegistry({
   products: defineBulk({
     table: "products",
-    scope: { abteilung: "richardprinz" },          // gilt bei jedem Lesen und Schreiben
+    scope: { abteilung: "shop" },                  // gilt bei jedem Lesen und Schreiben
     label: { one: "Produkt", many: "Produkte" },
     fields: {
       brand_id: { label: "Marke", type: "select", options: { table: "brands", label: "name" }, required: true },
@@ -314,10 +719,10 @@ Siehe Kommentare in den jeweiligen `src/*/index.ts`-Dateien für den Stand pro M
 | Phase | Modul | Status |
 |---|---|---|
 | 0 | Repo-Grundgerüst | ✅ erledigt |
-| 1 | Supabase-Client + Typen | offen |
-| 2 | Auth | offen |
-| 3 | Media Library + Site-Settings | offen |
-| 4 | Submissions + E-Mail-Adapter (Resend/SMTP) | offen |
-| 5 | Pilotprojekt migrieren | offen |
-| 6 | Restliche Projekte migrieren | offen |
-| 7 | sync-core.ps1 abschalten | offen |
+| 1 | Supabase-Client + Typen | ✅ erledigt |
+| 2 | Auth (Login, Passwort vergessen/ändern, Account) | ✅ erledigt |
+| 3 | Media Library + Site-Settings | ✅ erledigt |
+| 4 | Submissions + E-Mail-Adapter (Resend/SMTP) | ✅ erledigt |
+| 5 | Pilotprojekt migrieren | ✅ erledigt |
+| 6 | Restliche Projekte migrieren | ✅ erledigt |
+| 7 | sync-core.ps1 abschalten | ✅ erledigt (Skript und `template` entfernt, 2026-10-19) |

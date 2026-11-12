@@ -5,7 +5,7 @@
 // Diese Datei hat keine "use client"/"use server"-Angabe: Sie wird von der
 // Server-Seite (Optionen laden, Speichern) und für Typen im Browser genutzt.
 
-/** Fester Filter, z. B. { abteilung: "richardprinz" }. Gilt bei jedem Lesen und Schreiben. */
+/** Fester Filter, z. B. { abteilung: "shop" }. Gilt bei jedem Lesen und Schreiben. */
 export type BulkScope = Record<string, string | number | boolean>;
 
 export interface BulkOption {

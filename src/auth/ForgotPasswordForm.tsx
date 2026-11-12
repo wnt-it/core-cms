@@ -35,7 +35,7 @@ export default function ForgotPasswordForm() {
   if (success) {
     return (
       <div role="status" className="rounded-lg border border-[#BBF7D0] bg-[#F0FDF4] px-4 py-3 text-[13.5px] text-[#166534]">
-        E-Mail wurde gesendet. Bitte prüfen Sie Ihren Posteingang.
+        E-Mail wurde gesendet. Bitte prüfe deinen Posteingang.
       </div>
     )
   }
@@ -52,7 +52,7 @@ export default function ForgotPasswordForm() {
             name="email"
             required
             autoComplete="email"
-            placeholder="name@firma.de"
+            placeholder="name@example.com"
             aria-invalid={errorMsg ? true : undefined}
           />
         </label>

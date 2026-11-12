@@ -58,7 +58,7 @@ function EmailSection({ currentEmail }: { currentEmail: string }) {
     <Section
       bare
       title="E-Mail-Adresse"
-      description="Mit dieser Adresse melden Sie sich an. Aus Sicherheitsgründen wird zuerst ein Bestätigungslink an die neue Adresse geschickt."
+      description="Mit dieser Adresse meldest du dich an. Aus Sicherheitsgründen wird zuerst ein Bestätigungslink an die neue Adresse geschickt."
     >
       <form onSubmit={handleSubmit} className={cx(cardClass, 'min-w-0')}>
         <div className="flex flex-col gap-5 p-5 sm:p-6">
@@ -74,7 +74,7 @@ function EmailSection({ currentEmail }: { currentEmail: string }) {
                 autoComplete="email"
                 value={newEmail}
                 onChange={(e) => setNewEmail(e.target.value)}
-                placeholder="neue@adresse.de"
+                placeholder="neue.adresse@example.com"
               />
             </Field>
             <Field label="Aktuelles Passwort zur Bestätigung">
@@ -134,7 +134,7 @@ function PasswordSection() {
     <Section
       bare
       title="Passwort"
-      description={<>Passwort vergessen? Melden Sie sich ab und nutzen Sie stattdessen den Link „Passwort vergessen?“ auf der Login-Seite.</>}
+      description={<>Passwort vergessen? Melde dich ab und nutze stattdessen den Link „Passwort vergessen?“ auf der Login-Seite.</>}
     >
       <form onSubmit={handleSubmit} className={cx(cardClass, 'min-w-0')}>
         <div className="p-5 sm:p-6">

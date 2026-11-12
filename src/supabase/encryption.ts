@@ -1,5 +1,4 @@
 // AES-256-CBC Verschlüsselung für sensible Settings-Felder (z.B. SMTP-Passwort).
-// Quelle: template/src/utils/encryption.ts
 //
 // Der Schlüssel kommt AUSSCHLIESSLICH aus der Umgebungsvariable ENCRYPTION_KEY.
 // Es gibt bewusst keinen Ersatzschlüssel (das Repo ist öffentlich). Ist die Variable

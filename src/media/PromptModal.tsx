@@ -1,6 +1,5 @@
 'use client'
 
-// Quelle: template/src/components/ui/PromptModal.tsx
 // Kleines Eingabefenster (Ordner anlegen, umbenennen). Escape schließt.
 
 import { useState, useEffect } from 'react'

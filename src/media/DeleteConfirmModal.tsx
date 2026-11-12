@@ -1,6 +1,5 @@
 'use client'
 
-// Quelle: template/src/components/ui/DeleteConfirmModal.tsx
 // Darstellung über ConfirmDialog aus dem Admin-Kit; Schrift wird hier gesetzt,
 // weil das Fenster auch außerhalb von AdminShell geöffnet wird.
 

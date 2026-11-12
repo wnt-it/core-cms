@@ -1,6 +1,4 @@
-// SMTP-Adapter für EmailProvider.
-// Extrahiert aus der bisherigen, fest an Nodemailer/SMTP gekoppelten Logik in
-// template/src/lib/services/submissions.ts.
+// SMTP-Adapter für EmailProvider (Nodemailer). Zugangsdaten kommen aus den Einstellungen im Admin (smtp-settings.ts).
 
 import nodemailer, { type Transporter } from "nodemailer";
 import type { EmailMessage, EmailProvider } from "./provider";
@@ -43,6 +41,7 @@ export class SmtpEmailProvider implements EmailProvider {
       to: message.to,
       subject: message.subject,
       html: message.html,
+      ...(message.replyTo ? { replyTo: { name: message.replyTo.name ?? "", address: message.replyTo.email } } : {}),
     });
   }
 }
