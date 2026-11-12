@@ -8,6 +8,8 @@
 //  4. Layout: <ConsentProvider config={consentConfig}>{children}</ConsentProvider>
 //  5. Einbettungen: <ConsentGate service="google-maps"><iframe /></ConsentGate>
 //  6. Admin: AdminShell mit optionalPages={["einwilligungen"]}
+//  7. Google (ab v0.18.0): dienst("google-analytics") / dienst("google-ads") und <GoogleTag gtmId="GTM-…" /> im Provider,
+//     Conversions mit pushGoogleEvent("anfrage_gesendet"). Lädt erst nach Einwilligung, Consent Mode v2.
 //
 // Der Server-Teil (createConsentHandler) liegt bewusst in "core-cms/src/consent/server", damit er nicht im Browser-Bündel landet.
 
@@ -19,6 +21,10 @@ export type { ConsentGateProps } from "./ConsentGate";
 export { ConsentSettingsLink } from "./ConsentSettingsLink";
 export { useConsent } from "./context";
 export { CONSENT_CATALOG } from "./catalog";
+export { GoogleTag } from "./GoogleTag";
+export type { GoogleTagProps } from "./GoogleTag";
+export { pushGoogleEvent, googleConsentSignals } from "./google";
+export type { GoogleConsentSignals, GoogleServiceIds, GoogleTagIds } from "./google";
 export type {
   ConsentConfigInput,
   ConsentDesign,

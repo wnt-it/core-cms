@@ -17,6 +17,17 @@ export interface ChangelogEntry {
 /** Neueste Version zuerst. */
 export const CORE_CHANGELOG: ChangelogEntry[] = [
   {
+    // Entwurf: noch nicht veröffentlicht (kein Tag). Erst nach juristischer Prüfung der Google-Katalogtexte releasen.
+    version: "0.18.0",
+    date: "2026-11-13",
+    changes: [
+      { type: "feature", text: "Google Analytics und Google-Ads-Conversions mit Einwilligung: Die Website lädt Google erst, wenn Besucher im Cookie-Banner zustimmen, und meldet Google genau, was erlaubt ist (Statistik und Werbung getrennt). Ohne Zustimmung geht nichts an Google." },
+      { type: "fix", text: "Wird eine Einwilligung widerrufen, löscht die Website jetzt auch Cookies mit wechselnden Namen (z. B. von Google Analytics) und solche, die auf der Hauptdomain liegen." },
+    ],
+    releaseNotes:
+      "**Für Entwickler:** Neu im Katalog: `google-analytics` (statistik) und `google-ads` (marketing), beide Art `skript` und damit Modus `banner`. Neuer Baustein `<GoogleTag gtmId=… />` (oder `gaId`/`adsId` für gtag.js) innerhalb von `<ConsentProvider>`: lädt vor der Einwilligung nichts, danach Consent Mode v2 (default denied, update je Dienst), `ad_personalization` nur mit `remarketing`. Conversions: `pushGoogleEvent(\"anfrage_gesendet\")`. Speicher-Namen im Katalog dürfen auf `*` enden. `consent:check` kennt `--legal=/pfad,/pfad` (abweichende Rechtsseiten) und `--expect=host` (nach Zustimmung muss eine Anfrage an den Host gehen). Keine SQL-Datei.",
+  },
+  {
     version: "0.17.0",
     date: "2026-11-10",
     changes: [

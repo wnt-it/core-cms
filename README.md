@@ -498,7 +498,8 @@ export const POST = createConsentHandler(consentConfig);
    Footer-Link optional: `<ConsentSettingsLink />` (bei `einstellungenButton: "footer"` Pflicht).
 6. **Admin:** `<AdminShell optionalPages={["einwilligungen"]} …>`, dann erscheint „Einwilligungen“ unter „System“ (Protokoll, CSV-Export, Prüfstand der Dienste).
 
-**Dienst-Katalog (aktuell):** `google-maps`, `youtube`, `microsoft-bookings` (je Zwei-Klick-Einbettung, mit Anbieter, Zweck, Daten, Drittland-Grundlage und Prüfdatum).
+**Dienst-Katalog (aktuell):** `google-maps`, `youtube`, `microsoft-bookings` (je Zwei-Klick-Einbettung, mit Anbieter, Zweck, Daten, Drittland-Grundlage und Prüfdatum),
+ab v0.18.0 zusätzlich `google-analytics` (Statistik) und `google-ads` (Marketing, Conversion-Messung) als seitenweite Skripte (siehe „Google Analytics und Google Ads“).
 Der Katalog steht nur im Code (`src/consent/catalog.ts`), nicht im Admin: Welche Dienste ein Projekt nutzt, legt WNT-IT in `consent.config.ts` fest.
 Im Admin „Einwilligungen“ erscheinen nur die Dienste, die das Projekt tatsächlich eingetragen hat. Neuer Dienst oder geänderte Angaben (Anbieter, Daten, Drittland):
 im Katalog ergänzen bzw. `revision` und `geprueftAm` erhöhen, neuen Core-Tag veröffentlichen. Besucher werden dann nur zu diesem Dienst erneut gefragt.
@@ -522,6 +523,46 @@ npm run consent:check -- https://projekt.example --out=bericht.json   # Browser-
 `consent:check` startet einen frischen Browser und prüft: keine Fremdanfragen und kein unnötiger Speicher vor der Entscheidung und nach „Alle ablehnen“,
 gleich gestaltete Buttons, Überschrift nicht auf der Liste der FAQ, kein Banner auf den Rechtsseiten. Bei jedem Heben der Core-Version je Projekt
 ausführen und den Bericht beim Release ablegen. Braucht Playwright mit Browser (`npx playwright install chromium` oder `--channel=msedge`/`chrome`).
+
+### Google Analytics und Google Ads (ab v0.18.0)
+
+Google nur über den Core-Baustein einbinden, nie mit eigenem `<script>` oder `@next/third-parties`. Er lädt **vor der Einwilligung nichts** von Google
+(auch keine cookielosen Meldungen) und setzt Google Consent Mode v2 in der vorgeschriebenen Reihenfolge (erst alles `denied`, dann `update` je erlaubtem Dienst).
+
+```ts
+// consent.config.ts: Skripte erzwingen den Modus „banner“
+export const consentConfig = defineConsentConfig({
+  dienste: [dienst("google-analytics"), dienst("google-ads")],
+  rechtsseiten: ["/datenschutzerklaerung", "/impressum"], // nur nötig, wenn die Rechtsseiten anders heißen
+  datenschutzUrl: "/datenschutzerklaerung",
+});
+```
+
+```tsx
+// Root-Layout, INNERHALB des Providers
+import { ConsentProvider, GoogleTag } from "core-cms/src/consent";
+<ConsentProvider config={consentConfig}>
+  {children}
+  <GoogleTag gtmId={process.env.NEXT_PUBLIC_GTM_ID} />   {/* oder gaId="G-…" / adsId="AW-…" ohne Tag Manager */}
+</ConsentProvider>
+
+// Conversion melden (nur wenn Google mit Einwilligung läuft, keine personenbezogenen Daten übergeben):
+import { pushGoogleEvent } from "core-cms/src/consent";
+pushGoogleEvent("anfrage_gesendet", { anfrage_typ: "datenschutz-check" });
+```
+
+| Dienst erlaubt | Consent-Mode-Signale |
+| :--- | :--- |
+| `google-analytics` | `analytics_storage` |
+| `google-ads` | `ad_storage`, `ad_user_data` (`ad_personalization` nur mit `<GoogleTag remarketing />`, erst wenn Banner und Datenschutzerklärung Remarketing nennen) |
+
+- Ohne ID (z. B. lokal) bleibt `GoogleTag` still. Ungültige IDs werden nie geladen, sondern mit Fehler in der Konsole gemeldet.
+- **Tag Manager einrichten:** GA4-Tag mit „Zusätzliche Einwilligung erforderlich: `analytics_storage`“, Google-Ads-Tags und Conversion-Linker mit `ad_storage`.
+  Sonst schicken Google-Tags auch ohne die jeweilige Einwilligung cookielose Meldungen (das wollen wir nicht). Bei gtag.js (`gaId`/`adsId`) erledigt das der Core selbst.
+- Widerruf: Der Provider löscht `_ga`, `_ga_*`, `_gcl_au`, `_gcl_aw` (auch auf der Hauptdomain) und lädt die Seite neu.
+- Prüfen: `npm run consent:check -- https://vorschau.example --legal=/datenschutzerklaerung,/impressum --expect=www.googletagmanager.com`
+  (ohne Fremdanfragen vor der Entscheidung und nach „Alle ablehnen“, nach „Alle zulassen“ muss der Tag Manager laden).
+- Vor dem ersten Live-Einsatz: Katalogtexte und Datenschutz-Abschnitt (Entwurf in `docs/DATENSCHUTZ_BAUSTEINE_SPAETER.md`) juristisch gegenlesen.
 
 **Neuen Dienst aufnehmen:** Erst die Vorprüfung (Konzept, Abschnitt 3a: Geht es ohne Dritten? Alternative? Drittland-Grundlage? AV-Vertrag?), dann ein Eintrag in
 `src/consent/catalog.ts` mit allen Pflichtfeldern. `revision` nur bei wesentlichen Änderungen erhöhen (löst eine neue Frage aus). Texte in `src/consent/texts.ts`

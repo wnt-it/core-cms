@@ -1,6 +1,6 @@
 # Weitere Datenschutz-Bausteine (noch nicht in der Vorlage)
 
-Diese Bausteine gehören seit dem ersten Release nicht zur Vorlage, siehe [BACKLOG.md](../BACKLOG.md). Wer einen davon braucht, trägt ihn im Admin als eigenen Abschnitt in den Text ein. Die Entwürfe unten sind allgemein gehalten, `[● …]` muss je Kunde gefüllt werden. `{{ref:…}}` sind Verweise, im Editor über „Verweis einfügen“ setzen.
+Diese Bausteine gehören seit dem ersten Release nicht zur Vorlage, sind aber als zuschaltbare Bausteine geplant. Wer einen davon braucht, trägt ihn im Admin als eigenen Abschnitt in den Text ein. Die Entwürfe unten sind allgemein gehalten, `[● …]` muss je Kunde gefüllt werden. `{{ref:…}}` sind Verweise, im Editor über „Verweis einfügen“ setzen.
 
 ### Eingebettete Inhalte
 
@@ -35,6 +35,20 @@ Der Anbieter verarbeitet die Daten als unser Auftragsverarbeiter auf Grundlage e
 [● Drittland: Werden Daten in ein Drittland übermittelt? Falls ja, Land und Grundlage nennen, z. B. EU-US Data Privacy Framework oder EU-Standardvertragsklauseln. Falls nein, Satz streichen.]
 
 Die Buchungsdaten speichern wir, bis Ihr Anliegen abschließend bearbeitet ist, längstens jedoch [● Speicherdauer]. Sofern aus dem Termin eine Geschäftsbeziehung entsteht, gelten die Fristen in {{ref:speicherdauer}}.
+
+### Google Analytics und Google Ads (Entwurf, ab v0.18.0)
+
+Passt zu den Katalogeinträgen `google-analytics` und `google-ads` und zu `<GoogleTag />`. Vor dem Einsatz juristisch gegenlesen. Absätze zu einem Dienst, den das Projekt nicht nutzt, streichen.
+
+Sofern Sie einwilligen, setzen wir Dienste der Google Ireland Limited, Gordon House, Barrow Street, Dublin 4, Irland („Google“) ein. Ohne Ihre Einwilligung wird kein Google-Dienst geladen und es werden keine Daten an Google übermittelt. Die Dienste werden über den Google Tag Manager geladen. Er selbst setzt keine Cookies, beim Laden wird aber Ihre IP-Adresse an Google übermittelt.
+
+**Google Analytics (Statistik).** Wir werten aus, wie unsere Website genutzt wird, um Inhalte und Anzeigen zu verbessern. Erfasst werden insbesondere aufgerufene Seiten, Verweildauer und Klicks, die Seite, von der Sie kamen, Angaben zu Gerät, Browser und Sprache sowie Ihr ungefährer Standort. Dazu wird eine zufällige Kennung in Cookies gespeichert („_ga“, „_ga_[● Mess-ID]“, Speicherdauer bis zu 2 Jahre). Google Analytics speichert keine IP-Adressen. Die Ereignisdaten werden nach [● 2 oder 14] Monaten gelöscht. Google verarbeitet die Daten als unser Auftragsverarbeiter auf Grundlage eines Vertrags gemäß Art. 28 DSGVO.
+
+**Google Ads (Conversion-Messung).** Wir messen, ob eine Anfrage über eine unserer Google-Anzeigen zustande kam, um die Anzeigen zu steuern. Kommen Sie über eine Anzeige auf unsere Website, werden eine Kennung des Anzeigenklicks und Cookies gespeichert („_gcl_au“, „_gcl_aw“, Speicherdauer bis zu 90 Tage) und es wird erfasst, ob Sie eine Anfrage senden. Google kann diese Angaben mit Daten verknüpfen, die Google bereits über Sie hat, und ist dafür eigener Verantwortlicher. [● Remarketing: Eine personalisierte Werbeansprache findet nicht statt. Falls doch, hier beschreiben und `<GoogleTag remarketing />` setzen.]
+
+Ihre Auswahl übermitteln wir an Google (Google Consent Mode v2), damit Google nur nutzt, was Sie erlaubt haben. Rechtsgrundlage ist jeweils Ihre Einwilligung gemäß Art. 6 Abs. 1 lit. a) DSGVO und § 25 Abs. 1 TDDDG. Sie können sie jederzeit mit Wirkung für die Zukunft über die „Cookie-Einstellungen“ am Ende jeder Seite widerrufen. Dann löschen wir die genannten Cookies auf Ihrem Gerät und laden keine Google-Dienste mehr.
+
+Google kann Daten in die USA übermitteln. Google LLC ist nach dem EU-US Data Privacy Framework zertifiziert (Angemessenheitsbeschluss nach Art. 45 DSGVO), ergänzend gelten Standardvertragsklauseln. Weitere Informationen: https://policies.google.com/privacy und https://business.safety.google/adsprocessorterms/
 
 ### Newsletter
 

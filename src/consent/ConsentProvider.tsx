@@ -24,6 +24,7 @@ import {
   resolveState,
   withdrawnServices,
 } from "./logic";
+import { cookieDomains, storageNameMatches } from "./google";
 import { ServiceInfo } from "./ServiceInfo";
 import { CONSENT_CSS } from "./styles";
 import { TEXTS } from "./texts";
@@ -76,13 +77,28 @@ async function postEvent(endpoint: string, payload: ConsentEventPayload): Promis
   }
 }
 
-/** Räumt, was ein widerrufener Dienst laut Katalog auf dem Gerät abgelegt hat (nur eigene Domain möglich). */
+/**
+ * Räumt, was ein widerrufener Dienst laut Katalog auf dem Gerät abgelegt hat (nur eigene Domain möglich).
+ * Namen mit * am Ende sind Platzhalter (z. B. „_ga_*“). Cookies werden für Host, .Host und Hauptdomain gelöscht,
+ * weil Skripte wie Google Analytics sie oft auf der Hauptdomain setzen.
+ */
 function cleanupStorage(service: ConsentService) {
   for (const s of service.speicher) {
     try {
-      if (s.art === "cookie") document.cookie = `${s.name}=; Max-Age=0; path=/`;
-      else if (s.art === "localStorage") localStorage.removeItem(s.name);
-      else sessionStorage.removeItem(s.name);
+      if (s.art === "cookie") {
+        const names = document.cookie
+          .split(";")
+          .map((c) => c.split("=")[0].trim())
+          .filter((n) => n && storageNameMatches(s.name, n));
+        for (const name of names) {
+          for (const domain of cookieDomains(window.location.hostname)) {
+            document.cookie = `${name}=; Max-Age=0; path=/${domain ? `; domain=${domain}` : ""}`;
+          }
+        }
+      } else {
+        const store = s.art === "localStorage" ? localStorage : sessionStorage;
+        for (const key of Object.keys(store)) if (storageNameMatches(s.name, key)) store.removeItem(key);
+      }
     } catch {
       /* ignorieren */
     }

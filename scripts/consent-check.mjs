@@ -1,12 +1,14 @@
 // Browser-Prüfung des Einwilligungs-Features gegen eine laufende Website (Nachweis, dass vor der Zustimmung nichts geladen wird).
 //
 //   npm run consent:check -- https://projekt.example [--allow=api.example.org] [--allow-storage=name] [--out=bericht.json] [--channel=msedge]
+//                            [--legal=/datenschutzerklaerung,/impressum] [--expect=www.googletagmanager.com]
 //
 // Geprüft wird in einem frischen Browser (ohne Cookies, ohne Speicher):
 //   1. Beim Aufruf gehen keine Anfragen an Fremddomänen, und es liegt nichts außer dem Notwendigen im Speicher.
 //   2. Nach "Alle ablehnen" (Banner) bzw. ohne Klick (Zwei-Klick-Platzhalter) bleibt es dabei, die Ablehnung ist gespeichert.
-//   3. Auf /datenschutz und /impressum erscheint kein Banner.
-//   4. Nach "Alle zulassen" dürfen Fremdanfragen entstehen (nur zur Information, kein Fehler).
+//   3. Auf /datenschutz und /impressum (oder den Seiten aus --legal) erscheint kein Banner.
+//   4. Nach "Alle zulassen" dürfen Fremdanfragen entstehen (zur Information). Mit --expect=host wird es eine Prüfung:
+//      Nach der Zustimmung MUSS eine Anfrage an diesen Host gehen (z. B. Tag Manager bei Projekten mit <GoogleTag />).
 // Erlaubt sind standardmäßig die eigene Domäne und *.supabase.co (eigenes Backend). Weitere mit --allow=host.
 // Ergebnis: Ausgabe im Terminal, Exit-Code 1 bei Fehlern, optional JSON-Bericht (--out). Gedacht für jeden Release und jedes Heben der Core-Version.
 //
@@ -19,7 +21,7 @@ const args = process.argv.slice(2);
 const url = args.find((a) => !a.startsWith("--"));
 const opt = (name) => args.filter((a) => a.startsWith(`--${name}=`)).map((a) => a.slice(name.length + 3));
 if (!url) {
-  console.error("Aufruf: npm run consent:check -- https://projekt.example [--allow=host] [--allow-storage=name] [--out=bericht.json] [--channel=msedge]");
+  console.error("Aufruf: npm run consent:check -- https://projekt.example [--allow=host] [--allow-storage=name] [--legal=/pfad,/pfad] [--expect=host] [--out=bericht.json] [--channel=msedge]");
   process.exit(2);
 }
 
@@ -103,7 +105,8 @@ try {
   }
 
   // 2. Rechtsseiten ohne Banner
-  for (const path of ["/datenschutz", "/impressum"]) {
+  const legalPaths = opt("legal").flatMap((v) => v.split(",")).map((p) => p.trim()).filter(Boolean);
+  for (const path of legalPaths.length ? legalPaths : ["/datenschutz", "/impressum"]) {
     const { context, page } = await freshPage();
     const res = await page.goto(new URL(path, base).href).catch(() => null);
     if (!res || res.status() >= 400) {
@@ -125,6 +128,9 @@ try {
       await accept.first().click();
       await settle(page);
       console.log(`INFO    Nach „Alle zulassen“ gehen Anfragen an: ${[...new Set(foreign)].join(", ") || "(keine, nichts eingebunden)"}`);
+    }
+    for (const host of opt("expect")) {
+      check(`Nach „Alle zulassen“: Anfrage an ${host}`, foreign.includes(host), [...new Set(foreign)].join(", ") || "keine Fremdanfragen");
     }
     await context.close();
   }
