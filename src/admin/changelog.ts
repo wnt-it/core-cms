@@ -22,7 +22,7 @@ export const CORE_CHANGELOG: ChangelogEntry[] = [
     date: "2026-11-13",
     changes: [
       { type: "feature", text: "Google Analytics und Google-Ads-Conversions mit Einwilligung: Die Website lädt Google erst, wenn Besucher im Cookie-Banner zustimmen, und meldet Google genau, was erlaubt ist (Statistik und Werbung getrennt). Ohne Zustimmung geht nichts an Google." },
-      { type: "fix", text: "Wird eine Einwilligung widerrufen, löscht die Website jetzt auch Cookies mit wechselnden Namen (z. B. von Google Analytics) und solche, die auf der Hauptdomain liegen." },
+      { type: "fix", text: "Wird eine Einwilligung widerrufen, löscht die Website jetzt auch Cookies mit wechselnden Namen (z. B. von Google Analytics) und solche, die auf der Hauptdomain liegen. Google erfährt den Widerruf sofort, und Cookies, die Google bis zum Neuladen noch setzt, werden ebenfalls entfernt." },
       { type: "fix", text: "Cookie-Banner: Die Buttons „Alle ablehnen“, „Alle zulassen“ und „Einstellungen“ stehen jetzt fest unten im Banner und sind auch bei mehreren Diensten und kleinen Bildschirmen ohne Scrollen erreichbar." },
     ],
     releaseNotes:
