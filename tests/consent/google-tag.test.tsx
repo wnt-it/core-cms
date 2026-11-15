@@ -62,6 +62,21 @@ describe("GoogleTag", () => {
     expect(pushGoogleEvent("anfrage_gesendet")).toBe(false);
   });
 
+  it("erster Banner: je Dienst Anbieter und Zweck sichtbar, alle Angaben zugeklappt darunter", async () => {
+    render(app());
+    const banner = await screen.findByTestId("consent-banner");
+    const items = banner.querySelectorAll("li.wnt-consent-item");
+    expect(items).toHaveLength(2);
+    for (const li of items) {
+      expect(li.querySelector("p")?.textContent).toMatch(/^Google Ireland Limited: \S/);
+      const details = li.querySelector("details");
+      expect(details).not.toBeNull();
+      expect(details!.open).toBe(false);
+      expect(details!.querySelector("dl")).not.toBeNull();
+    }
+    expect(banner.textContent).toMatch(/außerhalb der EU|Drittl/);
+  });
+
   it("nach „Alle ablehnen“ bleibt es dabei", async () => {
     render(app());
     fireEvent.click(await screen.findByRole("button", { name: "Alle ablehnen" }));

@@ -303,8 +303,15 @@ function Banner({
         <ul className="wnt-consent-list">
           {open.map((s) => (
             <li key={s.id} className="wnt-consent-item">
+              {/* Erste Ebene: wer und wozu sichtbar (Drittland-Hinweis steht unter der Liste), alle Angaben aufklappbar direkt darunter */}
               <strong>{s.name}</strong>
-              <ServiceInfo service={s} />
+              <p className="wnt-consent-small" style={{ margin: "2px 0 0" }}>
+                {s.anbieter.split(",")[0]}: {s.zweck}
+              </p>
+              <details className="wnt-consent-details">
+                <summary>{TEXTS.gateDetails}</summary>
+                <ServiceInfo service={s} />
+              </details>
             </li>
           ))}
         </ul>
