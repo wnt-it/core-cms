@@ -79,13 +79,12 @@ export function GoogleTag({ gtmId, gaId, adsId, services, remarketing = false }:
     if (pathname.startsWith("/admin")) return;
     const url = googleScriptUrl(ids);
     if (!url) return;
-    // Nichts erlaubt: nichts laden. (Widerruf nach dem Laden: der Provider lädt die Seite neu.)
-    if (!anyGoogleAllowed(isAllowed, svc)) return;
-
     const w = window as GoogleWindow;
     const signals: GoogleConsentSignals = googleConsentSignals(isAllowed, svc, { remarketing });
 
     if (!w.__wntGoogleLoaded) {
+      // Nichts erlaubt: nichts laden
+      if (!anyGoogleAllowed(isAllowed, svc)) return;
       bootstrapGoogle(w, ids, signals);
       w.__wntGoogleConfigured = googleConfigTargets(ids, signals);
       const s = document.createElement("script");
@@ -97,8 +96,10 @@ export function GoogleTag({ gtmId, gaId, adsId, services, remarketing = false }:
       return;
     }
 
-    // Schon geladen und Auswahl geändert (z. B. zusätzlich Werbung erlaubt): Google sofort informieren
+    // Schon geladen und Auswahl geändert: Google sofort informieren. Auch beim Widerruf von allem,
+    // sonst schreibt Google Analytics bis zum Neuladen (der Provider lädt neu) weiter Cookies wie _ga_<ID>.
     w.gtag?.("consent", "update", signals);
+    if (!anyGoogleAllowed(isAllowed, svc)) return;
     const done = new Set(w.__wntGoogleConfigured ?? []);
     for (const id of googleConfigTargets(ids, signals)) {
       if (done.has(id)) continue;

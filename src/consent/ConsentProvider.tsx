@@ -132,6 +132,8 @@ export function ConsentProvider({ config, children }: ConsentProviderProps) {
   // Speicher lesen (erst im Browser) und liegen gebliebene Protokoll-Ereignisse nachsenden
   useEffect(() => {
     apply(readStorage());
+    // Rückstände abgelehnter Dienste entfernen (z. B. ein Cookie, das ein Skript beim Verlassen der Seite noch gesetzt hat)
+    for (const svc of config.dienste) if (choicesRef.current[svc.id] === false) cleanupStorage(svc);
     setReady(true);
     const pending = readPending();
     if (pending.length > 0) {
@@ -147,7 +149,7 @@ export function ConsentProvider({ config, children }: ConsentProviderProps) {
     };
     window.addEventListener("storage", onStorage);
     return () => window.removeEventListener("storage", onStorage);
-  }, [apply, config.endpunkt]);
+  }, [apply, config.dienste, config.endpunkt]);
 
   const commit = useCallback(
     (patch: ConsentChoices, trigger: ConsentTrigger) => {
@@ -165,9 +167,11 @@ export function ConsentProvider({ config, children }: ConsentProviderProps) {
 
       // Widerruf: Abgelegtes aufräumen, bei seitenweiten Skripten neu laden, damit sie wirklich weg sind
       let reload = false;
+      const withdrawn: ConsentService[] = [];
       for (const id of withdrawnServices(previous, next)) {
         const svc = config.dienste.find((s) => s.id === id);
         if (!svc) continue;
+        withdrawn.push(svc);
         cleanupStorage(svc);
         if (svc.art === "skript") reload = true;
       }
@@ -180,7 +184,10 @@ export function ConsentProvider({ config, children }: ConsentProviderProps) {
       };
       postEvent(config.endpunkt, payload).then((done) => {
         if (!done) writePending([...readPending(), payload]);
-        if (reload) window.location.reload();
+        if (!reload) return;
+        // Skripte können bis hierhin noch geschrieben haben: direkt vor dem Neuladen nochmal aufräumen
+        for (const svc of withdrawn) cleanupStorage(svc);
+        window.location.reload();
       });
     },
     [config.dienste, config.endpunkt],

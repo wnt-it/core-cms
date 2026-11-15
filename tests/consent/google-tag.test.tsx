@@ -128,6 +128,34 @@ describe("GoogleTag", () => {
     expect(document.cookie).toMatch(/andere=bleibt/);
   });
 
+  it("Widerruf von allem meldet Google sofort „denied“ und räumt vor dem Neuladen nochmal auf", async () => {
+    render(app());
+    fireEvent.click(await screen.findByRole("button", { name: "Alle zulassen" }));
+    await waitFor(() => expect(googleScripts()).toHaveLength(1));
+
+    fireEvent.click(document.querySelector<HTMLButtonElement>(".wnt-consent-float")!);
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Alle ablehnen" }));
+    // Google Analytics schreibt sein Sitzungs-Cookie bei jedem Treffer neu, auch direkt nach dem ersten Aufräumen
+    document.cookie = "_ga_ABC123=GS1.1.2; path=/";
+
+    await waitFor(() => expect(consentUpdates().at(-1)).toMatchObject({ analytics_storage: "denied", ad_storage: "denied", ad_user_data: "denied" }));
+    await waitFor(() => expect(document.cookie).not.toMatch(/_ga_ABC123/));
+  });
+
+  it("beim Seitenstart werden Rückstände abgelehnter Dienste entfernt", async () => {
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({ v: 1, at: Date.now(), exp: Date.now() + 1e9, c: { "google-analytics": false, "google-ads": false }, k: { "google-analytics": "google-analytics@1", "google-ads": "google-ads@1" } }),
+    );
+    document.cookie = "_ga_ABC123=GS1.1.3; path=/";
+    document.cookie = "andere=bleibt; path=/";
+    render(app());
+    await waitFor(() => expect(document.cookie).not.toMatch(/_ga_ABC123/));
+    expect(document.cookie).toMatch(/andere=bleibt/);
+    expect(googleScripts()).toHaveLength(0);
+  });
+
   it("ohne ID, mit ungültiger ID, im Admin oder ohne Provider wird nichts geladen", async () => {
     const err = vi.spyOn(console, "error").mockImplementation(() => {});
     localStorage.setItem(
