@@ -38,7 +38,7 @@ Die Buchungsdaten speichern wir, bis Ihr Anliegen abschließend bearbeitet ist, 
 
 ### Google Analytics und Google Ads (Entwurf, ab v0.18.0)
 
-Passt zu den Katalogeinträgen `google-analytics` und `google-ads` und zu `<GoogleTag />`. Vor dem Einsatz juristisch gegenlesen. Absätze zu einem Dienst, den das Projekt nicht nutzt, streichen.
+Entwurf zum Kopieren in den Admin des Projekts (eigener Abschnitt, nicht gesperrt). Passt zu Diensten mit den Kennungen `google-analytics` und `google-ads` und zu `<GoogleTag />`, deren Banner-Texte das Projekt selbst festlegt. Vor dem Einsatz juristisch gegenlesen. Absätze zu einem Dienst, den das Projekt nicht nutzt, streichen.
 
 Sofern Sie einwilligen, setzen wir Dienste der Google Ireland Limited, Gordon House, Barrow Street, Dublin 4, Irland („Google“) ein. Ohne Ihre Einwilligung wird kein Google-Dienst geladen und es werden keine Daten an Google übermittelt. Die Dienste werden über den Google Tag Manager geladen. Er selbst setzt keine Cookies, beim Laden wird aber Ihre IP-Adresse an Google übermittelt.
 

@@ -1,7 +1,9 @@
 // Google Consent Mode v2: Zuordnung Dienst → Signal, Reihenfolge der Einwilligung, strenge IDs.
 
 import { describe, expect, it } from "vitest";
+import { CONSENT_CATALOG } from "../../src/consent/catalog";
 import { defineConsentConfig, dienst } from "../../src/consent/config";
+import { GOOGLE_TEST_DIENSTE } from "./google-dienste";
 import {
   DENIED_SIGNALS,
   anyGoogleAllowed,
@@ -17,23 +19,24 @@ import {
 const allow = (...ids: string[]) => (id: string) => ids.includes(id);
 const args = (entry: unknown) => Array.from(entry as ArrayLike<unknown>);
 
-describe("Katalog: Google-Dienste", () => {
-  it("sind Skripte mit Pflichtangaben und erzwingen den Banner", () => {
-    const cfg = defineConsentConfig({ dienste: ["google-analytics", "google-ads"] });
+const GA = GOOGLE_TEST_DIENSTE["google-analytics"];
+const ADS = GOOGLE_TEST_DIENSTE["google-ads"];
+
+describe("Google-Dienste kommen aus dem Projekt", () => {
+  it("stehen nicht im Core-Katalog (Texte legt jedes Projekt selbst fest)", () => {
+    expect(CONSENT_CATALOG["google-analytics"]).toBeUndefined();
+    expect(CONSENT_CATALOG["google-ads"]).toBeUndefined();
+    expect(() => dienst("google-analytics")).toThrow(/Katalog/);
+  });
+
+  it("eigene Skript-Dienste erzwingen den Banner", () => {
+    const cfg = defineConsentConfig({ dienste: [GA, ADS] });
     expect(cfg.modus).toBe("banner");
-    expect(dienst("google-analytics").kategorie).toBe("statistik");
-    expect(dienst("google-ads").kategorie).toBe("marketing");
-    for (const id of ["google-analytics", "google-ads"]) {
-      const d = dienst(id);
-      expect(d.art).toBe("skript");
-      expect(d.drittland).toBe(true);
-      expect(d.drittlandGrundlage).toBeTruthy();
-      expect(d.speicher.length).toBeGreaterThan(0);
-    }
+    expect(cfg.dienste.map((d) => d.kategorie)).toEqual(["statistik", "marketing"]);
   });
 
   it("lässt sich nicht im Modus einbettung betreiben", () => {
-    expect(() => defineConsentConfig({ modus: "einbettung", dienste: ["google-analytics"] })).toThrow(/banner/);
+    expect(() => defineConsentConfig({ modus: "einbettung", dienste: [GA] })).toThrow(/banner/);
   });
 });
 

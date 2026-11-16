@@ -17,7 +17,7 @@ export interface ChangelogEntry {
 /** Neueste Version zuerst. */
 export const CORE_CHANGELOG: ChangelogEntry[] = [
   {
-    // Entwurf: noch nicht veröffentlicht (kein Tag). Erst nach juristischer Prüfung der Google-Katalogtexte releasen.
+    // Entwurf: noch nicht veröffentlicht (kein Tag). Google-Texte liegen im Projekt, nicht im Core.
     version: "0.18.0",
     date: "2026-11-13",
     changes: [
@@ -27,7 +27,7 @@ export const CORE_CHANGELOG: ChangelogEntry[] = [
       { type: "feature", text: "Cookie-Banner kürzer: Beim ersten Besuch stehen je Dienst nur Name, Anbieter und Zweck. Alle weiteren Angaben lassen sich direkt im Banner unter „Alle Angaben zum Anbieter“ aufklappen." },
     ],
     releaseNotes:
-      "**Für Entwickler:** Neu im Katalog: `google-analytics` (statistik) und `google-ads` (marketing), beide Art `skript` und damit Modus `banner`. Neuer Baustein `<GoogleTag gtmId=… />` (oder `gaId`/`adsId` für gtag.js) innerhalb von `<ConsentProvider>`: lädt vor der Einwilligung nichts, danach Consent Mode v2 (default denied, update je Dienst), `ad_personalization` nur mit `remarketing`. Conversions: `pushGoogleEvent(\"anfrage_gesendet\")`. Speicher-Namen im Katalog dürfen auf `*` enden. `consent:check` kennt `--legal=/pfad,/pfad` (abweichende Rechtsseiten) und `--expect=host` (nach Zustimmung muss eine Anfrage an den Host gehen). Keine SQL-Datei.",
+      "**Für Entwickler:** Google steht bewusst nicht im Katalog: Das Projekt trägt `google-analytics` (statistik) und/oder `google-ads` (marketing) als eigene `ConsentService`-Objekte mit eigenen Texten in `consent.config.ts` ein (Art `skript`, damit Modus `banner`; Muster im README). Neuer Baustein `<GoogleTag gtmId=… />` (oder `gaId`/`adsId` für gtag.js) innerhalb von `<ConsentProvider>`: lädt vor der Einwilligung nichts, danach Consent Mode v2 (default denied, update je Dienst), `ad_personalization` nur mit `remarketing`. Conversions: `pushGoogleEvent(\"anfrage_gesendet\")`. Speicher-Namen im Katalog dürfen auf `*` enden. `consent:check` kennt `--legal=/pfad,/pfad` (abweichende Rechtsseiten) und `--expect=host` (nach Zustimmung muss eine Anfrage an den Host gehen). Keine SQL-Datei.",
   },
   {
     version: "0.17.0",

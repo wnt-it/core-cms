@@ -9,7 +9,7 @@
 //     <GoogleTag gtmId={process.env.NEXT_PUBLIC_GTM_ID} />
 //   </ConsentProvider>
 //
-// Voraussetzung in consent.config.ts: dienst("google-analytics") und/oder dienst("google-ads") (Modus wird damit „banner“).
+// Voraussetzung in consent.config.ts: eigene Dienste mit id "google-analytics" und/oder "google-ads" (Banner-Texte legt das Projekt selbst fest) (Modus wird damit „banner“).
 // Ohne ID (z. B. lokal) passiert nichts. Vor der Einwilligung wird nichts von Google geladen.
 // Widerruf: Der Provider löscht die Cookies laut Katalog und lädt die Seite neu, danach ist das Skript weg.
 // Conversions: pushGoogleEvent("anfrage_gesendet") (meldet nur, wenn der Tag Manager mit Einwilligung läuft).

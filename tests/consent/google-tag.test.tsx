@@ -13,8 +13,9 @@ import { GoogleTag } from "../../src/consent/GoogleTag";
 import { defineConsentConfig } from "../../src/consent/config";
 import { pushGoogleEvent } from "../../src/consent/google";
 import { STORAGE_KEY } from "../../src/consent/logic";
+import { GOOGLE_TEST_DIENSTE } from "./google-dienste";
 
-const config = defineConsentConfig({ dienste: ["google-analytics", "google-ads"], rechtsseiten: ["/datenschutzerklaerung", "/impressum"] });
+const config = defineConsentConfig({ dienste: [GOOGLE_TEST_DIENSTE["google-analytics"], GOOGLE_TEST_DIENSTE["google-ads"]], rechtsseiten: ["/datenschutzerklaerung", "/impressum"] });
 const fetchMock = vi.fn(async () => new Response(null, { status: 204 }));
 
 type W = Window & { dataLayer?: unknown[]; gtag?: unknown; __wntGoogleLoaded?: boolean; __wntGoogleConfigured?: string[] };

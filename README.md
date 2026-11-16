@@ -499,7 +499,7 @@ export const POST = createConsentHandler(consentConfig);
 6. **Admin:** `<AdminShell optionalPages={["einwilligungen"]} …>`, dann erscheint „Einwilligungen“ unter „System“ (Protokoll, CSV-Export, Prüfstand der Dienste).
 
 **Dienst-Katalog (aktuell):** `google-maps`, `youtube`, `microsoft-bookings` (je Zwei-Klick-Einbettung, mit Anbieter, Zweck, Daten, Drittland-Grundlage und Prüfdatum),
-ab v0.18.0 zusätzlich `google-analytics` (Statistik) und `google-ads` (Marketing, Conversion-Messung) als seitenweite Skripte (siehe „Google Analytics und Google Ads“).
+Google Analytics und Google Ads stehen nicht im Katalog: Ihre Texte legt jedes Projekt selbst fest (siehe „Google Analytics und Google Ads“).
 Der Katalog steht nur im Code (`src/consent/catalog.ts`), nicht im Admin: Welche Dienste ein Projekt nutzt, legt WNT-IT in `consent.config.ts` fest.
 Im Admin „Einwilligungen“ erscheinen nur die Dienste, die das Projekt tatsächlich eingetragen hat. Neuer Dienst oder geänderte Angaben (Anbieter, Daten, Drittland):
 im Katalog ergänzen bzw. `revision` und `geprueftAm` erhöhen, neuen Core-Tag veröffentlichen. Besucher werden dann nur zu diesem Dienst erneut gefragt.
@@ -530,9 +530,20 @@ Google nur über den Core-Baustein einbinden, nie mit eigenem `<script>` oder `@
 (auch keine cookielosen Meldungen) und setzt Google Consent Mode v2 in der vorgeschriebenen Reihenfolge (erst alles `denied`, dann `update` je erlaubtem Dienst).
 
 ```ts
-// consent.config.ts: Skripte erzwingen den Modus „banner“
+// consent.config.ts: Die Dienste und ihre Banner-Texte gehören dem Projekt (nicht im Core-Katalog).
+// Kennungen „google-analytics“ / „google-ads“ beibehalten, daran hängt GoogleTag die Consent-Signale.
+// Pflichtfelder siehe ConsentService (types.ts), vollständiges Beispiel: dago/src/consent.config.ts.
+const googleAnalytics: ConsentService = {
+  id: "google-analytics", art: "skript", kategorie: "statistik", name: "Google Analytics",
+  anbieter: "Google Ireland Limited, …", zweck: "…", daten: "…",
+  drittland: true, drittlandGrundlage: "EU-US Data Privacy Framework und Standardvertragsklauseln",
+  datenschutzUrl: "https://policies.google.com/privacy",
+  speicher: [{ name: "_ga", art: "cookie", dauer: "2 Jahre" }, { name: "_ga_*", art: "cookie", dauer: "2 Jahre" }],
+  revision: 1, rolle: "auftragsverarbeiter", geprueftAm: "2026-11-16",
+};
+// Skripte erzwingen den Modus „banner“
 export const consentConfig = defineConsentConfig({
-  dienste: [dienst("google-analytics"), dienst("google-ads")],
+  dienste: [googleAnalytics /*, googleAds */],
   rechtsseiten: ["/datenschutzerklaerung", "/impressum"], // nur nötig, wenn die Rechtsseiten anders heißen
   datenschutzUrl: "/datenschutzerklaerung",
 });
@@ -562,7 +573,7 @@ pushGoogleEvent("anfrage_gesendet", { anfrage_typ: "datenschutz-check" });
 - Widerruf: Der Provider löscht `_ga`, `_ga_*`, `_gcl_au`, `_gcl_aw` (auch auf der Hauptdomain) und lädt die Seite neu.
 - Prüfen: `npm run consent:check -- https://vorschau.example --legal=/datenschutzerklaerung,/impressum --expect=www.googletagmanager.com`
   (ohne Fremdanfragen vor der Entscheidung und nach „Alle ablehnen“, nach „Alle zulassen“ muss der Tag Manager laden).
-- Vor dem ersten Live-Einsatz: Katalogtexte und Datenschutz-Abschnitt (Entwurf in `docs/DATENSCHUTZ_BAUSTEINE_SPAETER.md`) juristisch gegenlesen.
+- Texte: Banner-Texte stehen im Projekt (`consent.config.ts`), der Datenschutz-Abschnitt als eigener, nicht gesperrter Abschnitt im Admin des Projekts (Entwurf zum Kopieren in `docs/DATENSCHUTZ_BAUSTEINE_SPAETER.md`). Vor dem ersten Live-Einsatz juristisch gegenlesen. `revision` des Dienstes erhöhen, wenn sich Zweck, Anbieter, Drittland oder Cookies wesentlich ändern (löst eine neue Frage aus).
 
 **Neuen Dienst aufnehmen:** Erst die Vorprüfung (Konzept, Abschnitt 3a: Geht es ohne Dritten? Alternative? Drittland-Grundlage? AV-Vertrag?), dann ein Eintrag in
 `src/consent/catalog.ts` mit allen Pflichtfeldern. `revision` nur bei wesentlichen Änderungen erhöhen (löst eine neue Frage aus). Texte in `src/consent/texts.ts`
