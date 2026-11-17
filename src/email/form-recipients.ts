@@ -27,6 +27,10 @@ export interface SmtpSettingsData {
   fromEmail: string;
   recipient: string;
   passStatus: "none" | "saved" | "unreadable";
+  /** Zertifikat des Mailservers nicht prüfen (ab v0.18.0) */
+  skipCertCheck: boolean;
+  /** false: Spalte smtp_skip_cert_check fehlt (sql/0.18.0_smtp_zertifikat.sql) */
+  certSwitchAvailable: boolean;
   missing: string[];
   forms: FormRecipientsInfo;
 }

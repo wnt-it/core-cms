@@ -3,7 +3,7 @@
 // Tabs der Core-Seite „Einstellungen“ (SettingsPage.tsx). Nach dem Speichern lädt router.refresh() den Stand neu.
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import type { SiteSettings } from '../supabase/types'
 import { Segmented } from '../ui/components'
 import { ExportPanel } from '../export'
@@ -26,7 +26,9 @@ export default function SettingsTabs({
   forms?: string[]
 }) {
   const router = useRouter()
-  const [active, setActive] = useState('general')
+  // ?bereich=smtp öffnet direkt „E-Mail & SMTP“ (Link aus der Mail-Versand-Anzeige auf dem Dashboard)
+  const bereich = useSearchParams()?.get('bereich')
+  const [active, setActive] = useState(bereich === 'smtp' || (bereich === 'export' && dataExport) ? bereich : 'general')
 
   const options = [
     { value: 'general', label: 'Website & Branding' },

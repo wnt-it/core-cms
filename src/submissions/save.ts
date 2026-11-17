@@ -125,8 +125,8 @@ export async function notifySubmission(input: SaveInput, options: NotifyOptions 
         console.warn(`[submissions] SMTP im Admin nicht vollständig eingerichtet (fehlt: ${smtp.missing.join(", ")}), keine E-Mail gesendet.`);
         return;
       }
-      const { host, port, user, pass } = smtp.config;
-      provider = getEmailProvider({ type: "smtp", config: { host, port, user, pass } });
+      const { host, port, user, pass, skipCertCheck } = smtp.config;
+      provider = getEmailProvider({ type: "smtp", config: { host, port, user, pass, skipCertCheck } });
     }
     // Eigener Provider (z. B. Resend): Empfänger und Absender kommen trotzdem aus den Einstellungen
     if (!recipientEmail) {

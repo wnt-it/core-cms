@@ -68,7 +68,7 @@ entfällt Punkt 2 komplett — npm kopiert das Package dann als echten Unterordn
 
 ## Datenbank eines neuen Projekts (ab v0.14.0)
 
-Neues Supabase-Projekt: einmal `sql/0.14.0_basis.sql` im SQL-Editor ausführen (Einstellungen, SMTP, Mediathek mit Bucket `images`, Posteingang, jeweils mit Rechten und Zugriffsregeln), danach die übrigen Dateien in `sql/` der Versionsreihe nach (`0.9.0_site_popup`, `0.12.0_site_popup_options`, `0.12.0_legal_documents`, bei Bedarf `0.14.0_consent`, dann `0.15.0_posteingang`, `0.16.0_haertung` und `0.17.0_empfaenger_je_formular`). Bestehende Projekte haben diese Tabellen schon. Danach in Supabase unter Authentication die Registrierung neuer Benutzer ausschalten und den Admin-Benutzer von Hand anlegen.
+Neues Supabase-Projekt: einmal `sql/0.14.0_basis.sql` im SQL-Editor ausführen (Einstellungen, SMTP, Mediathek mit Bucket `images`, Posteingang, jeweils mit Rechten und Zugriffsregeln), danach die übrigen Dateien in `sql/` der Versionsreihe nach (`0.9.0_site_popup`, `0.12.0_site_popup_options`, `0.12.0_legal_documents`, bei Bedarf `0.14.0_consent`, dann `0.15.0_posteingang`, `0.16.0_haertung`, `0.17.0_empfaenger_je_formular` und `0.18.0_smtp_zertifikat`). Bestehende Projekte haben diese Tabellen schon. Danach in Supabase unter Authentication die Registrierung neuer Benutzer ausschalten und den Admin-Benutzer von Hand anlegen.
 
 ### Datenbank-Änderungen bei Live-Seiten (verbindlich)
 
@@ -401,6 +401,29 @@ Ein Mailserver pro Website bleibt. Nur die Adresse, **an die** eine Anfrage geht
 - **Datenbank:** einmal `sql/0.17.0_empfaenger_je_formular.sql` (Spalte `email_settings.form_recipients`, nie öffentlich, nie im Export). Ohne die Datei läuft alles wie bisher, die Einstellungsseite zeigt einen Hinweis.
 - **Formulare schon vor der ersten Anfrage anzeigen (empfohlen):** Alle Formulare des Projekts stehen in `src/forms.ts`, und der Catch-all gibt sie weiter: `options.einstellungen.forms = [bewerbung, kontakt]` (defineForm-Ergebnisse) oder Formular-Arten als Text. Wichtig: dieselbe Quelle, aus der das Formular beim Absenden seinen Namen bekommt, nie ein zweites Mal von Hand getippt. Sonst stehen in den Einstellungen Namen, die nie gesendet werden. Ohne Angabe erscheint jedes Formular mit seiner ersten Anfrage.
 - Logik ohne Datenbank in `src/email/form-recipients.ts` (`recipientFor`, `validateFormRecipients`, `listFormTypes`), getestet in `tests/email/form-recipients.test.ts`.
+
+## Mail-Versand: Zertifikat und Verbindungsprüfung (ab v0.18.0)
+
+**Zertifikat wird geprüft.** Bis v0.17.0 nahm der Core beim Mailserver jedes Zertifikat an (`rejectUnauthorized: false`). Die Verbindung war verschlüsselt, aber wer sich zwischen Website und Mailserver schaltet, hätte mit einem gefälschten Zertifikat SMTP-Passwort und Anfragen mitlesen können. Jetzt gilt wie in jedem Mailprogramm: Das Zertifikat muss gültig, nicht abgelaufen und für genau den eingetragenen Servernamen ausgestellt sein. Außerdem geht nie etwas unverschlüsselt raus: Port 465 nutzt TLS von Anfang an, alle anderen Ports müssen STARTTLS können (`requireTLS`). Gemeinsame Optionen für Versand und Prüfung: `buildSmtpTransportOptions` in `src/email/smtp-provider.ts`.
+
+- **Bei großen Anbietern** (IONOS, Strato, All-Inkl, Google, Microsoft, Resend …) passt das von selbst, solange der Servername des Anbieters eingetragen ist (z. B. `smtp.ionos.de`).
+- **Häufigster Fehler:** eine eigene Adresse wie `mail.kunde.de`, die nur auf den Server des Anbieters zeigt. Das Zertifikat gilt dann für den Anbieter-Namen, nicht für `mail.kunde.de`. Die Prüfung nennt die Namen aus dem Zertifikat, den passenden einfach eintragen.
+- **Eigener Server mit selbst ausgestelltem Zertifikat:** Schalter „Zertifikat des Mailservers nicht prüfen“ unter Einstellungen → E-Mail & SMTP → Server-Einstellungen (Spalte `email_settings.smtp_skip_cert_check`, `sql/0.18.0_smtp_zertifikat.sql`). Ohne die Spalte wird immer geprüft und statt des Schalters steht ein Hinweis.
+
+**Verbindungsprüfung mit Live-Anzeige.** `checkSmtpConnection({ fresh })` (Server Action) meldet sich mit den gespeicherten Daten beim Mailserver an, ohne eine E-Mail zu senden, und liefert drei Schritte: Server erreichbar, Verbindung verschlüsselt mit gültigem Zertifikat, Anmeldung. Bei Fehlern steht dabei, was los ist und was zu tun ist (Servername falsch, Port falsch, Zertifikat abgelaufen oder für einen anderen Namen, Passwort abgelehnt …). Ergebnisse werden 10 Minuten je Zugangsdaten gemerkt, damit Dashboard-Aufrufe den Mailserver nicht ständig anfragen.
+
+- **Einstellungen → E-Mail & SMTP** zeigt die Prüfung oben, beim Öffnen und sofort nach jedem Speichern (mit den neuen Angaben), dazu „Erneut prüfen“.
+- **Dashboard (empfohlen):** im Projekt eine Zeile auf der Startseite des Admins:
+
+```tsx
+import { SmtpStatus } from "core-cms/src/admin";
+<SmtpStatus variant="card" />   // kompakt: grün mit Haken oder Problem mit Erklärung und Link zu den Einstellungen
+```
+
+- Die Test-E-Mail bleibt: Sie prüft zusätzlich, ob der Server Absender und Empfänger annimmt. Ihre Fehlermeldungen nutzen dieselben Erklärungen.
+- Logik: `src/email/smtp-check-types.ts` (`classifySmtpError`, ohne Server-Code, getestet in `tests/email/smtp-check.test.ts`), `src/email/smtp-check.ts` (Prüfung), Anzeige `src/admin/SmtpStatus.tsx`.
+
+**Vor dem Rollout je Projekt:** Nach dem Update die Einstellungen öffnen und die Prüfung ansehen. Steht dort ein Zertifikatsproblem, verschickt das Projekt ab jetzt keine E-Mails mehr (Anfragen landen weiter im Posteingang): Servernamen korrigieren oder, nur bei eigenem Server, den Schalter setzen (dafür vorher die SQL-Datei ausführen).
 
 ## Absicherung und Aufräumen (ab v0.16.0)
 

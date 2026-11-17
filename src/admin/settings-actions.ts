@@ -10,6 +10,8 @@ import { listFormTypes, recipientFor, validateFormRecipients, type FormRecipient
 import { isAllowedImageSettingColumn, sanitizeGeneralSettings, type GeneralSettingsField } from "./general-settings";
 import { revalidatePath } from "next/cache";
 import { SmtpEmailProvider } from "../email/smtp-provider";
+import { checkSmtp } from "../email/smtp-check";
+import { classifySmtpError, incompleteResult, type SmtpCheckResult } from "../email/smtp-check-types";
 import { dbErrorMessage, smtpErrorMessage } from "../auth/auth-errors";
 
 // Defense in depth: Server Actions sind öffentlich aufrufbar, daher nie nur auf RLS verlassen.
@@ -75,6 +77,22 @@ export async function saveSmtpSettings(formData: FormData) {
   if (error) {
     console.error("Failed to save SMTP settings to email_settings:", error);
     return { success: false, error: dbErrorMessage(error, "Speichern der SMTP-Einstellungen") };
+  }
+
+  // Schalter „Zertifikat nicht prüfen“ (ab v0.18.0): eigenes Update, damit eine fehlende Spalte die übrigen Daten nicht verhindert
+  const skipCert = formData.get("smtp_skip_cert_check")?.toString();
+  if (skipCert === "1" || skipCert === "0") {
+    const { error: certError } = await supabase.from("email_settings").update({ smtp_skip_cert_check: skipCert === "1" }).eq("id", "general");
+    if (certError) {
+      console.error("Failed to save smtp_skip_cert_check:", certError);
+      revalidatePath("/admin/einstellungen");
+      return {
+        success: false,
+        error: /smtp_skip_cert_check/.test(certError.message ?? "")
+          ? "SMTP-Daten gespeichert. Der Schalter für das Zertifikat braucht noch die Datenbank-Aktualisierung für core-cms v0.18.0 (sql/0.18.0_smtp_zertifikat.sql)."
+          : dbErrorMessage(certError, "Speichern des Zertifikat-Schalters"),
+      };
+    }
   }
 
   // Eigenes Update: Fehlt die Spalte (sql/0.17.0 nicht ausgeführt), bleiben die SMTP-Daten trotzdem gespeichert
@@ -181,7 +199,7 @@ export async function sendTestEmail(formType?: string): Promise<{ success: true;
   const what = typeof formType === "string" && formType ? `Neue Anfragen aus „${formType}“` : "Neue Anfragen";
 
   try {
-    const provider = new SmtpEmailProvider({ host: config.host, port: config.port, user: config.user, pass: config.pass });
+    const provider = new SmtpEmailProvider({ host: config.host, port: config.port, user: config.user, pass: config.pass, skipCertCheck: config.skipCertCheck });
     await provider.send({
       to,
       subject: "Test-E-Mail aus dem Admin",
@@ -192,6 +210,22 @@ export async function sendTestEmail(formType?: string): Promise<{ success: true;
     return { success: true, to };
   } catch (err) {
     console.error("SMTP test failed:", err);
-    return { success: false, error: smtpErrorMessage(err as Error) };
+    // Verbindungs- und Zertifikatsfehler so erklären wie die Verbindungsprüfung, alles andere (z. B. Adressen abgelehnt) wie bisher
+    const checked = classifySmtpError(err, config);
+    return { success: false, error: checked.problem && checked.problem !== "other" ? [checked.message, checked.hint].filter(Boolean).join(" ") : smtpErrorMessage(err as Error) };
   }
+}
+
+/**
+ * Prüft die Verbindung zum Mailserver mit den GESPEICHERTEN Einstellungen, ohne eine E-Mail zu senden:
+ * Server erreichbar, Verbindung verschlüsselt (Zertifikat), Anmeldung. Ergebnis wird 10 Minuten gemerkt,
+ * `fresh` prüft sofort neu (z. B. nach dem Speichern oder per „Erneut prüfen“).
+ * Für die Anzeige in den Einstellungen und auf dem Dashboard (SmtpStatus).
+ */
+export async function checkSmtpConnection(options: { fresh?: boolean } = {}): Promise<SmtpCheckResult | { ok: false; notLoggedIn: true }> {
+  const supabase = await createClient();
+  if (!(await isLoggedIn(supabase))) return { ok: false, notLoggedIn: true };
+  const { config, missing } = await loadSmtpSettings(supabase);
+  if (!config) return incompleteResult(missing);
+  return checkSmtp(config, { fresh: options?.fresh === true });
 }

@@ -8,7 +8,8 @@ import { saveSmtpSettings, getSmtpSettings, sendTestEmail } from './settings-act
 import { Send, Save, Loader2, ChevronDown, Settings2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { cx, hintClass, mutedClass } from '../ui/styles'
-import { Button, Card, CardFooter, Field, FieldGrid, Input, Note, SaveBar, Section } from '../ui/components'
+import { Button, Card, CardFooter, Field, FieldGrid, Input, Note, SaveBar, Section, SwitchRow } from '../ui/components'
+import { SmtpStatus } from './SmtpStatus'
 import type { SmtpFormValues } from '../email/smtp-settings'
 import { listFormTypes, type FormRecipientsInfo } from '../email/form-recipients'
 
@@ -28,6 +29,7 @@ const toForm = (s?: Partial<SmtpFormValues>) => ({
   fromName: s?.fromName || '',
   fromEmail: s?.fromEmail || '',
   recipient: s?.recipient || '',
+  skipCertCheck: s?.skipCertCheck === true,
 })
 
 export default function SmtpSettingsForm({ initialSettings, declaredForms = [] }: SmtpSettingsFormProps) {
@@ -42,6 +44,9 @@ export default function SmtpSettingsForm({ initialSettings, declaredForms = [] }
   const [isTesting, setIsTesting] = useState(false)
   const [isLoading, setIsLoading] = useState(!initialSettings)
   const [showAdvanced, setShowAdvanced] = useState(false)
+  const [certSwitchAvailable, setCertSwitchAvailable] = useState(initialSettings?.certSwitchAvailable ?? true)
+  /** Nach dem Speichern hochzählen: Die Verbindungsprüfung läuft dann sofort mit den neuen Angaben */
+  const [checkKey, setCheckKey] = useState(0)
 
   useEffect(() => {
     if (!initialSettings) {
@@ -51,6 +56,7 @@ export default function SmtpSettingsForm({ initialSettings, declaredForms = [] }
         setMissing(settings.missing)
         setForms(settings.forms)
         setFormRecipients({ ...settings.forms.recipients })
+        setCertSwitchAvailable(settings.certSwitchAvailable)
         setIsLoading(false)
       })
     }
@@ -88,6 +94,7 @@ export default function SmtpSettingsForm({ initialSettings, declaredForms = [] }
     form.append('smtp_from_email', formData.fromEmail)
     form.append('smtp_recipient', formData.recipient)
     if (forms.available) form.append('form_recipients', JSON.stringify(formRecipients))
+    if (certSwitchAvailable) form.append('smtp_skip_cert_check', formData.skipCertCheck ? '1' : '0')
 
     try {
       const result = await saveSmtpSettings(form)
@@ -100,7 +107,11 @@ export default function SmtpSettingsForm({ initialSettings, declaredForms = [] }
         setMissing(fresh.missing)
         setForms(fresh.forms)
         setFormRecipients({ ...fresh.forms.recipients })
+        setCertSwitchAvailable(fresh.certSwitchAvailable)
+        setCheckKey((k) => k + 1)
       } else {
+        // Teilweise gespeichert (z. B. Spalte fehlt): Verbindung trotzdem neu prüfen
+        setCheckKey((k) => k + 1)
         toast.error(result.error || 'Fehler beim Speichern.')
       }
     } catch (err) {
@@ -128,6 +139,9 @@ export default function SmtpSettingsForm({ initialSettings, declaredForms = [] }
           Es geht noch keine E-Mail raus, Anfragen landen nur im Posteingang. Es fehlt: {missing.join(', ')}.
         </Note></div>
       )}
+      {/* Live-Prüfung der Verbindung (ab v0.18.0): beim Öffnen und nach jedem Speichern */}
+      <div className="mb-6"><SmtpStatus refreshKey={checkKey} /></div>
+
       {/* ABSENDER & EMPFÄNGER - für alle Nutzer sichtbar, keine technische Erklärung nötig */}
       <Section
         title="Absender & Empfänger"
@@ -297,6 +311,26 @@ export default function SmtpSettingsForm({ initialSettings, declaredForms = [] }
                   />
                 </Field>
               </FieldGrid>
+
+              {/* Zertifikat (ab v0.18.0): Standard ist prüfen. Ausschalten nur für eigene Server mit selbst ausgestelltem Zertifikat. */}
+              {certSwitchAvailable ? (
+                <div className="flex flex-col gap-3">
+                  <SwitchRow
+                    divider
+                    label="Zertifikat des Mailservers nicht prüfen"
+                    hint="Nur für einen eigenen Mailserver mit selbst ausgestelltem Zertifikat. Die Verbindung bleibt verschlüsselt, ist aber nicht mehr gegen gefälschte Server geschützt. Bei Anbietern wie IONOS, Strato, Google oder Microsoft immer aus lassen."
+                    checked={formData.skipCertCheck}
+                    onChange={(e) => setFormData({ ...formData, skipCertCheck: e.target.checked })}
+                  />
+                  {formData.skipCertCheck && (
+                    <Note tone="warn">Die Prüfung des Zertifikats ist ausgeschaltet. Schalte sie wieder ein, sobald dein Mailserver ein gültiges Zertifikat hat.</Note>
+                  )}
+                </div>
+              ) : (
+                <p className={cx(hintClass, 'border-t border-[#F1F5F9] pt-5')}>
+                  Das Zertifikat des Mailservers wird immer geprüft. Der Schalter für Ausnahmen braucht noch die Datenbank-Aktualisierung für core-cms v0.18.0.
+                </p>
+              )}
             </div>
           )}
 

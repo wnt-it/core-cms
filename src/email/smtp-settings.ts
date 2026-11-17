@@ -17,6 +17,8 @@ export interface SmtpConfig {
   fromName: string;
   fromEmail: string;
   recipient: string;
+  /** Zertifikat des Mailservers nicht prüfen (Schalter in den Einstellungen, ab v0.18.0) */
+  skipCertCheck: boolean;
 }
 
 /** Gespeicherte Angaben ohne Passwort, so wie sie das Formular im Admin anzeigt. */
@@ -29,6 +31,10 @@ export interface SmtpFormValues {
   recipient: string;
   /** none: kein Passwort gespeichert; saved: gespeichert; unreadable: gespeichert, aber nicht zu entschlüsseln (ENCRYPTION_KEY fehlt oder hat sich geändert) */
   passStatus: "none" | "saved" | "unreadable";
+  /** Zertifikat des Mailservers nicht prüfen (ab v0.18.0) */
+  skipCertCheck: boolean;
+  /** false: Spalte smtp_skip_cert_check fehlt (sql/0.18.0_smtp_zertifikat.sql noch nicht ausgeführt) */
+  certSwitchAvailable: boolean;
 }
 
 export interface SmtpLoadResult {
@@ -39,7 +45,7 @@ export interface SmtpLoadResult {
   missing: string[];
 }
 
-export const EMPTY_SMTP_VALUES: SmtpFormValues = { host: "", port: "587", user: "", fromName: "", fromEmail: "", recipient: "", passStatus: "none" };
+export const EMPTY_SMTP_VALUES: SmtpFormValues = { host: "", port: "587", user: "", fromName: "", fromEmail: "", recipient: "", passStatus: "none", skipCertCheck: false, certSwitchAvailable: true };
 
 type Row = {
   smtp_host: string | null;
@@ -49,6 +55,8 @@ type Row = {
   smtp_from_name: string | null;
   smtp_from_email: string | null;
   smtp_recipient: string | null;
+  /** ab v0.18.0, fehlt in älteren Datenbanken */
+  smtp_skip_cert_check?: boolean | null;
 };
 
 /** Reine Auswertung einer Zeile aus email_settings (testbar ohne Datenbank). */
@@ -72,6 +80,8 @@ export function evaluateSmtpRow(row: Row | null | undefined, decryptPass: (v: st
     fromEmail: row.smtp_from_email || "",
     recipient: row.smtp_recipient || "",
     passStatus,
+    skipCertCheck: row.smtp_skip_cert_check === true,
+    certSwitchAvailable: "smtp_skip_cert_check" in row,
   };
   // Leerer Port: 587 wie im Formular vorbelegt
   const port = Number(row.smtp_port || 587);
@@ -86,7 +96,7 @@ export function evaluateSmtpRow(row: Row | null | undefined, decryptPass: (v: st
   ].filter((m): m is string => Boolean(m));
   const config = missing.length
     ? null
-    : { host: values.host, port, user: values.user, pass, fromName: values.fromName, fromEmail: values.fromEmail, recipient: values.recipient };
+    : { host: values.host, port, user: values.user, pass, fromName: values.fromName, fromEmail: values.fromEmail, recipient: values.recipient, skipCertCheck: values.skipCertCheck };
   return { values, config, missing };
 }
 
@@ -114,7 +124,9 @@ export async function loadFormRecipients(client: SupabaseClient): Promise<FormRe
 export async function loadSmtpSettings(client: SupabaseClient): Promise<SmtpLoadResult> {
   const { data, error } = await client
     .from("email_settings")
-    .select("smtp_host, smtp_port, smtp_user, smtp_pass, smtp_from_name, smtp_from_email, smtp_recipient")
+    // "*" statt fester Spaltenliste: Eine Spalte, die erst eine neuere SQL-Datei anlegt (smtp_skip_cert_check),
+    // darf den Versand nie verhindern, wenn die Datei noch nicht ausgeführt ist.
+    .select("*")
     .eq("id", "general")
     .maybeSingle();
   if (error) console.error("[email] SMTP-Einstellungen nicht lesbar", error);
