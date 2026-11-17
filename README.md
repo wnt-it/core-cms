@@ -662,6 +662,60 @@ const blocks = impressumToBlocks(doc.data); // Absätze und Überschriften, selb
 Überschriften, auf die verwiesen wird, tragen `ref: "kennung"`; im Text steht `{{ref:kennung}}`
 (im Editor über „Verweis einfügen“). Platzhalter-Format `[● …]`; ein Verweis ohne Ziel erscheint als „[● Verweis fehlt]“.
 
+## Texteditor für längere Texte (ab v0.18.0)
+
+Für alle längeren Textfelder im Admin (News, Stellenangebote, Beschreibungen, Zusatzseiten): Werkzeugleiste mit Absatz, Überschrift, Zwischenüberschrift, Fett, Kursiv, Unterstrichen, Link, Aufzählung, nummerierter Liste, Rückgängig/Wiederholen, optional Bild aus der Mediathek. Tastenkürzel wie gewohnt (Strg+B/I/U/Z). Keine Formatierung über Sternchen oder andere Zeichen mehr.
+
+**Warum so:**
+
+- **Speicherformat: bereinigtes HTML** (statt Markdown). Unterstreichen gibt es in Markdown nicht, ein Editor arbeitet ohnehin mit HTML, und eine feste Liste erlaubter Elemente ist leichter sicher zu prüfen als ein Markdown-Dialekt. Erlaubt sind nur `p`, `h2`, `h3`, `ul`, `ol`, `li`, `strong`, `em`, `u`, `a` (nur `href`), `br`, `img` (nur `src`, `alt`). Kein `style`, keine Klassen, keine anderen Attribute.
+- **Editor: Tiptap 3** (ProseMirror), nur die nötigen Erweiterungen statt StarterKit, keine Cloud-Funktionen, keine externen Dienste. Etwa 140 KB (gzip), aber nur im Admin-Bundle: Editor und Anzeige liegen in getrennten Einstiegen.
+- **Anzeige: eigene Bereinigung ohne Abhängigkeiten** (`src/richtext/sanitize.ts`, etwa 4 KB gzip). Läuft auf dem Server, ohne DOM, ohne `dangerouslySetInnerHTML`: Der Text wird eingelesen, auf die erlaubte Liste zurückgeschnitten und als React-Elemente ausgegeben. Links nur mit `https://`, `http://`, `mailto:`, `tel:`, relativ (`/…`) oder `#…` (auch verschleierte Varianten wie `&#106;avascript:` fallen raus), Bilder nur `https://` oder relativ. Externe Links bekommen `rel="noopener noreferrer"` und öffnen in neuem Tab.
+- **Alte Texte laufen weiter:** Text im bisherigen einfachen Format (`**fett**`, `*kursiv*`, `## Titel`, `- Liste`, `1. Liste`, `[Link](…)`, `![Bild](…)`, Leerzeile = Absatz) erkennt der Core automatisch: `RichText` zeigt ihn richtig an, der Editor wandelt ihn beim Öffnen um, und beim nächsten Speichern liegt HTML in der Spalte. Keine SQL-Datei, die Spalten bleiben `text`.
+
+**Admin (Client-Komponente):**
+
+```tsx
+"use client";
+import { RichTextEditor } from "core-cms/src/richtext/editor";
+import { Field } from "core-cms/src/ui";
+
+<Field as="div" label="Beschreibung">
+  <RichTextEditor aria-label="Beschreibung" value={text} onChange={setText} />
+</Field>
+
+// Formular mit Server Action: unkontrolliert, das HTML steht im versteckten Feld „text“
+<RichTextEditor aria-label="Text" name="text" defaultValue={eintrag.text} images />
+```
+
+Optionen: `headings` (Standard an), `lists` (an), `images` (aus, Knopf „Bild aus der Mediathek“; vorhandene Bilder bleiben immer erhalten), `minHeight`, `placeholder`, `disabled`, `invalid`. `onChange` bekommt bereinigtes HTML, leerer Text ergibt `""`.
+
+**Speichern (Server Action, Pflicht):** Der Browser kann beliebiges schicken, deshalb vor dem Schreiben bereinigen:
+
+```ts
+import { sanitizeRichText } from "core-cms/src/richtext";
+const text = sanitizeRichText(String(formData.get("text") ?? ""));
+```
+
+**Website:**
+
+```tsx
+import { RichText, richTextToPlainText } from "core-cms/src/richtext";
+
+<RichText value={news.text} className="rich" />          // Typografie (h2, ul, a …) macht das Projekt per CSS
+const description = richTextToPlainText(news.text, 160); // z. B. meta description oder Vorschau in Listen
+```
+
+Weitere Helfer: `isRichTextEmpty`, `toRichTextHtml` (alt oder HTML → bereinigtes HTML), `legacyTextToHtml`, `safeHref`. Tests: `tests/richtext/`.
+
+**Umstellen eines Projekts** (Beispiel cityrondell mit eigenem `TextEditor.tsx` und `RichText.tsx`):
+
+1. Core-Version anheben.
+2. Im Admin den eigenen `TextEditor` durch `RichTextEditor` ersetzen (gleiches `value`/`onChange`), Hinweistext zum Format entfällt.
+3. In den Server Actions, die diese Felder speichern, `sanitizeRichText()` auf jedes Rich-Text-Feld anwenden.
+4. Auf der Website das eigene `RichText` durch `RichText` aus dem Core ersetzen (`value` statt `text`), CSS-Klasse wie bisher. Die eigene Datei kann dann weg. Wo bisher Auszüge aus dem Rohtext gebildet wurden (Vorschau, meta description), `richTextToPlainText` nehmen, sonst stehen dort HTML-Tags.
+5. Bestehende Texte nicht per SQL umwandeln: Sie werden alt weiter richtig angezeigt und beim nächsten Speichern im Admin zu HTML.
+
 ## Mehrfachbearbeitung (ab v0.10.0)
 
 In jeder Verwaltungsliste mehrere Einträge auswählen und ein Feld für alle ändern oder sie

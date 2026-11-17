@@ -11,3 +11,4 @@ export * from "./legal";
 export * from "./export";
 export * from "./consent";
 export * from "./branding";
+export * from "./richtext";
