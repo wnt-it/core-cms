@@ -220,7 +220,7 @@ export async function sendTestEmail(formType?: string): Promise<{ success: true;
  * Prüft die Verbindung zum Mailserver mit den GESPEICHERTEN Einstellungen, ohne eine E-Mail zu senden:
  * Server erreichbar, Verbindung verschlüsselt (Zertifikat), Anmeldung. Ergebnis wird 10 Minuten gemerkt,
  * `fresh` prüft sofort neu (z. B. nach dem Speichern oder per „Erneut prüfen“).
- * Für die Anzeige in den Einstellungen und auf dem Dashboard (SmtpStatus).
+ * Für die Anzeige in den Einstellungen (SmtpStatus).
  */
 export async function checkSmtpConnection(options: { fresh?: boolean } = {}): Promise<SmtpCheckResult | { ok: false; notLoggedIn: true }> {
   const supabase = await createClient();

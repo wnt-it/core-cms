@@ -2,10 +2,9 @@
 
 // Live-Anzeige „Klappt der Mail-Versand?“ (ab v0.18.0). Prüft beim Öffnen die Verbindung zum Mailserver mit den
 // gespeicherten Einstellungen, ohne eine E-Mail zu senden: Server erreichbar, Verbindung verschlüsselt mit gültigem
-// Zertifikat, Anmeldung. In den Einstellungen (E-Mail & SMTP) eingebaut, fürs Dashboard als <SmtpStatus variant="card" />.
+// Zertifikat, Anmeldung. Nur in den Einstellungen (E-Mail & SMTP), keine Anzeige auf dem Dashboard.
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import Link from 'next/link'
 import { AlertTriangle, Check, CheckCircle2, Loader2, Minus, RefreshCw, X, XCircle } from 'lucide-react'
 import { checkSmtpConnection } from './settings-actions'
 import type { SmtpCheckResult, SmtpCheckStep } from '../email/smtp-check-types'
@@ -13,12 +12,8 @@ import { cardClass, cx, hintClass, mutedClass } from '../ui/styles'
 import { Button } from '../ui/components'
 
 export interface SmtpStatusProps {
-  /** "full" in den Einstellungen (mit Schritten), "card" kompakt fürs Dashboard (Schritte nur bei Problemen). */
-  variant?: 'full' | 'card'
   /** Wechselt der Wert, wird sofort neu geprüft (z. B. nach dem Speichern der Einstellungen). */
   refreshKey?: number
-  /** Link zu den E-Mail-Einstellungen (nur variant="card"). Standard: /admin/einstellungen?bereich=smtp, null blendet ihn aus. */
-  settingsHref?: string | null
   className?: string
 }
 
@@ -46,7 +41,7 @@ function time(iso: string) {
   }
 }
 
-export function SmtpStatus({ variant = 'full', refreshKey = 0, settingsHref = '/admin/einstellungen?bereich=smtp', className }: SmtpStatusProps) {
+export function SmtpStatus({ refreshKey = 0, className }: SmtpStatusProps) {
   const [state, setState] = useState<State>({ status: 'loading' })
   const run = useRef(0)
 
@@ -84,7 +79,7 @@ export function SmtpStatus({ variant = 'full', refreshKey = 0, settingsHref = '/
 
   const Icon = tone === 'loading' ? Loader2 : tone === 'ok' ? CheckCircle2 : tone === 'warn' ? AlertTriangle : XCircle
   const iconColor = tone === 'loading' ? 'text-[#64748B] animate-spin' : tone === 'ok' ? 'text-[#15803D]' : tone === 'warn' ? 'text-[#B45309]' : 'text-[#B91C1C]'
-  const showSteps = result && !incomplete && (variant === 'full' || !result.ok)
+  const showSteps = result && !incomplete
 
   return (
     <section
@@ -103,11 +98,8 @@ export function SmtpStatus({ variant = 'full', refreshKey = 0, settingsHref = '/
         <div className="min-w-0 flex-1">
           <h3 className="text-[14.5px] font-semibold text-[#0F172A]">{title}</h3>
           {state.status === 'error' && <p className={cx(hintClass, 'mt-1')}>Die Verbindung zum Server der Website ist fehlgeschlagen. Bitte lade die Seite neu.</p>}
-          {result && (!result.ok || variant === 'full' || result.certCheckSkipped) && (
-            <p className="mt-1 text-[13.5px] leading-snug text-[#334155]">{result.ok && variant === 'card' ? result.hint : result.message}</p>
-          )}
-          {result && !result.ok && result.hint && <p className={cx(hintClass, 'mt-1')}>{result.hint}</p>}
-          {result?.ok && variant === 'full' && result.hint && <p className={cx(hintClass, 'mt-1')}>{result.hint}</p>}
+          {result && <p className="mt-1 text-[13.5px] leading-snug text-[#334155]">{result.message}</p>}
+          {result?.hint && <p className={cx(hintClass, 'mt-1')}>{result.hint}</p>}
 
           {showSteps && (
             <ul className="mt-3 flex flex-col gap-1.5">
@@ -131,11 +123,6 @@ export function SmtpStatus({ variant = 'full', refreshKey = 0, settingsHref = '/
               </span>
             )}
             <span className="ml-auto flex items-center gap-2">
-              {variant === 'card' && settingsHref && (
-                <Link href={settingsHref} className="text-[13px] font-medium text-[#0F172A] underline underline-offset-2 hover:text-[#334155]">
-                  E-Mail-Einstellungen
-                </Link>
-              )}
               {!incomplete && (
                 <Button size="sm" variant="ghost" onClick={() => check(true)} disabled={state.status === 'loading'}>
                   <RefreshCw size={14} aria-hidden="true" />
@@ -144,11 +131,9 @@ export function SmtpStatus({ variant = 'full', refreshKey = 0, settingsHref = '/
               )}
             </span>
           </div>
-          {variant === 'full' && (
-            <p className={cx(hintClass, 'mt-2')}>
-              Es wird keine E-Mail gesendet. Ob Absender- und Empfängeradresse angenommen werden, zeigt die Test-E-Mail.
-            </p>
-          )}
+          <p className={cx(hintClass, 'mt-2')}>
+            Es wird keine E-Mail gesendet. Ob Absender- und Empfängeradresse angenommen werden, zeigt die Test-E-Mail.
+          </p>
         </div>
       </div>
     </section>

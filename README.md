@@ -410,15 +410,9 @@ Ein Mailserver pro Website bleibt. Nur die Adresse, **an die** eine Anfrage geht
 - **Häufigster Fehler:** eine eigene Adresse wie `mail.kunde.de`, die nur auf den Server des Anbieters zeigt. Das Zertifikat gilt dann für den Anbieter-Namen, nicht für `mail.kunde.de`. Die Prüfung nennt die Namen aus dem Zertifikat, den passenden einfach eintragen.
 - **Eigener Server mit selbst ausgestelltem Zertifikat:** Schalter „Zertifikat des Mailservers nicht prüfen“ unter Einstellungen → E-Mail & SMTP → Server-Einstellungen (Spalte `email_settings.smtp_skip_cert_check`, `sql/0.18.0_smtp_zertifikat.sql`). Ohne die Spalte wird immer geprüft und statt des Schalters steht ein Hinweis.
 
-**Verbindungsprüfung mit Live-Anzeige.** `checkSmtpConnection({ fresh })` (Server Action) meldet sich mit den gespeicherten Daten beim Mailserver an, ohne eine E-Mail zu senden, und liefert drei Schritte: Server erreichbar, Verbindung verschlüsselt mit gültigem Zertifikat, Anmeldung. Bei Fehlern steht dabei, was los ist und was zu tun ist (Servername falsch, Port falsch, Zertifikat abgelaufen oder für einen anderen Namen, Passwort abgelehnt …). Ergebnisse werden 10 Minuten je Zugangsdaten gemerkt, damit Dashboard-Aufrufe den Mailserver nicht ständig anfragen.
+**Verbindungsprüfung mit Live-Anzeige.** `checkSmtpConnection({ fresh })` (Server Action) meldet sich mit den gespeicherten Daten beim Mailserver an, ohne eine E-Mail zu senden, und liefert drei Schritte: Server erreichbar, Verbindung verschlüsselt mit gültigem Zertifikat, Anmeldung. Bei Fehlern steht dabei, was los ist und was zu tun ist (Servername falsch, Port falsch, Zertifikat abgelaufen oder für einen anderen Namen, Passwort abgelehnt …). Ergebnisse werden 10 Minuten je Zugangsdaten gemerkt, damit wiederholtes Öffnen der Einstellungen den Mailserver nicht ständig anfragt.
 
-- **Einstellungen → E-Mail & SMTP** zeigt die Prüfung oben, beim Öffnen und sofort nach jedem Speichern (mit den neuen Angaben), dazu „Erneut prüfen“.
-- **Dashboard (empfohlen):** im Projekt eine Zeile auf der Startseite des Admins:
-
-```tsx
-import { SmtpStatus } from "core-cms/src/admin";
-<SmtpStatus variant="card" />   // kompakt: grün mit Haken oder Problem mit Erklärung und Link zu den Einstellungen
-```
+- **Einstellungen → E-Mail & SMTP** zeigt die Prüfung oben, beim Öffnen und sofort nach jedem Speichern (mit den neuen Angaben), dazu „Erneut prüfen“. Nur dort, bewusst keine Anzeige auf dem Dashboard. Im Projekt ist nichts einzubauen.
 
 - Die Test-E-Mail bleibt: Sie prüft zusätzlich, ob der Server Absender und Empfänger annimmt. Ihre Fehlermeldungen nutzen dieselben Erklärungen.
 - Logik: `src/email/smtp-check-types.ts` (`classifySmtpError`, ohne Server-Code, getestet in `tests/email/smtp-check.test.ts`), `src/email/smtp-check.ts` (Prüfung), Anzeige `src/admin/SmtpStatus.tsx`.
