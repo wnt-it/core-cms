@@ -5,9 +5,9 @@
 
 import { useState, useEffect } from 'react'
 import { saveSmtpSettings, getSmtpSettings, sendTestEmail } from './settings-actions'
-import { Send, Save, Eye, EyeOff, Loader2, ChevronDown, Settings2 } from 'lucide-react'
+import { Send, Save, Loader2, ChevronDown, Settings2 } from 'lucide-react'
 import { toast } from 'sonner'
-import { cx, hintClass, iconButtonClass, mutedClass } from '../ui/styles'
+import { cx, hintClass, mutedClass } from '../ui/styles'
 import { Button, Card, CardFooter, Field, FieldGrid, Input, Note, SaveBar, Section } from '../ui/components'
 import type { SmtpFormValues } from '../email/smtp-settings'
 import { listFormTypes, type FormRecipientsInfo } from '../email/form-recipients'
@@ -38,7 +38,6 @@ export default function SmtpSettingsForm({ initialSettings, declaredForms = [] }
   const formTypes = listFormTypes(declaredForms, forms.types)
   const [passStatus, setPassStatus] = useState<SmtpFormValues['passStatus']>(initialSettings?.passStatus ?? 'none')
   const [missing, setMissing] = useState<string[]>(initialSettings?.missing ?? [])
-  const [showPass, setShowPass] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [isTesting, setIsTesting] = useState(false)
   const [isLoading, setIsLoading] = useState(!initialSettings)
@@ -277,10 +276,9 @@ export default function SmtpSettingsForm({ initialSettings, declaredForms = [] }
                     onChange={(e) => setFormData({ ...formData, user: e.target.value })}
                   />
                 </Field>
-                {/* div statt label: enthält auch den Anzeigen-Knopf */}
+                {/* Kein „Passwort anzeigen“: Das gespeicherte Passwort kommt nie in den Browser, es gäbe nichts anzuzeigen */}
                 <Field
-                  as="div"
-                  label={<label htmlFor="smtp-pass">Passwort / API-Key</label>}
+                  label="Passwort / API-Key"
                   hint={
                     passStatus === 'saved'
                       ? 'Gespeichert. Leer lassen, um es zu behalten.'
@@ -289,26 +287,14 @@ export default function SmtpSettingsForm({ initialSettings, declaredForms = [] }
                         : 'Wird verschlüsselt gespeichert.'
                   }
                 >
-                  <span className="relative block">
-                    <Input
-                      id="smtp-pass"
-                      type={showPass ? 'text' : 'password'}
-                      required={passStatus !== 'saved'}
-                      autoComplete="new-password"
-                      placeholder={passStatus === 'saved' ? '•••••••• (gespeichert)' : 'Passwort eingeben'}
-                      value={formData.pass}
-                      onChange={(e) => setFormData({ ...formData, pass: e.target.value })}
-                      className="pr-11"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPass(!showPass)}
-                      className={cx(iconButtonClass, 'absolute right-0.5 top-0.5')}
-                      aria-label={showPass ? 'Passwort verbergen' : 'Passwort anzeigen'}
-                    >
-                      {showPass ? <EyeOff size={16} /> : <Eye size={16} />}
-                    </button>
-                  </span>
+                  <Input
+                    type="password"
+                    required={passStatus !== 'saved'}
+                    autoComplete="new-password"
+                    placeholder={passStatus === 'saved' ? '•••••••• (gespeichert)' : 'Passwort eingeben'}
+                    value={formData.pass}
+                    onChange={(e) => setFormData({ ...formData, pass: e.target.value })}
+                  />
                 </Field>
               </FieldGrid>
             </div>
