@@ -161,6 +161,89 @@ function assertNoBrandingOverrides() {
   )
 }
 
+/** Dateien mit Code, in denen das Pop-up eingebunden sein kann. */
+const CODE_FILE = /\.(tsx|ts|jsx|js|mjs)$/
+const POPUP_HOST = /<SitePopupHost\b/
+/** Alte Einbindung einzelner Seiten (getSitePopup + <SitePopup>), ersetzt durch SitePopupHost im Layout. */
+const POPUP_SINGLE = /<SitePopup(?![A-Za-z0-9_])/
+
+/** Kommentare entfernen, damit eine auskommentierte Zeile nicht als Einbindung zählt (grob, reicht dafür). */
+function stripComments(text) {
+  return text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1')
+}
+
+/**
+ * Prüft, ob ein Projekt mit Admin das Pop-up auf der Website einbindet (ab v0.18.0 Pflicht): Die Einstellungen
+ * unter /admin/popup gibt es in jedem Core-Projekt, also muss die Website sie auch anzeigen können.
+ * Gesucht wird unter app/ und src/ außerhalb von admin-Ordnern.
+ * @param {string} [root] Projektordner (Standard: aktueller Ordner)
+ * @returns {{ hasAdmin: boolean, hosts: string[], singles: string[] }}
+ */
+export function findPopupIntegration(root = process.cwd()) {
+  // Admin unter /admin, auch in Routengruppen wie app/(admin)/admin
+  const hasAdminIn = (dir) => {
+    let entries
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true })
+    } catch {
+      return false
+    }
+    return entries.some((e) => e.isDirectory() && (e.name === 'admin' || (/^\(.*\)$/.test(e.name) && hasAdminIn(path.join(dir, e.name)))))
+  }
+  const hasAdmin = ['app', path.join('src', 'app')].some((d) => hasAdminIn(path.join(root, d)))
+  const hosts = []
+  const singles = []
+  const walk = (dir) => {
+    let entries
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true })
+    } catch {
+      return
+    }
+    for (const entry of entries) {
+      const full = path.join(dir, entry.name)
+      if (entry.isDirectory()) {
+        if (entry.name === 'node_modules' || entry.name === 'admin' || entry.name.startsWith('.')) continue
+        walk(full)
+      } else if (CODE_FILE.test(entry.name)) {
+        let text = ''
+        try {
+          text = stripComments(fs.readFileSync(full, 'utf8'))
+        } catch {
+          continue
+        }
+        if (POPUP_HOST.test(text)) hosts.push(path.relative(root, full))
+        if (POPUP_SINGLE.test(text)) singles.push(path.relative(root, full))
+      }
+    }
+  }
+  walk(path.join(root, 'src'))
+  walk(path.join(root, 'app'))
+  return { hasAdmin, hosts: [...new Set(hosts)], singles: [...new Set(singles)] }
+}
+
+/** Bricht `next dev` und `next build` ab, wenn ein Projekt mit Admin das Pop-up nicht (oder nur alt) einbindet. */
+function assertPopupIntegration() {
+  const { hasAdmin, hosts, singles } = findPopupIntegration()
+  if (!hasAdmin) return
+  const howTo =
+    'Einmal ins Layout der öffentlichen Seiten (bei mehreren öffentlichen Layouts in jedes):\n' +
+    '  import { SitePopupHost } from "core-cms/src/popup";\n' +
+    '  … {children}<SitePopupHost />\n' +
+    'Es zeigt nur etwas an, wenn im Admin unter „Pop-up“ etwas eingeschaltet ist (Zeitraum und Seiten prüft der Core). ' +
+    'Siehe README von core-cms, Abschnitt „Pop-up“.'
+  if (singles.length) {
+    throw new Error(
+      `[core-cms] Das Pop-up ist noch einzeln auf Seiten eingebunden (<SitePopup>):\n${singles.map((f) => `  - ${f}`).join('\n')}\n` +
+        'So erscheint es nur dort, die Einstellung „Auf allen Seiten“ wirkt nicht. Bitte diese Einbindung (samt getSitePopup) entfernen. ' +
+        howTo,
+    )
+  }
+  if (hosts.length === 0) {
+    throw new Error(`[core-cms] Das Pop-up aus dem Admin wird auf der Website nicht angezeigt: <SitePopupHost /> fehlt.\n${howTo}`)
+  }
+}
+
 /** @param {{ protocol?: string, hostname: string, port?: string, pathname?: string, search?: string }} p */
 function patternKey(p) {
   return [p.protocol ?? '', p.hostname, p.port ?? '', p.pathname ?? '', p.search ?? ''].join('|')
@@ -176,6 +259,7 @@ function patternKey(p) {
  * - Bricht ab, wenn das Projekt eine Core-Seite (CORE_ONLY_ADMIN_SLUGS) als eigene Route anlegt.
  * - redirects: alte Adressen von Core-Seiten (RETIRED_ADMIN_SLUGS) zuerst, danach die des Projekts.
  * - Bricht ab, wenn das Projekt ein eigenes Favicon festlegt (findBrandingOverrides).
+ * - Bricht ab, wenn ein Projekt mit Admin das Pop-up nicht über <SitePopupHost /> einbindet (findPopupIntegration).
  * - Alles andere (redirects, rewrites, headers, dangerouslyAllowSVG …) wird
  *   unverändert durchgereicht.
  *
@@ -185,6 +269,7 @@ function patternKey(p) {
 export function withCoreCms(userConfig = {}) {
   assertNoCoreRouteConflicts()
   assertNoBrandingOverrides()
+  assertPopupIntegration()
   const userImages = userConfig.images ?? {}
 
   const patterns = []

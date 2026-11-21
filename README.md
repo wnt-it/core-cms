@@ -458,22 +458,23 @@ Ein Bild als Hinweis beim Öffnen der Website (z. B. Aktionen, Betriebsferien), 
 1. **Datenbank:** einmal pro Projekt `sql/0.9.0_site_popup.sql` ausführen (Spalten `popup_enabled`,
    `popup_image_url`, `popup_image_alt` in `site_settings`). Ohne Migration bleibt das Pop-up aus,
    die Website läuft weiter.
-2. **Verwaltung:** `/admin/popup` erscheint automatisch über `coreAdminPages` unter „System“.
-3. **Website:** dort einbinden, wo es erscheinen soll (liest ohne Cookies, Seite bleibt statisch):
+2. **Verwaltung:** `/admin/popup` erscheint automatisch über `coreAdminPages` unter „System“, in jedem Projekt mit Admin (gehört zu allen Dynamic-Tarifen).
+3. **Website (Pflicht ab v0.18.0):** `<SitePopupHost />` einmal ins Layout der öffentlichen Seiten (liest ohne Cookies, Seite bleibt statisch):
 
 ```tsx
-import { SitePopup, getSitePopup } from "core-cms/src/popup";
+import { SitePopupHost } from "core-cms/src/popup";
 
-const popup = await getSitePopup();
-return <>{popup && <SitePopup {...popup} />} …</>;
+// z. B. app/(site)/layout.tsx
+return <>{children}<SitePopupHost /></>;
 ```
+
+Es zeigt nur etwas an, wenn im Admin ein Pop-up eingeschaltet ist. Zeitraum, Seiten und Häufigkeit prüft der Core.
+**Prüfung beim Bauen:** `withCoreCms` bricht `next dev` und `next build` ab, wenn ein Projekt mit Admin (`app/admin`, auch in einer Routengruppe) kein `<SitePopupHost />` unter `app/` bzw. `src/` hat oder das Pop-up noch einzeln auf Seiten einbindet (`<SitePopup>` mit `getSitePopup`, alte Einbindung bis v0.11.0: erscheint nur auf dieser Seite, die Einstellung „Auf allen Seiten“ wirkt nicht, zusammen mit `SitePopupHost` doppelt). Admin-Ordner zählen nicht. Logik: `findPopupIntegration` in `next-config.mjs`.
 
 Kein Cookie, nur `sessionStorage` im Browser. Für automatische Tests blendet
 `sessionStorage.setItem("site-popup-gesehen", "*")` das Pop-up aus.
 
-**Für die ganze Website (ab v0.12.0, empfohlen):** `<SitePopupHost />` einmal im Root-Layout der öffentlichen Seiten
-(`import { SitePopupHost } from "core-cms/src/popup"`), dann überall und ohne Seiten-Code. Einzelne `SitePopup`-Einbindungen
-auf Seiten dann entfernen, sonst erscheint es doppelt. Zeitraum, Häufigkeit, Verzögerung und Seiten stellt der Kunde unter
+**Ganze Website (ab v0.12.0):** Mit `<SitePopupHost />` erscheint das Pop-up überall ohne Seiten-Code. Zeitraum, Häufigkeit, Verzögerung und Seiten stellt der Kunde unter
 `/admin/popup` ein; dafür einmal `sql/0.12.0_site_popup_options.sql` ausführen (ohne sie gilt das bisherige Verhalten). „Einmal pro Tag/Woche“
 speichert Bild und Zeitpunkt im `localStorage` des Besuchers (nur „pro Besuch“ nutzt `sessionStorage`). Das gilt als technisch notwendig, braucht
 keine Einwilligung, sollte aber in der Datenschutzerklärung stehen, z. B.: „Zum Merken, dass ein Hinweisfenster (Pop-up) bereits angezeigt wurde, nutzen
