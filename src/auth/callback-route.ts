@@ -1,5 +1,3 @@
-// Quelle: template/src/app/admin/auth/callback/route.ts
-// Import von createClient auf core-cms-internen relativen Pfad umgestellt.
 //
 // Verwendung im Kundenprojekt: app/admin/auth/callback/route.ts re-exportiert GET
 // aus core-cms, z.B. `export { GET } from "core-cms/auth"`.

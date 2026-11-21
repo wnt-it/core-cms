@@ -1,5 +1,4 @@
 // Supabase-Client für Server Components / Server Actions (Next.js App Router).
-// Quelle: template/src/utils/supabase/server.ts
 
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'

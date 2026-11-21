@@ -1,155 +1,150 @@
 'use client'
 
-// Quelle: template/src/app/admin/(dashboard)/submissions/SubmissionsAdminClient.tsx
-// Imports auf core-cms-interne relative Pfade umgestellt; generische mailto-Betreffzeile
-// (kein hartcodierter Firmenname mehr).
+// Posteingang (Core-Seite). Name und E-Mail sind keine Pflicht (ab v0.15.0), Zusatzfelder erscheinen mit
+// ihrer Bezeichnung aus field_labels, Anhänge liegen im privaten Speicherbereich und werden nur über kurz
+// gültige Links und nach einem Warnhinweis heruntergeladen.
+// Aufbau: diese Datei hält Zustand und Datenbank-Aufrufe, SubmissionsList zeigt die Liste,
+// SubmissionDetail die geöffnete Anfrage, submission-view.ts enthält die reinen Helfer.
 
-import { useState, useTransition, useEffect, useCallback, type KeyboardEvent as ReactKeyboardEvent } from 'react'
-import { Submission } from '../supabase/types'
+import { useState, useTransition, useEffect, useCallback, useMemo, useRef } from 'react'
+import type { Submission, SubmissionFile } from '../supabase/types'
 import { createClient } from '../supabase/client'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { Trash2, Mail, ChevronDown, X, Inbox } from 'lucide-react'
-import {
-  Badge,
-  Button,
-  ConfirmDialog,
-  EmptyState,
-  Menu,
-  SearchInput,
-  Segmented,
-  Select,
-  TableCard,
-  buttonClass,
-  cx,
-  iconButtonClass,
-  iconButtonDangerClass,
-  tableClass,
-  tdClass,
-  thClass,
-  trClass,
-} from '../ui'
+import { Inbox } from 'lucide-react'
+import { Button, EmptyState, Note, SearchInput, Segmented, Select, TableCard } from '../ui/components'
+import { ConfirmDialog } from '../ui/ConfirmDialog'
+import { SUBMISSIONS_PAGE } from './paging'
+import SubmissionsList from './SubmissionsList'
+import SubmissionDetail from './SubmissionDetail'
+import { ATTACHMENT_BUCKET, STATUS_OPTIONS, appendUnique, countFormTypes, filterSubmissions, notifySubmissionsChanged, type StatusValue } from './submission-view'
 
 interface SubmissionsAdminClientProps {
   initialSubmissions: Submission[]
+  initialFiles?: SubmissionFile[]
+  /** Anzahl aller Anfragen in der Datenbank; mehr als geladen: Knopf „Ältere laden“ */
+  totalCount?: number
 }
 
-const STATUS_OPTIONS = [
-  { value: 'Neu', label: 'Neu', tone: 'red' },
-  { value: 'In Bearbeitung', label: 'In Bearbeitung', tone: 'amber' },
-  { value: 'Erledigt', label: 'Erledigt', tone: 'green' },
-] as const
+// Fester Standardwert: ein neues [] bei jedem Render würde den Abgleich-Effekt endlos auslösen
+const NO_FILES: SubmissionFile[] = []
+const NOW = () => new Date().toISOString()
 
-type StatusValue = (typeof STATUS_OPTIONS)[number]['value']
-
-// Formular ohne Zusatz, z. B. „Kontakt“ aus „Kontakt · Richard Prinz“
-const baseType = (type: string) => type.split(" · ")[0].trim() || type
-
-const formatDate = (iso: string) =>
-  new Date(iso).toLocaleDateString('de-DE', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
-
-export default function SubmissionsAdminClient({ initialSubmissions }: SubmissionsAdminClientProps) {
+export default function SubmissionsAdminClient({ initialSubmissions, initialFiles = NO_FILES, totalCount }: SubmissionsAdminClientProps) {
   const [submissions, setSubmissions] = useState<Submission[]>(initialSubmissions)
+  const [total, setTotal] = useState(totalCount ?? initialSubmissions.length)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [files, setFiles] = useState<SubmissionFile[]>(initialFiles)
   const [searchQuery, setSearchQuery] = useState('')
   const [typeFilter, setTypeFilter] = useState('all')
   const [statusFilter, setStatusFilter] = useState('all')
   const [isPending, startTransition] = useTransition()
-  const [activeSubmission, setActiveSubmission] = useState<Submission | null>(null)
+  // Anhang, dessen Herunterladen gerade bestätigt werden soll
+  const [downloadTarget, setDownloadTarget] = useState<SubmissionFile | null>(null)
   // Eintrag, dessen Löschen gerade bestätigt werden soll
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null)
 
   const router = useRouter()
-  const supabase = createClient()
+  const supabase = useMemo(() => createClient(), [])
 
-  useEffect(() => {
-    setSubmissions(initialSubmissions)
-  }, [initialSubmissions])
+  useEffect(() => setSubmissions(initialSubmissions), [initialSubmissions])
+  useEffect(() => setTotal(totalCount ?? initialSubmissions.length), [totalCount, initialSubmissions])
+  useEffect(() => setFiles(initialFiles), [initialFiles])
 
-  // Detailansicht mit ESC schließen (nicht, solange der Löschdialog offen ist)
+  // Detailansicht gleitet herein und wieder hinaus: erst nach dem Einhängen öffnen, beim Schließen erst nach der Animation aushängen
+  const [activeSubmission, setActiveSubmission] = useState<Submission | null>(null)
+  const [panelOpen, setPanelOpen] = useState(false)
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const closePanel = useCallback(() => {
+    setPanelOpen(false)
+    if (closeTimer.current) clearTimeout(closeTimer.current)
+    closeTimer.current = setTimeout(() => setActiveSubmission(null), 260)
+  }, [])
+  const showSubmission = (sub: Submission) => {
+    if (closeTimer.current) clearTimeout(closeTimer.current)
+    setActiveSubmission(sub)
+    // Zwei Frames warten, damit die Ansicht erst geschlossen gezeichnet wird und dann hereingleitet
+    requestAnimationFrame(() => requestAnimationFrame(() => setPanelOpen(true)))
+  }
+  useEffect(
+    () => () => {
+      if (closeTimer.current) clearTimeout(closeTimer.current)
+    },
+    [],
+  )
+
+  // Detailansicht mit ESC schließen (nicht, solange ein Dialog offen ist)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape') return
-      if (!deleteTarget) setActiveSubmission(null)
+      if (e.key === 'Escape' && !deleteTarget && !downloadTarget) closePanel()
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [deleteTarget])
+  }, [deleteTarget, downloadTarget, closePanel])
 
-  // Vorhandene Formulare mit Anzahl, für den Filter
-  const formTypes = Object.entries(
-    submissions.reduce<Record<string, number>>((acc, s) => {
-      const t = baseType(s.type)
-      acc[t] = (acc[t] ?? 0) + 1
-      return acc
-    }, {}),
-  ).sort((a, b) => a[0].localeCompare(b[0], "de"))
+  // Anhänge je Anfrage (einmal gruppiert statt bei jeder Zeile neu zu suchen)
+  const filesById = useMemo(() => {
+    const map = new Map<string, SubmissionFile[]>()
+    for (const f of files) map.set(f.submission_id, [...(map.get(f.submission_id) ?? []), f])
+    return map
+  }, [files])
+  const filesOf = (id: string) => filesById.get(id) ?? NO_FILES
 
-  const filteredSubmissions = submissions.filter((s) => {
-    const matchesType = typeFilter === 'all' || baseType(s.type) === typeFilter
-    const matchesStatus = statusFilter === 'all' || s.status === statusFilter
-    const q = searchQuery.toLowerCase().trim()
-    const matchesSearch = q === '' ||
-      s.name.toLowerCase().includes(q) ||
-      s.email.toLowerCase().includes(q) ||
-      (s.company && s.company.toLowerCase().includes(q)) ||
-      (s.subject && s.subject.toLowerCase().includes(q)) ||
-      (s.source_page && s.source_page.toLowerCase().includes(q)) ||
-      (s.message && s.message.toLowerCase().includes(q))
-    return matchesType && matchesStatus && matchesSearch
-  })
+  const formTypes = useMemo(() => countFormTypes(submissions), [submissions])
+  const filteredSubmissions = useMemo(
+    () => filterSubmissions(submissions, { query: searchQuery, type: typeFilter, status: statusFilter }),
+    [submissions, searchQuery, typeFilter, statusFilter],
+  )
 
-  // Status ändern
-  const updateStatus = async (id: string, newStatus: 'Neu' | 'In Bearbeitung' | 'Erledigt') => {
-    setSubmissions((prev) => prev.map((s) => (s.id === id ? { ...s, status: newStatus } : s)))
-    if (activeSubmission?.id === id) {
-      setActiveSubmission((prev) => (prev ? { ...prev, status: newStatus } : null))
-    }
-
-    startTransition(async () => {
-      const { error } = await supabase
+  // Ältere Anfragen seitenweise nachladen, mit ihren Anhängen
+  const loadMore = async () => {
+    setLoadingMore(true)
+    try {
+      const from = submissions.length
+      const { data, error } = await supabase
         .from('submissions')
-        .update({ status: newStatus, updated_at: new Date().toISOString() })
-        .eq('id', id)
+        .select('*')
+        .order('created_at', { ascending: false })
+        .range(from, from + SUBMISSIONS_PAGE - 1)
+      if (error) throw error
+      const more = (data ?? []) as Submission[]
+      const ids = more.map((s) => s.id)
+      if (ids.length) {
+        const { data: moreFiles } = await supabase.from('submission_files').select('*').in('submission_id', ids).order('created_at')
+        setFiles((prev) => appendUnique(prev, (moreFiles ?? []) as SubmissionFile[]))
+      }
+      setSubmissions((prev) => appendUnique(prev, more))
+      if (more.length < SUBMISSIONS_PAGE) setTotal(from + more.length)
+    } catch (err) {
+      toast.error('Ältere Anfragen konnten nicht geladen werden' + (err instanceof Error ? ': ' + err.message : ''))
+    } finally {
+      setLoadingMore(false)
+    }
+  }
+  const hasMore = submissions.length < total
 
+  // Status in der Liste und in der offenen Ansicht setzen, dann speichern
+  const saveStatus = (id: string, status: StatusValue, notify: boolean) => {
+    setSubmissions((prev) => prev.map((s) => (s.id === id ? { ...s, status } : s)))
+    setActiveSubmission((prev) => (prev?.id === id ? { ...prev, status } : prev))
+    startTransition(async () => {
+      const { error } = await supabase.from('submissions').update({ status, updated_at: NOW() }).eq('id', id)
       if (error) {
         toast.error('Fehler beim Aktualisieren: ' + error.message)
         router.refresh()
-      } else {
-        toast.success(`Status auf „${newStatus}“ gesetzt`)
+        return
       }
+      notifySubmissionsChanged()
+      if (notify) toast.success(`Status auf „${status}“ gesetzt`)
     })
   }
+  const updateStatus = (id: string, status: StatusValue) => saveStatus(id, status, true)
 
   // Eintrag öffnen: neue Anfragen gelten damit als gesehen (Status „In Bearbeitung“)
   const openSubmission = (sub: Submission) => {
-    if (sub.status !== 'Neu') {
-      setActiveSubmission(sub)
-      return
-    }
-    const seen = { ...sub, status: 'In Bearbeitung' as const }
-    setActiveSubmission(seen)
-    setSubmissions((prev) => prev.map((s) => (s.id === sub.id ? seen : s)))
-    startTransition(async () => {
-      const { error } = await supabase
-        .from('submissions')
-        .update({ status: 'In Bearbeitung', updated_at: new Date().toISOString() })
-        .eq('id', sub.id)
-      if (error) {
-        toast.error('Fehler beim Aktualisieren: ' + error.message)
-        router.refresh()
-      }
-    })
-  }
-
-  // Löschen: erst Bestätigungsdialog öffnen
-  const handleDelete = (id: string, name: string) => {
-    setDeleteTarget({ id, name })
+    if (sub.status !== 'Neu') return showSubmission(sub)
+    showSubmission({ ...sub, status: 'In Bearbeitung' })
+    saveStatus(sub.id, 'In Bearbeitung', false)
   }
 
   const confirmDelete = () => {
@@ -158,40 +153,50 @@ export default function SubmissionsAdminClient({ initialSubmissions }: Submissio
     setDeleteTarget(null)
 
     setSubmissions((prev) => prev.filter((s) => s.id !== id))
-    if (activeSubmission?.id === id) setActiveSubmission(null)
+    if (activeSubmission?.id === id) closePanel()
+    const paths = filesOf(id).map((f) => f.path)
+    setFiles((prev) => prev.filter((f) => f.submission_id !== id))
+    setTotal((n) => Math.max(0, n - 1))
 
     startTransition(async () => {
-      const { error } = await supabase
-        .from('submissions')
-        .delete()
-        .eq('id', id)
-
+      // Anhänge zuerst löschen, die Einträge in submission_files gehen mit der Anfrage.
+      // Alles im Ordner der Anfrage, auch Dateien ohne Eintrag (z. B. abgebrochene Uploads)
+      const { data: listed } = await supabase.storage.from(ATTACHMENT_BUCKET).list(id, { limit: 1000 })
+      const all = [...new Set([...paths, ...(listed ?? []).map((o) => `${id}/${o.name}`)])]
+      if (all.length) {
+        const { error: storageError } = await supabase.storage.from(ATTACHMENT_BUCKET).remove(all)
+        if (storageError) {
+          toast.error('Anhänge konnten nicht gelöscht werden: ' + storageError.message)
+          router.refresh()
+          return
+        }
+      }
+      const { error } = await supabase.from('submissions').delete().eq('id', id)
       if (error) {
         toast.error('Fehler beim Löschen: ' + error.message)
         router.refresh()
       } else {
+        notifySubmissionsChanged()
         toast.success('Eintrag gelöscht')
       }
     })
   }
 
+  const openDelete = useCallback((id: string, name: string) => setDeleteTarget({ id, name }), [])
   const cancelDelete = useCallback(() => setDeleteTarget(null), [])
 
-  const getStatusObj = (status: string) => {
-    return STATUS_OPTIONS.find((s) => s.value === status) || STATUS_OPTIONS[0]
-  }
-
-  // Zeile per Tastatur öffnen
-  const onRowKeyDown = (e: ReactKeyboardEvent, sub: Submission) => {
-    if (e.target !== e.currentTarget) return
-    if (e.key === 'Enter' || e.key === ' ') {
-      e.preventDefault()
-      openSubmission(sub)
+  // Herunterladen erst nach Hinweis. Der Link gilt eine Minute und lädt immer als Datei (nie im Browser anzeigen).
+  const confirmDownload = async () => {
+    const file = downloadTarget
+    setDownloadTarget(null)
+    if (!file) return
+    const { data, error } = await supabase.storage.from(ATTACHMENT_BUCKET).createSignedUrl(file.path, 60, { download: file.name })
+    if (error || !data?.signedUrl) {
+      toast.error('Anhang konnte nicht geladen werden' + (error ? ': ' + error.message : ''))
+      return
     }
+    window.location.href = data.signedUrl
   }
-
-  const mailtoHref = (sub: Submission) =>
-    `mailto:${sub.email}?subject=Re: ${encodeURIComponent(sub.subject || 'Ihre Anfrage')}`
 
   const toolbar = (
     <>
@@ -201,12 +206,7 @@ export default function SubmissionsAdminClient({ initialSubmissions }: Submissio
         value={searchQuery}
         onChange={(e) => setSearchQuery(e.target.value)}
       />
-      <Select
-        aria-label="Formular"
-        value={typeFilter}
-        onChange={(e) => setTypeFilter(e.target.value)}
-        className="w-full sm:w-auto sm:min-w-[200px]"
-      >
+      <Select aria-label="Formular" value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} className="w-full sm:w-auto sm:min-w-[200px]">
         <option value="all">Alle Formulare ({submissions.length})</option>
         {formTypes.map(([type, count]) => (
           <option key={type} value={type}>
@@ -225,296 +225,67 @@ export default function SubmissionsAdminClient({ initialSubmissions }: Submissio
     </>
   )
 
-  const empty = (
-    <EmptyState
-      icon={<Inbox size={20} aria-hidden="true" />}
-      title={submissions.length === 0 ? 'Keine Formulareingänge vorhanden.' : 'Keine passenden Anfragen gefunden.'}
-      description={submissions.length === 0 ? undefined : 'Suche oder Filter anpassen.'}
-    />
-  )
-
   return (
     <>
       <TableCard toolbar={toolbar}>
         {filteredSubmissions.length === 0 ? (
-          empty
+          <EmptyState
+            icon={<Inbox size={20} aria-hidden="true" />}
+            title={submissions.length === 0 ? 'Keine Formulareingänge vorhanden.' : 'Keine passenden Anfragen gefunden.'}
+            description={submissions.length === 0 ? undefined : 'Suche oder Filter anpassen.'}
+          />
         ) : (
-          <>
-            {/* Ab Tablet: Tabelle */}
-            <table className={cx(tableClass, 'hidden xl:table')}>
-              <thead>
-                <tr>
-                  <th scope="col" className={thClass}>Absender</th>
-                  <th scope="col" className={thClass}>Anliegen</th>
-                  <th scope="col" className={thClass}>Formular</th>
-                  <th scope="col" className={thClass}>Eingang</th>
-                  <th scope="col" className={thClass}>Status</th>
-                  <th scope="col" className={cx(thClass, 'w-12')}><span className="sr-only">Aktionen</span></th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredSubmissions.map((sub) => {
-                  const currentStatusObj = getStatusObj(sub.status)
-                  const isSelected = activeSubmission?.id === sub.id
-
-                  return (
-                    <tr
-                      key={sub.id}
-                      tabIndex={0}
-                      onClick={() => openSubmission(sub)}
-                      onKeyDown={(e) => onRowKeyDown(e, sub)}
-                      className={cx(
-                        trClass,
-                        'cursor-pointer outline-none focus-visible:bg-[#F1F5F9]',
-                        isSelected && 'bg-[#FAFAFC]',
-                      )}
-                    >
-                      {/* Absender */}
-                      <td className={tdClass}>
-                        <span className={cx('block max-w-[200px] truncate', sub.status === 'Neu' ? 'font-semibold' : 'font-medium')}>{sub.name}</span>
-                        <span className="block max-w-[200px] truncate text-[13px] text-[#64748B]">{sub.email}</span>
-                        {sub.phone && <span className="block text-[12.5px] text-[#94A3B8]">{sub.phone}</span>}
-                      </td>
-
-                      {/* Betreff & Vorschau */}
-                      <td className={tdClass}>
-                        <span className="block max-w-[230px] truncate">{sub.subject || 'Kein Betreff'}</span>
-                        <span className="block max-w-[230px] truncate text-[13px] text-[#64748B]">{sub.message || '–'}</span>
-                      </td>
-
-                      {/* Formular & Herkunft */}
-                      <td className={cx(tdClass, 'text-[13px] text-[#64748B]')}>
-                        <span className="block max-w-[150px] truncate" title={sub.type}>{sub.type}</span>
-                        {sub.source_page && (
-                          <span className="block max-w-[160px] truncate text-[12.5px] text-[#94A3B8]" title={sub.source_page}>
-                            {sub.source_page.split('(')[0].trim()}
-                          </span>
-                        )}
-                      </td>
-
-                      {/* Datum */}
-                      <td className={cx(tdClass, 'whitespace-nowrap text-[13px] tabular-nums text-[#64748B]')}>
-                        {formatDate(sub.created_at)}
-                      </td>
-
-                      {/* Status mit Auswahlmenü */}
-                      <td className={cx(tdClass, 'whitespace-nowrap')} onClick={(e) => e.stopPropagation()}>
-                        <Menu
-                          label={`Status: ${currentStatusObj.label} – ändern`}
-                          width={180}
-                          trigger={(open) => (
-                            <Badge tone={currentStatusObj.tone} dot>
-                              {currentStatusObj.label}
-                              <ChevronDown size={12} aria-hidden="true" className={cx('opacity-60 transition-transform', open && 'rotate-180')} />
-                            </Badge>
-                          )}
-                          items={STATUS_OPTIONS.map((opt) => ({
-                            label: <Badge tone={opt.tone} dot>{opt.label}</Badge>,
-                            checked: sub.status === opt.value,
-                            onSelect: () => updateStatus(sub.id, opt.value),
-                          }))}
-                        />
-                      </td>
-
-                      {/* Aktionen */}
-                      <td className={cx(tdClass, 'text-right')} onClick={(e) => e.stopPropagation()}>
-                        <button
-                          type="button"
-                          onClick={() => handleDelete(sub.id, sub.name)}
-                          className={iconButtonDangerClass}
-                          aria-label={`Anfrage von ${sub.name} löschen`}
-                          title="Löschen"
-                        >
-                          <Trash2 size={16} aria-hidden="true" />
-                        </button>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-
-            {/* Handy: Liste */}
-            <ul className="divide-y divide-[#F1F5F9] xl:hidden">
-              {filteredSubmissions.map((sub) => {
-                const st = getStatusObj(sub.status)
-                return (
-                  <li key={sub.id}>
-                    <button
-                      type="button"
-                      onClick={() => openSubmission(sub)}
-                      className="flex w-full cursor-pointer flex-col gap-1 px-4 py-3 text-left outline-none hover:bg-[#FAFAFC] focus-visible:bg-[#F1F5F9]"
-                    >
-                      <span className="flex items-center gap-2">
-                        <span className={cx('min-w-0 flex-1 truncate text-[14px] text-[#0F172A]', sub.status === 'Neu' ? 'font-semibold' : 'font-medium')}>
-                          {sub.name}
-                        </span>
-                        <Badge tone={st.tone} dot>{st.label}</Badge>
-                      </span>
-                      <span className="truncate text-[14px] text-[#0F172A]">{sub.subject || 'Kein Betreff'}</span>
-                      <span className="truncate text-[13px] text-[#64748B]">{sub.message || '–'}</span>
-                      <span className="text-[12.5px] tabular-nums text-[#94A3B8]">
-                        {sub.type} · {formatDate(sub.created_at)}
-                      </span>
-                    </button>
-                  </li>
-                )
-              })}
-            </ul>
-          </>
+          <SubmissionsList
+            submissions={filteredSubmissions}
+            activeId={activeSubmission?.id ?? null}
+            hasAttachment={(id) => filesOf(id).some((f) => f.status === 'ok')}
+            onOpen={openSubmission}
+            onStatusChange={updateStatus}
+            onDelete={openDelete}
+          />
         )}
       </TableCard>
 
-      {/* Detailansicht (Seitenleiste rechts) */}
-      {activeSubmission && (
-        <div className="fixed inset-0 z-50">
-          <div
-            onClick={() => setActiveSubmission(null)}
-            className="absolute inset-0 bg-[rgba(15,23,42,.28)]"
-            aria-hidden="true"
-          />
-
-          <section
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="submission-title"
-            className="absolute inset-y-0 right-0 flex w-full max-w-[520px] flex-col border-l border-[#E2E8F0] bg-white shadow-[-12px_0_40px_rgba(15,23,42,.08)]"
-          >
-            {/* Kopf */}
-            <div className="flex items-center gap-3 border-b border-[#F1F5F9] px-4 py-4 sm:px-6">
-              <Badge>{activeSubmission.type}</Badge>
-              <span className="mr-auto truncate text-[13px] tabular-nums text-[#64748B]">
-                {new Date(activeSubmission.created_at).toLocaleString('de-DE')}
-              </span>
-              <button
-                type="button"
-                onClick={() => handleDelete(activeSubmission.id, activeSubmission.name)}
-                className={iconButtonDangerClass}
-                aria-label="Anfrage löschen"
-                title="Anfrage löschen"
-              >
-                <Trash2 size={16} aria-hidden="true" />
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveSubmission(null)}
-                className={iconButtonClass}
-                aria-label="Schließen (Esc)"
-                title="Schließen (Esc)"
-                autoFocus
-              >
-                <X size={18} aria-hidden="true" />
-              </button>
-            </div>
-
-            {/* Inhalt */}
-            <div className="flex flex-1 flex-col gap-7 overflow-y-auto px-4 py-6 sm:px-6">
-              {/* Betreff & Herkunft */}
-              <div>
-                <h2 id="submission-title" className="text-[18px] font-semibold leading-snug tracking-[-0.01em] text-[#0F172A]">
-                  {activeSubmission.subject || `${activeSubmission.type}-Anfrage`}
-                </h2>
-                <p className="mt-1 break-words text-[13px] text-[#64748B]">
-                  <span className="sr-only">Herkunft: </span>
-                  {activeSubmission.source_page || 'Kontaktseite (/kontakt)'}
-                  {activeSubmission.source_url && <> · {activeSubmission.source_url}</>}
-                </p>
-              </div>
-
-              {/* Bearbeitungsstatus */}
-              <div className="flex flex-col gap-1.5">
-                <span className="text-[13px] font-medium text-[#334155]">Status</span>
-                <div className="max-w-full overflow-x-auto">
-                  <Segmented
-                    label="Bearbeitungsstatus"
-                    value={activeSubmission.status as StatusValue}
-                    onChange={(v) => updateStatus(activeSubmission.id, v)}
-                    options={STATUS_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
-                  />
-                </div>
-              </div>
-
-              {/* Kontaktdaten */}
-              <dl className="m-0 grid grid-cols-1 gap-x-4 gap-y-1 text-[14px] sm:grid-cols-[120px_minmax(0,1fr)] sm:gap-y-2">
-                <dt className="text-[13px] text-[#64748B]">Name</dt>
-                <dd className="m-0 mb-2 text-[#0F172A] sm:mb-0">{activeSubmission.name}</dd>
-
-                <dt className="text-[13px] text-[#64748B]">E-Mail</dt>
-                <dd className="m-0 mb-2 break-all sm:mb-0">
-                  <a href={mailtoHref(activeSubmission)} className="text-[#0F172A] underline decoration-[#CBD5E1] underline-offset-2 hover:decoration-current">
-                    {activeSubmission.email}
-                  </a>
-                </dd>
-
-                {activeSubmission.phone && (
-                  <>
-                    <dt className="text-[13px] text-[#64748B]">Telefon</dt>
-                    <dd className="m-0 mb-2 sm:mb-0">
-                      <a href={`tel:${activeSubmission.phone}`} className="text-[#0F172A] underline decoration-[#CBD5E1] underline-offset-2 hover:decoration-current">
-                        {activeSubmission.phone}
-                      </a>
-                    </dd>
-                  </>
-                )}
-
-                {activeSubmission.company && (
-                  <>
-                    <dt className="text-[13px] text-[#64748B]">Firma</dt>
-                    <dd className="m-0 mb-2 text-[#0F172A] sm:mb-0">{activeSubmission.company}</dd>
-                  </>
-                )}
-              </dl>
-
-              {/* Nachricht */}
-              <div className="flex flex-col gap-2">
-                <span className="text-[13px] font-medium text-[#334155]">Nachricht</span>
-                {activeSubmission.message ? (
-                  <p className="whitespace-pre-wrap break-words text-[14px] leading-relaxed text-[#1E293B]">{activeSubmission.message}</p>
-                ) : (
-                  <p className="text-[14px] italic text-[#94A3B8]">Keine zusätzliche Nachricht übermittelt.</p>
-                )}
-              </div>
-
-              {/* Dynamische Zusatzdaten (z. B. Projektdaten, Checkboxen, Sonderfelder) */}
-              {activeSubmission.metadata && Object.keys(activeSubmission.metadata).length > 0 && (
-                <div className="flex flex-col gap-2">
-                  <span className="text-[13px] font-medium text-[#334155]">Zusätzliche Formular- &amp; Projektdaten</span>
-                  <dl className="m-0 grid grid-cols-1 gap-x-4 gap-y-1 rounded-lg bg-[#FAFAFC] px-4 py-3.5 text-[14px] sm:grid-cols-[120px_minmax(0,1fr)] sm:gap-y-2">
-                    {Object.entries(activeSubmission.metadata).map(([key, val]) => (
-                      <div key={key} className="contents">
-                        <dt className="text-[13px] capitalize text-[#64748B]">{key.replace(/_/g, ' ')}</dt>
-                        <dd className="m-0 mb-2 break-words text-[#0F172A] sm:mb-0">
-                          {typeof val === 'object' ? JSON.stringify(val) : String(val)}
-                        </dd>
-                      </div>
-                    ))}
-                  </dl>
-                </div>
-              )}
-            </div>
-
-            {/* Fuß */}
-            <div className="flex items-center justify-end gap-2 border-t border-[#F1F5F9] bg-[#FAFAFC] px-4 py-3.5 sm:px-6">
-              <Button variant="ghost" onClick={() => setActiveSubmission(null)}>
-                Schließen
-              </Button>
-              <a href={mailtoHref(activeSubmission)} className={buttonClass('primary', 'md', 'flex-1 sm:flex-none')}>
-                <Mail size={16} aria-hidden="true" />
-                Per E-Mail antworten
-              </a>
-            </div>
-          </section>
+      {hasMore && (
+        <div className="mt-4 flex flex-wrap items-center justify-center gap-3 text-[13px] text-[#64748B]">
+          <span>
+            {submissions.length} von {total} Anfragen geladen. Suche und Filter gelten für die geladenen.
+          </span>
+          <Button size="sm" onClick={loadMore} disabled={loadingMore}>
+            {loadingMore ? 'Lädt …' : 'Ältere laden'}
+          </Button>
         </div>
       )}
 
+      {activeSubmission && (
+        <SubmissionDetail
+          submission={activeSubmission}
+          files={filesOf(activeSubmission.id)}
+          open={panelOpen}
+          onClose={closePanel}
+          onDelete={openDelete}
+          onStatusChange={updateStatus}
+          onDownload={setDownloadTarget}
+        />
+      )}
+
+      <ConfirmDialog open={deleteTarget !== null} title="Anfrage löschen?" pending={isPending} onConfirm={confirmDelete} onCancel={cancelDelete}>
+        Eintrag von „{deleteTarget?.name}“ wirklich löschen? Anhänge werden mit gelöscht.
+      </ConfirmDialog>
+
       <ConfirmDialog
-        open={deleteTarget !== null}
-        title="Anfrage löschen?"
-        pending={isPending}
-        onConfirm={confirmDelete}
-        onCancel={cancelDelete}
+        open={downloadTarget !== null}
+        title="Anhang herunterladen?"
+        confirmLabel="Herunterladen"
+        danger={false}
+        onConfirm={confirmDownload}
+        onCancel={() => setDownloadTarget(null)}
       >
-        Eintrag von „{deleteTarget?.name}“ wirklich löschen?
+        <Note tone="warn">
+          Dieser Anhang wurde von einer fremden Person über ein Formular der Website geschickt und ist nicht auf Viren
+          geprüft. Öffne ihn nur, wenn du ihn erwartest, und lass ihn vorher vom Virenschutz deines Rechners
+          prüfen. Für alles, was beim Öffnen auf deinem Rechner passiert, bist du selbst verantwortlich.
+        </Note>
       </ConfirmDialog>
     </>
   )

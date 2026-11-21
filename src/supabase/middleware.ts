@@ -1,5 +1,4 @@
 // Next.js Middleware-Helfer: Auth-Session refreshen + /admin-Routen schützen.
-// Quelle: template/src/utils/supabase/middleware.ts
 
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'

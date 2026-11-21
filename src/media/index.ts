@@ -1,5 +1,7 @@
 export * from "./media-download";
-export { MediaItemCard, formatBytes } from "./MediaItemCard";
+export { MediaItemCard } from "./MediaItemCard";
+export { formatBytes } from "../ui/format";
+export type { MediaItem, MediaFileItem, MediaFolderItem, MediaFolderRow } from "./folder-tree";
 export { MediaGrid } from "./MediaGrid";
 export { useMediaLibrary } from "./useMediaLibrary";
 export { default as DeleteConfirmModal } from "./DeleteConfirmModal";
@@ -11,6 +13,16 @@ export { default as GalleryField } from "./GalleryField";
 export type { GalleryFieldProps } from "./GalleryField";
 export { uploadToLibrary } from "./upload-to-library";
 export { LARGE_FILE_WARN_BYTES, confirmLargeFiles } from "./upload-limits";
+export { StorageUsage } from "./StorageUsage";
+export {
+  KONTINGENT_URL,
+  STORAGE_WARN_RATIO,
+  kontingentAbfrageUrl,
+  kontingentAusAntwort,
+  parseQuotaGb,
+  storageStatus,
+} from "./storage-quota";
+export type { StorageState } from "./storage-quota";
 export {
   DEFAULT_IMAGE_UPLOAD_OPTIONS,
   STORAGE_CACHE_CONTROL,

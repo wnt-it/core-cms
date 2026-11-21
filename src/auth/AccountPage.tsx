@@ -11,7 +11,7 @@ export default async function AccountPage() {
 
   return (
     <>
-      <PageHeader title="Mein Konto" description="E-Mail-Adresse und Passwort Ihres Admin-Zugangs verwalten." />
+      <PageHeader title="Mein Konto" description="E-Mail-Adresse und Passwort deines Admin-Zugangs verwalten." />
       <AccountForm currentEmail={user?.email || ''} />
     </>
   )

@@ -12,7 +12,8 @@ export type EmailProviderSelection =
 
 /**
  * Factory: liefert die passende EmailProvider-Implementierung je nach gewähltem Typ.
- * Auswahl pro Kunde z.B. über site_settings.email_provider ("resend" | "smtp").
+ * Der Core selbst versendet nur über SMTP aus den Einstellungen (email_settings, siehe smtp-settings.ts).
+ * Resend bleibt für Projekte, die einen eigenen Provider an notifySubmission/submitContactForm übergeben.
  */
 export function getEmailProvider(selection: EmailProviderSelection): EmailProvider {
   switch (selection.type) {

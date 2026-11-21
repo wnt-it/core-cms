@@ -1,6 +1,5 @@
 'use client'
 
-// Quelle: template/src/components/admin/GeneralSettingsForm.tsx
 //
 // Abweichung vom Original: das Original bezog `settings`/`refreshSettings` aus einem
 // projekt-lokalen React Context (`@/contexts/SiteSettingsContext`), der pro Kundenprojekt
@@ -15,7 +14,8 @@ import MediaLibraryModal from '../media/MediaLibraryModal'
 import { saveGeneralSettings } from './settings-actions'
 import { Image as ImageIcon, Trash2, Save, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
-import { Button, Card, Field, FieldGrid, Input, SaveBar, Section, Textarea, cx, hintClass, iconButtonDangerClass } from '../ui'
+import { cx, hintClass, iconButtonDangerClass } from '../ui/styles'
+import { Button, Card, Field, FieldGrid, Input, SaveBar, Section, Textarea } from '../ui/components'
 
 export interface GeneralSettingsFormProps {
   settings: Partial<SiteSettings> | null | undefined
@@ -24,7 +24,8 @@ export interface GeneralSettingsFormProps {
 }
 
 export default function GeneralSettingsForm({ settings, refreshSettings, defaultSiteName = '' }: GeneralSettingsFormProps) {
-  const [formData, setFormData] = useState<Partial<SiteSettings>>({})
+  // Gleich mit den Daten starten: sonst zeigt der erste Frame leere Felder, die dann aufspringen
+  const [formData, setFormData] = useState<Partial<SiteSettings>>(() => settings ?? {})
   const [isSaving, setIsSaving] = useState(false)
   const [mediaModalOpen, setMediaModalOpen] = useState(false)
   const [mediaTarget, setMediaTarget] = useState<'logo' | 'favicon' | null>(null)
@@ -114,12 +115,12 @@ export default function GeneralSettingsForm({ settings, refreshSettings, default
           </Field>
         </Section>
 
-        <Section title="Logo & Favicon" description="Bilder kommen aus der Mediathek." bare>
+        <Section title="Logo & Favicon" description="Bilder kommen aus der Mediathek. Die Website nimmt Logo und Favicon nur von hier." bare>
           <Card padded={false}>
             <ImageRow
               title="Hauptlogo"
               hint="Kopf- und Fußbereich (Header & Footer)."
-              emptyText="Standard-Logo aktiv (kein Bild hinterlegt)"
+              emptyText="Kein Logo hinterlegt, die Website zeigt den Namen"
               url={formData.logo_url}
               previewAlt="Logo Vorschau"
               previewClass="max-h-full max-w-full object-contain"
@@ -133,7 +134,7 @@ export default function GeneralSettingsForm({ settings, refreshSettings, default
             <ImageRow
               title="Favicon"
               hint="Symbol im Browser-Tab."
-              emptyText="Standard-Favicon aktiv"
+              emptyText="Kein Favicon hinterlegt"
               url={formData.favicon_url}
               previewAlt="Favicon Vorschau"
               previewClass="h-8 w-8 object-contain"
@@ -158,7 +159,7 @@ export default function GeneralSettingsForm({ settings, refreshSettings, default
                 type="email"
                 value={formData.contact_email || ''}
                 onChange={(e) => setFormData({ ...formData, contact_email: e.target.value })}
-                placeholder="info@domain.de"
+                placeholder="info@example.com"
               />
             </Field>
             <Field label="Telefonnummer">

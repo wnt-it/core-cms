@@ -1,4 +1,4 @@
-import { formatBytes } from './MediaItemCard'
+import { formatBytes } from '../ui/format'
 
 /** Ab dieser Größe wird vor dem Hochladen gewarnt (große Bilder verlangsamen die Website). */
 export const LARGE_FILE_WARN_BYTES = 5 * 1024 * 1024

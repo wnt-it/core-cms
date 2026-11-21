@@ -1,12 +1,17 @@
 'use server'
 
-// Quelle: template/src/app/admin/login/actions.ts
-// Import von createClient auf core-cms-internen relativen Pfad umgestellt.
-
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { createClient } from '../supabase/server'
 import { authErrorMessage, PASSWORD_RULES_HINT } from './auth-errors'
+import { resolveSiteOrigin } from './site-origin'
+
+/** Adresse für Links in Auth-E-Mails, siehe site-origin.ts (nicht ungeprüft aus dem Host-Header). */
+async function requestOrigin() {
+  const { headers } = await import('next/headers')
+  const h = await headers()
+  return resolveSiteOrigin(h.get('host'), h.get('x-forwarded-proto'))
+}
 
 export async function login(formData: FormData) {
   const supabase = await createClient()
@@ -15,7 +20,7 @@ export async function login(formData: FormData) {
   const password = formData.get('password') as string
 
   if (!email || !password) {
-    redirect('/admin/login?error=Bitte geben Sie E-Mail und Passwort ein')
+    redirect('/admin/login?error=Bitte gib E-Mail und Passwort ein')
   }
 
   const { error } = await supabase.auth.signInWithPassword({
@@ -38,14 +43,10 @@ export async function requestPasswordReset(formData: FormData) {
   const email = formData.get('email') as string
 
   if (!email) {
-    return { error: 'Bitte geben Sie eine E-Mail-Adresse ein.' }
+    return { error: 'Bitte gib eine E-Mail-Adresse ein.' }
   }
 
-  const { headers } = await import('next/headers')
-  const headersList = await headers();
-  const host = headersList.get('host') || 'localhost:3000';
-  const protocol = headersList.get('x-forwarded-proto') || (host.includes('localhost') ? 'http' : 'https');
-  const origin = `${protocol}://${host}`;
+  const origin = await requestOrigin()
 
   const { error } = await supabase.auth.resetPasswordForEmail(email, {
     redirectTo: `${origin}/admin/auth/callback?next=/admin/update-password`,
@@ -118,11 +119,7 @@ export async function updateOwnEmail(formData: FormData) {
     return { error: reauth.error }
   }
 
-  const { headers } = await import('next/headers')
-  const headersList = await headers()
-  const host = headersList.get('host') || 'localhost:3000'
-  const protocol = headersList.get('x-forwarded-proto') || (host.includes('localhost') ? 'http' : 'https')
-  const origin = `${protocol}://${host}`
+  const origin = await requestOrigin()
 
   const { error } = await supabase.auth.updateUser(
     { email: newEmail },

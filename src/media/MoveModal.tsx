@@ -1,11 +1,12 @@
 'use client'
 
-// Quelle: template/src/components/ui/MoveModal.tsx
-// Import von createClient auf core-cms-internen relativen Pfad umgestellt.
+// Zielordner wählen. Die verschobenen Ordner selbst und ihre Unterordner stehen nicht zur Auswahl
+// (ein Ordner kann nicht in sich selbst liegen). Pfade sind gegen Kreise in alten Daten geschützt.
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { Folder, Loader2 } from 'lucide-react'
 import { createClient } from '../supabase/client'
+import { folderPath, withDescendants, type MediaFolderRow } from './folder-tree'
 import { Button } from '../ui/components'
 import { cx } from '../ui/styles'
 
@@ -13,30 +14,58 @@ interface MoveModalProps {
   isOpen: boolean
   onClose: () => void
   onConfirm: (destinationPath: string) => void
-  bucket: string
+  /** Nicht mehr genutzt, bleibt für bestehende Aufrufe */
+  bucket?: string
   itemsCount: number
   isLoading?: boolean
+  /** Ordner, die verschoben werden: sie und ihre Unterordner sind kein Ziel */
+  excludeFolderIds?: string[]
 }
 
 export default function MoveModal({
   isOpen,
   onClose,
   onConfirm,
-  bucket,
   itemsCount,
-  isLoading = false
+  isLoading = false,
+  excludeFolderIds
 }: MoveModalProps) {
-  const [folders, setFolders] = useState<{ id: string, path: string }[]>([])
+  const [rows, setRows] = useState<MediaFolderRow[]>([])
   const [selectedFolder, setSelectedFolder] = useState<string>('')
   const [isFetching, setIsFetching] = useState(false)
-  const supabase = createClient()
+  const [fetchError, setFetchError] = useState<string | null>(null)
+  const supabase = useMemo(() => createClient(), [])
+  const excludeKey = (excludeFolderIds ?? []).join(',')
+
+  const folders = useMemo(() => {
+    const excluded = withDescendants(rows, excludeKey ? excludeKey.split(',') : [])
+    return rows
+      .filter((f) => !excluded.has(f.id))
+      .map((f) => ({ id: f.id, path: folderPath(rows, f.id) }))
+      .sort((a, b) => a.path.localeCompare(b.path, 'de'))
+  }, [rows, excludeKey])
+
+  const fetchFolders = useCallback(async () => {
+    setIsFetching(true)
+    setFetchError(null)
+    try {
+      const { data, error } = await supabase.from('media_folders').select('id, name, parent_id')
+      if (error) throw error
+      setRows((data ?? []) as MediaFolderRow[])
+    } catch (err) {
+      console.error('Error fetching virtual folders:', err)
+      setFetchError('Die Ordner konnten nicht geladen werden.')
+    } finally {
+      setIsFetching(false)
+    }
+  }, [supabase])
 
   useEffect(() => {
     if (isOpen) {
-      fetchFolders()
-      setSelectedFolder('') // default to root
+      void fetchFolders()
+      setSelectedFolder('') // Standard: Hauptverzeichnis
     }
-  }, [isOpen])
+  }, [isOpen, fetchFolders])
 
   useEffect(() => {
     if (!isOpen) return
@@ -46,42 +75,6 @@ export default function MoveModal({
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
   }, [isOpen, onClose])
-
-  const fetchFolders = async () => {
-    setIsFetching(true)
-    try {
-      const { data, error } = await supabase
-        .from('media_folders')
-        .select('id, name, parent_id')
-
-      if (error) throw error
-
-      if (data) {
-        const folderMap = new Map<string, { name: string, parent_id: string | null }>()
-        data.forEach(f => folderMap.set(f.id, { name: f.name, parent_id: f.parent_id }))
-
-        const getPath = (id: string): string => {
-          const f = folderMap.get(id)
-          if (!f) return ''
-          if (f.parent_id) {
-            return `${getPath(f.parent_id)} / ${f.name}`
-          }
-          return f.name
-        }
-
-        const formatted = data.map(f => ({
-          id: f.id,
-          path: getPath(f.id)
-        })).sort((a, b) => a.path.localeCompare(b.path))
-
-        setFolders(formatted)
-      }
-    } catch (err) {
-      console.error('Error fetching virtual folders:', err)
-    } finally {
-      setIsFetching(false)
-    }
-  }
 
   if (!isOpen) return null
 
@@ -113,8 +106,10 @@ export default function MoveModal({
         <div className="flex min-h-0 flex-col gap-3 px-5 pb-4 pt-5">
           <h2 id="move-modal-title" className="text-[16px] font-semibold text-[#0F172A]">Verschieben</h2>
           <p className="text-[14px] leading-relaxed text-[#475569]">
-            Wählen Sie den Zielordner aus, in den {itemsCount === 1 ? 'das Element' : `die ${itemsCount} Elemente`} verschoben werden sollen.
+            Wähle den Zielordner aus, in den {itemsCount === 1 ? 'das Element verschoben werden soll' : `die ${itemsCount} Elemente verschoben werden sollen`}.
           </p>
+
+          {fetchError && <p className="text-[13px] text-[#B91C1C]" role="alert">{fetchError}</p>}
 
           {isFetching ? (
             <div className="flex items-center justify-center gap-2 py-8 text-[13px] text-[#64748B]" role="status">
