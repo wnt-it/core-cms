@@ -6,7 +6,7 @@
 // Die Vorlage enthält nur die festen Basis-Bausteine: Allgemeines, Hosting, E-Mail, Cookies, Kontaktformular, Rechte (mit Änderungsklausel).
 // Sie sind im Editor gesperrt (fest: true) und werden nur in der JSON-Datei geändert. „Text aus Vorlage holen“ ersetzt genau diese Abschnitte (merge.ts).
 // Alles andere (Karten, Videos, Newsletter, KI-Agent ...) trägt der Kunde bzw. WNT-IT im Admin als eigenen Abschnitt ein, das bleibt beim Holen erhalten.
-// Spätere Bausteine: docs/DATENSCHUTZ_BAUSTEINE_SPAETER.md und BACKLOG.md.
+// Spätere Bausteine: docs/DATENSCHUTZ_BAUSTEINE_SPAETER.md.
 // Projektangaben (Firma, Anschrift, Kontakt ...) kommen aus DatenschutzConfig und ersetzen die %Platzhalter% im Text.
 // Offene Punkte stehen als [● …] im Text und werden im Editor gelb markiert.
 

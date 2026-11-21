@@ -46,7 +46,7 @@ Der Text wird nie automatisch übernommen. Pro Projekt:
 
 ## So funktioniert das Holen der Vorlage (`src/legal/templates/merge.ts`)
 
-Der Text wird in Abschnitte geteilt (Überschrift bis zur nächsten Überschrift). Abschnitte, deren Überschrift zur Vorlage gehört, werden samt Inhalt ersetzt, auch die Einleitung. Alle anderen bleiben unverändert hinter dem Abschnitt, hinter dem sie stehen. Die Überschriften werden danach neu nummeriert. Die Vorschau vergleicht je Abschnitt den Text im Admin mit der neuen Vorlage. Ein Abgleich einzelner Absätze ist geplant, siehe [BACKLOG.md](../BACKLOG.md).
+Der Text wird in Abschnitte geteilt (Überschrift bis zur nächsten Überschrift). Abschnitte, deren Überschrift zur Vorlage gehört, werden samt Inhalt ersetzt, auch die Einleitung. Alle anderen bleiben unverändert hinter dem Abschnitt, hinter dem sie stehen. Die Überschriften werden danach neu nummeriert. Die Vorschau vergleicht je Abschnitt den Text im Admin mit der neuen Vorlage. Ein Abgleich einzelner Absätze ist geplant.
 
 ## Regelwerk (Kurzfassung, Stand 04.11.2026)
 
@@ -60,7 +60,7 @@ Der Text wird in Abschnitte geteilt (Überschrift bis zur nächsten Überschrift
 
 ## Übersicht: welches Projekt steht wo
 
-Der Stand je Kundenprojekt (Core-Version, Vorlagenstand, Impressum-Formular, Region) steht in `OFFENE_PUNKTE.md` im Workspace, nicht in diesem öffentlichen Repo. Bitte dort nach jedem Rollout pflegen.
+Der Stand je Kundenprojekt (Core-Version, Vorlagenstand, Impressum-Formular, Region) steht in der internen Planung im Workspace, nicht in diesem öffentlichen Repo. Bitte dort nach jedem Rollout pflegen.
 
 ## Checkliste neues Kundenprojekt mit Admin
 
