@@ -142,12 +142,26 @@ export default function SubmissionDetail({ submission: sub, files, open, onClose
             <div className="flex flex-col gap-2">
               <span className="text-[13px] font-medium text-[#334155]">Weitere Angaben</span>
               <dl className="m-0 grid grid-cols-1 gap-x-4 gap-y-1 rounded-lg bg-[#FAFAFC] px-4 py-3.5 text-[14px] sm:grid-cols-[120px_minmax(0,1fr)] sm:gap-y-2">
-                {Object.entries(sub.metadata).map(([key, val]) => (
-                  <div key={key} className="contents">
-                    <dt className={cx('text-[13px] text-[#64748B]', !labels?.[key] && 'capitalize')}>{labels?.[key] ?? key.replace(/_/g, ' ')}</dt>
-                    <dd className="m-0 mb-2 break-words text-[#0F172A] sm:mb-0">{typeof val === 'object' ? JSON.stringify(val) : String(val)}</dd>
-                  </div>
-                ))}
+                {Object.entries(sub.metadata).map(([key, val]) => {
+                  const text = typeof val === 'object' ? JSON.stringify(val) : String(val)
+                  // Mehrzeilige Angaben (z. B. ein Check-Ergebnis) über die volle Breite und mit ihren Zeilenumbrüchen zeigen
+                  const multiline = text.includes('\n')
+                  return (
+                    <div key={key} className="contents">
+                      <dt className={cx('text-[13px] text-[#64748B]', !labels?.[key] && 'capitalize', multiline && 'sm:col-span-2 sm:mt-1')}>
+                        {labels?.[key] ?? key.replace(/_/g, ' ')}
+                      </dt>
+                      <dd
+                        className={cx(
+                          'm-0 mb-2 break-words text-[#0F172A] sm:mb-0',
+                          multiline && 'whitespace-pre-line rounded-md border border-[#E2E8F0] bg-white px-3 py-2.5 text-[13.5px] leading-relaxed sm:col-span-2',
+                        )}
+                      >
+                        {text}
+                      </dd>
+                    </div>
+                  )
+                })}
               </dl>
             </div>
           )}
