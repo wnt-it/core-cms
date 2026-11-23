@@ -17,7 +17,15 @@ export interface ChangelogEntry {
 /** Neueste Version zuerst. */
 export const CORE_CHANGELOG: ChangelogEntry[] = [
   {
-    // Entwurf: noch nicht veröffentlicht (kein Tag). Google-Texte liegen im Projekt, nicht im Core.
+    // Entwurf: noch nicht veröffentlicht (kein Tag).
+    version: "0.18.1",
+    date: "2026-11-23",
+    changes: [
+      { type: "fix", text: "Posteingang: Längere Zusatzangaben mit mehreren Zeilen, zum Beispiel das Ergebnis eines Online-Checks, stehen jetzt gut lesbar über die volle Breite und mit ihren Zeilenumbrüchen statt als ein langer Fließtext." },
+    ],
+    releaseNotes: "**Für Entwickler:** `SubmissionDetail` zeigt Metadaten-Werte mit Zeilenumbruch (`\\n`) über beide Spalten mit `white-space: pre-line`. Kein Code im Projekt nötig, keine SQL-Datei.",
+  },
+  {
     version: "0.18.0",
     date: "2026-11-21",
     changes: [
