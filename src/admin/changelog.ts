@@ -17,7 +17,6 @@ export interface ChangelogEntry {
 /** Neueste Version zuerst. */
 export const CORE_CHANGELOG: ChangelogEntry[] = [
   {
-    // Entwurf: noch nicht veröffentlicht (kein Tag).
     version: "0.18.1",
     date: "2026-11-23",
     changes: [
