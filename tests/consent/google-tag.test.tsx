@@ -63,19 +63,16 @@ describe("GoogleTag", () => {
     expect(pushGoogleEvent("anfrage_gesendet")).toBe(false);
   });
 
-  it("erster Banner: je Dienst Anbieter und Zweck sichtbar, alle Angaben zugeklappt darunter", async () => {
+  it("erster Banner (kompakt): je Zweck Dienst und Anbieter, Drittland-Hinweis, Details unter Einstellungen", async () => {
     render(app());
     const banner = await screen.findByTestId("consent-banner");
-    const items = banner.querySelectorAll("li.wnt-consent-item");
-    expect(items).toHaveLength(2);
-    for (const li of items) {
-      expect(li.querySelector("p")?.textContent).toMatch(/^Google Ireland Limited: \S/);
-      const details = li.querySelector("details");
-      expect(details).not.toBeNull();
-      expect(details!.open).toBe(false);
-      expect(details!.querySelector("dl")).not.toBeNull();
-    }
-    expect(banner.textContent).toMatch(/außerhalb der EU|Drittl/);
+    // kompakt (Standard): je Zweck eine Zeile mit Dienst und Anbieter, alle Angaben erst unter „Einstellungen“
+    const rows = banner.querySelectorAll(".wnt-consent-zwecke li");
+    expect(rows).toHaveLength(2);
+    for (const li of rows) expect(li.textContent).toMatch(/von Google Ireland Limited/);
+    expect(banner.textContent).toMatch(/Statistik: Google Analytics/);
+    expect(banner.textContent).toMatch(/außerhalb der EU/);
+    expect(banner.querySelector("details")).toBeNull();
   });
 
   it("nach „Alle ablehnen“ bleibt es dabei", async () => {

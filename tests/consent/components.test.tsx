@@ -198,9 +198,33 @@ describe("Banner (Modus banner)", () => {
     // Überschrift, Anbieter, Freiwilligkeit, Links
     expect(within(el).getByRole("heading", { name: "Einwilligung zur Datenübermittlung an externe Anbieter" })).toBeTruthy();
     expect(within(el).getAllByText(/Google Ireland Limited/).length).toBeGreaterThan(0);
-    expect(within(el).getByText(/freiwillig und keine Bedingung/)).toBeTruthy();
+    expect(within(el).getByText(/freiwillig und jederzeit/)).toBeTruthy();
+    expect(within(el).getByText(/widerrufbar/)).toBeTruthy();
     expect(within(el).getByRole("link", { name: "Datenschutzerklärung" }).getAttribute("href")).toBe("/datenschutz");
     expect(within(el).getByRole("link", { name: "Impressum" }).getAttribute("href")).toBe("/impressum");
+  });
+
+  it("kompakt (Standard): je Zweck eine Zeile mit Dienst und Anbieter, Details erst unter Einstellungen", async () => {
+    render(app(banner));
+    const el = await screen.findByTestId("consent-banner");
+    expect(el.getAttribute("data-size")).toBe("kompakt");
+    const rows = el.querySelectorAll(".wnt-consent-zwecke li");
+    expect(rows.length).toBeGreaterThan(0);
+    expect(el.textContent).toContain("Google Maps von Google Ireland Limited");
+    expect(el.textContent).toMatch(/außerhalb der EU/);
+    expect(el.querySelector("details")).toBeNull();
+    fireEvent.click(within(el).getByRole("button", { name: "Einstellungen" }));
+    expect(await screen.findByRole("dialog")).toBeTruthy();
+  });
+
+  it("ausführlich: jeder Dienst mit Zweck und aufklappbaren Angaben, wie bisher", async () => {
+    const lang = defineConsentConfig({ modus: "banner", dienste: ["google-maps", "youtube"], design: { banner: "ausfuehrlich" } });
+    render(app(lang));
+    const el = await screen.findByTestId("consent-banner");
+    expect(el.getAttribute("data-size")).toBeNull();
+    expect(el.querySelectorAll("li.wnt-consent-item details").length).toBe(2);
+    expect(within(el).getByText(/freiwillig und keine Bedingung/)).toBeTruthy();
+    expect(within(el).getAllByRole("button").map((b) => b.textContent)).toEqual(["Alle ablehnen", "Alle zulassen", "Einstellungen"]);
   });
 
   it("vor der Entscheidung wird nichts geladen und nichts gespeichert", async () => {
@@ -271,8 +295,8 @@ describe("Banner (Modus banner)", () => {
 
     render(app(banner));
     const el = await screen.findByTestId("consent-banner");
-    expect(within(el).getByText("YouTube")).toBeTruthy();
-    expect(within(el).queryByText("Google Maps")).toBeNull();
+    expect(el.textContent).toMatch(/YouTube/);
+    expect(el.textContent).not.toMatch(/Google Maps/);
   });
 });
 
