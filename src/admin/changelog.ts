@@ -16,7 +16,6 @@ export interface ChangelogEntry {
 
 /** Neueste Version zuerst. */
 export const CORE_CHANGELOG: ChangelogEntry[] = [
-  // ENTWURF (noch kein Release): Microsoft-365-Versand und kompakter Cookie-Banner. Vor dem Release die Banner-Texte gegenlesen (TEXT_VERSION 2026-11-27).
   {
     version: "0.19.0",
     date: "2026-11-27",
