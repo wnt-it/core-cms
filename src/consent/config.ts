@@ -70,6 +70,7 @@ export function defineConsentConfig(input: ConsentConfigInput): ResolvedConsentC
       akzent,
       rundung: Math.min(24, Math.max(0, input.design?.rundung ?? 8)),
       platzierung: input.design?.platzierung ?? "leiste-unten",
+      banner: input.design?.banner ?? "kompakt",
     },
     rechtsseiten,
     datenschutzUrl,

@@ -31,6 +31,8 @@ import { TEXTS } from "./texts";
 import type { ConsentChoices, ConsentEventPayload, ConsentService, ConsentTrigger, ResolvedConsentConfig } from "./types";
 
 const KATEGORIE_LABEL = { funktional: "Funktionale Dienste", statistik: "Statistik", marketing: "Marketing und Videos" } as const;
+/** Kurze Zweck-Bezeichnung in der kompakten ersten Ebene, die Dienste stehen direkt dahinter. */
+const KATEGORIE_KURZ = { funktional: "Funktionen", statistik: "Statistik", marketing: "Marketing" } as const;
 
 function readStorage(): string | null {
   try {
@@ -274,6 +276,54 @@ function Banner({
   const grouped = open.length > GROUP_AFTER;
   const kategorien = (["funktional", "statistik", "marketing"] as const).filter((k) => open.some((s) => s.kategorie === k));
   const hasThirdCountry = open.some((s) => s.drittland);
+  const footer = (
+    <div className="wnt-consent-bfoot">
+      <Buttons
+        onAllow={() => onChoose(allChoices(open, true))}
+        onReject={() => onChoose(allChoices(open, false))}
+        third={{ label: TEXTS.btnEinstellungen, onClick: onSettings }}
+      />
+      <Links config={config} />
+    </div>
+  );
+
+  // Kompakt (Standard): je Zweck eine Zeile mit Dienst und Anbieter, Drittland, Freiwilligkeit und Widerruf in einem Absatz.
+  // Zweck im Wortlaut, übertragene Daten und Rechtsgrundlage stehen eine Ebene tiefer unter „Einstellungen“.
+  if (config.design.banner === "kompakt") {
+    return (
+      <section
+        className="wnt-consent-banner"
+        data-placement={config.design.platzierung}
+        data-size="kompakt"
+        role="region"
+        aria-labelledby="wnt-consent-h"
+        data-testid="consent-banner"
+      >
+        <div className="wnt-consent-bbody">
+          <h2 id="wnt-consent-h" className="wnt-consent-h">
+            {TEXTS.bannerHeadline}
+          </h2>
+          <p className="wnt-consent-p">{TEXTS.kompaktIntro}</p>
+          <ul className="wnt-consent-zwecke">
+            {kategorien.map((k) => (
+              <li key={k}>
+                <span className="wnt-consent-zweck">{KATEGORIE_KURZ[k]}:</span>{" "}
+                {open
+                  .filter((s) => s.kategorie === k)
+                  .map((s) => `${s.name} von ${s.anbieter.split(",")[0]}`)
+                  .join("; ")}
+              </li>
+            ))}
+          </ul>
+          <p className="wnt-consent-p wnt-consent-small">
+            {TEXTS.kompaktUebertragung}
+            {hasThirdCountry && TEXTS.kompaktDrittland}. {TEXTS.kompaktOhne} {TEXTS.freiwilligKurz}
+          </p>
+        </div>
+        {footer}
+      </section>
+    );
+  }
 
   return (
     <section className="wnt-consent-banner" data-placement={config.design.platzierung} role="region" aria-labelledby="wnt-consent-h" data-testid="consent-banner">
@@ -319,14 +369,7 @@ function Banner({
       {hasThirdCountry && <p className="wnt-consent-p wnt-consent-small">{TEXTS.drittland}</p>}
       <p className="wnt-consent-p wnt-consent-small">{TEXTS.freiwillig}</p>
       </div>
-      <div className="wnt-consent-bfoot">
-        <Buttons
-          onAllow={() => onChoose(allChoices(open, true))}
-          onReject={() => onChoose(allChoices(open, false))}
-          third={{ label: TEXTS.btnEinstellungen, onClick: onSettings }}
-        />
-        <Links config={config} />
-      </div>
+      {footer}
     </section>
   );
 }

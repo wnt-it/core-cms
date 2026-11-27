@@ -32,6 +32,22 @@ export const CONSENT_CSS = `
 .wnt-consent-btn:focus-visible,.wnt-consent-link:focus-visible,.wnt-consent-switch:focus-visible .wnt-consent-track,.wnt-consent-float:focus-visible{outline:3px solid var(--wnt-c-accent);outline-offset:2px}
 .wnt-consent-links{display:flex;flex-wrap:wrap;gap:14px;margin-top:12px;font-size:13.5px}
 .wnt-consent-link,.wnt-consent-root a{color:#1f2937;text-decoration:underline;background:none;border:0;padding:0;font:inherit;cursor:pointer}
+/* Kompakte erste Ebene: weniger Abstand, kleinere Schrift, Buttons und Links in einer Zeile (ab 720px), gleich große Buttons bleiben */
+.wnt-consent-banner[data-size="kompakt"]{font-size:14px;line-height:1.45}
+.wnt-consent-banner[data-size="kompakt"] .wnt-consent-bbody{padding:14px 18px 2px}
+.wnt-consent-banner[data-size="kompakt"] .wnt-consent-h{font-size:15.5px;margin:0 0 4px}
+.wnt-consent-banner[data-size="kompakt"] .wnt-consent-p{margin:0 0 6px}
+.wnt-consent-banner[data-size="kompakt"] .wnt-consent-small{font-size:13px}
+.wnt-consent-zwecke{list-style:none;margin:0 0 6px;padding:0;display:grid;gap:2px}
+.wnt-consent-zweck{font-weight:700}
+.wnt-consent-banner[data-size="kompakt"] .wnt-consent-bfoot{padding:8px 18px 10px}
+.wnt-consent-banner[data-size="kompakt"] .wnt-consent-actions{gap:8px}
+.wnt-consent-banner[data-size="kompakt"] .wnt-consent-actions .wnt-consent-btn{flex:1 1 0;min-width:0;min-height:40px;padding:7px 10px;font-size:14px}
+.wnt-consent-banner[data-size="kompakt"] .wnt-consent-links{margin-top:6px;font-size:12.5px}
+.wnt-consent-banner[data-size="kompakt"][data-placement="leiste-unten"]{max-width:960px}
+/* Schmale Bildschirme: Ablehnen und Zulassen nebeneinander, Einstellungen darunter in voller Breite (gleiche Höhe, gleiche Gestaltung) */
+@media (max-width:479px){.wnt-consent-banner[data-size="kompakt"] .wnt-consent-actions .wnt-consent-btn:nth-child(3){flex:1 1 100%}.wnt-consent-banner[data-size="kompakt"] .wnt-consent-bbody{padding:12px 14px 2px}.wnt-consent-banner[data-size="kompakt"] .wnt-consent-bfoot{padding:8px 14px 10px}}
+@media (min-width:720px){.wnt-consent-banner[data-size="kompakt"] .wnt-consent-bfoot{display:flex;align-items:center;gap:16px}.wnt-consent-banner[data-size="kompakt"] .wnt-consent-bfoot .wnt-consent-actions{flex:1 1 auto}.wnt-consent-banner[data-size="kompakt"] .wnt-consent-bfoot .wnt-consent-links{margin-top:0;flex:none}}
 .wnt-consent-overlay{position:fixed;inset:0;z-index:2147483001;background:rgba(17,24,39,.6);display:flex;align-items:center;justify-content:center;padding:12px}
 .wnt-consent-dialog{background:#fff;color:#111827;border-radius:var(--wnt-c-radius);width:min(640px,100%);max-height:92vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.4)}
 .wnt-consent-dbody{overflow:auto;padding:22px 22px 8px;flex:1 1 auto}

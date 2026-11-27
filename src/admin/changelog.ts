@@ -16,6 +16,16 @@ export interface ChangelogEntry {
 
 /** Neueste Version zuerst. */
 export const CORE_CHANGELOG: ChangelogEntry[] = [
+  // ENTWURF (noch kein Release): kompakter Cookie-Banner. Vor dem Release Texte gegenlesen (TEXT_VERSION 2026-11-27).
+  {
+    version: "0.19.0",
+    date: "2026-11-27",
+    changes: [
+      { type: "feature", text: "Cookie-Banner deutlich kleiner: Beim ersten Besuch stehen nur noch die Dienste je Zweck mit Anbieter, ob Daten die EU verlassen, und dass die Zustimmung freiwillig und widerrufbar ist. Alle weiteren Angaben findet man unter „Einstellungen“. Auf dem Handy stehen „Alle ablehnen“ und „Alle zulassen“ nebeneinander. Wer die ausführliche Fassung behalten will, kann sie im Projekt wieder einstellen." },
+      { type: "fix", text: "Cookie-Einstellungen: Der Hinweis zu Ländern außerhalb der EU passt jetzt auch, wenn mehrere Dienste aufgeführt sind." },
+    ],
+    releaseNotes: "**Für Entwickler:** Neue Option `design.banner` in `consent.config.ts`: `\"kompakt\"` (Standard) oder `\"ausfuehrlich\"` (bisherige erste Ebene). Neue feste Texte `kompaktIntro`, `kompaktUebertragung`, `kompaktDrittland`, `kompaktOhne`, `freiwilligKurz`, Wortlaut von `drittland` angepasst, `TEXT_VERSION` 2026-11-27. Keine SQL-Datei.",
+  },
   {
     // Entwurf: noch nicht veröffentlicht (kein Tag).
     version: "0.19.0",

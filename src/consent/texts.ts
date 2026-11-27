@@ -4,13 +4,23 @@
 // vorher juristisch gegenlesen lassen.
 
 /** Fassung der festen Texte, wandert in den Textstand im Protokoll. */
-export const TEXT_VERSION = "2026-11-06";
+export const TEXT_VERSION = "2026-11-27";
 
 export const TEXTS = {
   /** Überschrift des Banners (nur im Modus „banner“). Allgemein, mit Bezug zur Tragweite, nichts von der Liste der FAQ. */
   bannerHeadline: "Einwilligung zur Datenübermittlung an externe Anbieter",
   bannerIntro:
     "Diese Website möchte die folgenden externen Dienste einsetzen. Dabei werden Daten an die genannten Anbieter übertragen, teils auch in Länder außerhalb der EU. Ohne Ihre Zustimmung wird nichts geladen und nichts gespeichert, außer dem technisch Notwendigen.",
+  /** Erste Ebene kompakt: Einleitung vor der Liste der Dienste je Zweck. */
+  kompaktIntro: "Diese Website möchte folgende externe Dienste einsetzen:",
+  /** Erste Ebene kompakt: nach der Liste. Mit Drittland-Zusatz, wenn mindestens ein Dienst Daten außerhalb der EU übermittelt. */
+  kompaktUebertragung: "Dabei werden Daten an die Anbieter übertragen",
+  kompaktDrittland: ", auch in Länder außerhalb der EU",
+  /** Erste Ebene kompakt: nach der Liste, zusammen mit dem Drittland-Hinweis und der Freiwilligkeit. */
+  kompaktOhne: "Ohne Ihre Zustimmung wird nichts davon geladen.",
+  /** Erste Ebene kompakt: Kurzfassung von „freiwillig“, mit Weg zum Widerruf und zu den Details. */
+  freiwilligKurz:
+    "Ihre Zustimmung ist freiwillig und jederzeit über „Cookie-Einstellungen“ am unteren Seitenrand widerrufbar.",
   /** Überschrift am Platzhalter einer Einbettung. */
   gateHeadline: "Externer Inhalt: Beim Laden werden Daten an den Anbieter übermittelt",
   gateIntro: "Dieser Inhalt kommt von einem externen Anbieter und wird erst geladen, wenn Sie zustimmen:",
@@ -24,7 +34,7 @@ export const TEXTS = {
     "Ihre Zustimmung ist freiwillig und keine Bedingung für die Nutzung dieser Website. Sie können sie jederzeit widerrufen: über „Cookie-Einstellungen“ am unteren Seitenrand.",
   /** Wird nur gezeigt, wenn mindestens ein Dienst in ein Drittland übermittelt. */
   drittland:
-    "Dieser Dienst übermittelt Daten in Länder außerhalb der EU. Die genannte Rechtsgrundlage soll ein angemessenes Schutzniveau sichern, ein Restrisiko (z. B. Zugriff von Behörden) bleibt.",
+    "Daten werden auch in Länder außerhalb der EU übermittelt. Die jeweils genannte Rechtsgrundlage soll ein angemessenes Schutzniveau sichern, ein Restrisiko (z. B. Zugriff von Behörden) bleibt.",
   notwendigTitel: "Technisch notwendig",
   notwendigText:
     "Diese Website speichert Ihre Auswahl hier auf Ihrem Gerät, damit sie nicht bei jedem Besuch neu fragen muss (nur ja oder nein je Dienst und ein Ablaufdatum). Dafür ist keine Einwilligung nötig.",

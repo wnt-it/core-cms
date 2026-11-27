@@ -46,6 +46,7 @@ export interface ConsentService {
 }
 
 export type ConsentMode = "einbettung" | "banner" | "aus";
+export type ConsentBannerSize = "kompakt" | "ausfuehrlich";
 export type ConsentPlacement = "leiste-unten" | "karte-links" | "dialog-mitte";
 
 export interface ConsentDesign {
@@ -54,6 +55,8 @@ export interface ConsentDesign {
   /** Eckenrundung in px. */
   rundung?: number;
   platzierung?: ConsentPlacement;
+  /** Umfang der ersten Ebene: kompakt (Standard, Dienste je Zweck in einer Zeile, Details unter „Einstellungen“) oder ausführlich (jeder Dienst mit Zweck und aufklappbaren Angaben). */
+  banner?: ConsentBannerSize;
 }
 
 /** Eingabe im Projekt (consent.config.ts). */
