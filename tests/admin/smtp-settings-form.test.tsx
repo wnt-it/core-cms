@@ -40,7 +40,7 @@ describe("SmtpSettingsForm mit Microsoft 365", () => {
     save.mockResolvedValue({ success: true });
     get.mockResolvedValue(settings);
     render(<SmtpSettingsForm initialSettings={settings} />);
-    fireEvent.click(screen.getByRole("button", { name: /Microsoft 365 \(für Techniker\)/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Versand-Einstellungen/ }));
     expect((screen.getByPlaceholderText("•••••••• (gespeichert)") as HTMLInputElement).value).toBe("");
     expect(screen.queryByText("SMTP Host / Server-Adresse")).toBeNull();
     expect(screen.getByRole("button", { name: "Microsoft 365", pressed: true })).toBeTruthy();
@@ -65,7 +65,7 @@ describe("SmtpSettingsForm mit Microsoft 365", () => {
     save.mockResolvedValue({ success: true });
     get.mockResolvedValue({ ...settings, transport: "smtp", msAvailable: false });
     render(<SmtpSettingsForm initialSettings={{ ...settings, transport: "smtp", msAvailable: false, host: "smtp.x.de", user: "u", passStatus: "saved" }} />);
-    fireEvent.click(screen.getByRole("button", { name: /Server-Einstellungen/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Versand-Einstellungen/ }));
     expect(screen.getByText(/braucht noch die Datenbank-Aktualisierung für core-cms v0.19.0/)).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /E-Mail-Einstellungen speichern/ }));
     await waitFor(() => expect(save).toHaveBeenCalled());

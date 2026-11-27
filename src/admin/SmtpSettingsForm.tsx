@@ -265,9 +265,9 @@ export default function SmtpSettingsForm({ initialSettings, declaredForms = [] }
             <span className="flex min-w-0 items-center gap-3">
               <Settings2 size={16} className="shrink-0 text-[#64748B]" aria-hidden="true" />
               <span className="min-w-0">
-                <span className="block text-[14px] font-medium text-[#0F172A]">{isMs ? 'Microsoft 365 (für Techniker)' : 'Server-Einstellungen (für Techniker)'}</span>
+                <span className="block text-[14px] font-medium text-[#0F172A]">Versand-Einstellungen (für Techniker)</span>
                 {isMs ? (
-                  formData.msSender && <span className={cx(mutedClass, 'block truncate')}>Microsoft 365 · {formData.msSender}</span>
+                  <span className={cx(mutedClass, 'block truncate')}>Microsoft 365{formData.msSender ? ` · ${formData.msSender}` : ''}</span>
                 ) : formData.host && (
                   <span className={cx(mutedClass, 'block truncate')}>
                     {formData.host}
@@ -308,15 +308,15 @@ export default function SmtpSettingsForm({ initialSettings, declaredForms = [] }
                       value={formData.transport}
                       onChange={(v) => setFormData({ ...formData, transport: v })}
                       options={[
-                        { value: 'smtp', label: 'SMTP (Benutzername und Passwort)' },
+                        { value: 'smtp', label: 'SMTP' },
                         { value: 'microsoft365', label: 'Microsoft 365' },
                       ]}
                     />
                   </div>
                   <p className={hintClass}>
                     {isMs
-                      ? 'Die Website meldet sich als App bei deinem Microsoft-365-Tenant an und sendet aus einem festen Postfach, ohne Passwort. Die App muss in Exchange auf genau dieses Postfach beschränkt sein.'
-                      : 'Für Postfächer bei IONOS, Strato, All-Inkl, Google und anderen. Microsoft 365 schaltet SMTP mit Passwort ab, dort bitte „Microsoft 365“ wählen.'}
+                      ? 'Die Website sendet als App aus einem festen Postfach, ohne Passwort.'
+                      : 'Für IONOS, Strato, All-Inkl, Google und andere. Bei Microsoft 365 bitte „Microsoft 365“ wählen.'}
                   </p>
                 </div>
               ) : (
@@ -325,80 +325,86 @@ export default function SmtpSettingsForm({ initialSettings, declaredForms = [] }
 
               {isMs ? (
                 <>
-                  <FieldGrid>
-                    <Field label="Tenant-ID (Verzeichnis-ID)" hint="Entra ID → Übersicht → Mandanten-ID">
-                      <Input
-                        type="text"
-                        required
-                        autoComplete="off"
-                        spellCheck={false}
-                        placeholder="z.B. 00000000-0000-0000-0000-000000000000"
-                        value={formData.msTenantId}
-                        onChange={(e) => setFormData({ ...formData, msTenantId: e.target.value })}
-                      />
-                    </Field>
-                    <Field label="Client-ID (Anwendungs-ID)" hint="Entra ID → App-Registrierungen → deine App">
-                      <Input
-                        type="text"
-                        required
-                        autoComplete="off"
-                        spellCheck={false}
-                        placeholder="z.B. 00000000-0000-0000-0000-000000000000"
-                        value={formData.msClientId}
-                        onChange={(e) => setFormData({ ...formData, msClientId: e.target.value })}
-                      />
-                    </Field>
-                    {/* Wie beim SMTP-Passwort: Das gespeicherte Secret kommt nie in den Browser */}
-                    <Field
-                      label="Client-Secret (Wert)"
-                      hint={
-                        msSecretStatus === 'saved'
-                          ? 'Gespeichert. Leer lassen, um es zu behalten.'
-                          : msSecretStatus === 'unreadable'
-                            ? 'Das gespeicherte Secret lässt sich nicht mehr lesen. Bitte neu eingeben.'
-                            : 'Den „Wert“ kopieren, nicht die Geheimnis-ID. Wird verschlüsselt gespeichert.'
-                      }
-                    >
-                      <Input
-                        type="password"
-                        required={msSecretStatus !== 'saved'}
-                        autoComplete="new-password"
-                        placeholder={msSecretStatus === 'saved' ? '•••••••• (gespeichert)' : 'Secret eingeben'}
-                        value={formData.msSecret}
-                        onChange={(e) => setFormData({ ...formData, msSecret: e.target.value })}
-                      />
-                    </Field>
-                    <Field label="Secret gültig bis" hint={`Steht in Entra ID unter „Zertifikate & Geheimnisse“. Höchstens ${SECRET_MAX_MONTHS} Monate.`}>
-                      <Input
-                        type="date"
-                        value={formData.msSecretExpiresAt}
-                        onChange={(e) => setFormData({ ...formData, msSecretExpiresAt: e.target.value })}
-                      />
-                    </Field>
-                    <Field
-                      label="Absender-Postfach"
-                      className="sm:col-span-2"
-                      hint="Aus diesem Postfach gehen alle E-Mails raus, gern ein freigegebenes Postfach (Shared Mailbox) wie anfragen@…"
-                    >
-                      <Input
-                        type="email"
-                        required
-                        placeholder="z.B. anfragen@example.com"
-                        value={formData.msSender}
-                        onChange={(e) => setFormData({ ...formData, msSender: e.target.value })}
-                      />
-                    </Field>
-                  </FieldGrid>
-                  {expiry.status === 'expired' || expiry.status === 'soon' ? (
-                    <Note tone={expiry.status === 'expired' ? 'error' : 'warn'}>{secretExpiryHint(formData.msSecretExpiresAt)}</Note>
-                  ) : (
-                    <Note>
-                      Ein Client-Secret gilt höchstens {SECRET_MAX_MONTHS} Monate. Danach gehen keine E-Mails mehr raus, bis ein neues eingetragen ist.
-                      {expiry.status === 'ok'
-                        ? ` Dieses gilt noch ${expiry.days} Tage.`
-                        : ' Trag das Ablaufdatum ein, dann erinnert dich der Admin rechtzeitig.'}
-                    </Note>
-                  )}
+                  <Field
+                    label="Absender-Postfach"
+                    hint="Aus diesem Postfach gehen alle E-Mails raus, z. B. ein freigegebenes Postfach."
+                  >
+                    <Input
+                      type="email"
+                      required
+                      placeholder="z.B. anfragen@example.com"
+                      value={formData.msSender}
+                      onChange={(e) => setFormData({ ...formData, msSender: e.target.value })}
+                    />
+                  </Field>
+
+                  <div className="flex flex-col gap-4 border-t border-[#F1F5F9] pt-5">
+                    <div>
+                      <span className="block text-[13px] font-medium text-[#0F172A]">Zugang aus Entra ID</span>
+                      <span className={hintClass}>Aus der App-Registrierung. Die App muss in Exchange auf das Absender-Postfach beschränkt sein.</span>
+                    </div>
+                    <FieldGrid>
+                      <Field label="Tenant-ID" hint="Übersicht → Mandanten-ID">
+                        <Input
+                          type="text"
+                          required
+                          autoComplete="off"
+                          spellCheck={false}
+                          placeholder="GUID oder firma.onmicrosoft.com"
+                          value={formData.msTenantId}
+                          onChange={(e) => setFormData({ ...formData, msTenantId: e.target.value })}
+                        />
+                      </Field>
+                      <Field label="Client-ID" hint="App-Registrierungen → deine App">
+                        <Input
+                          type="text"
+                          required
+                          autoComplete="off"
+                          spellCheck={false}
+                          placeholder="GUID der Anwendung"
+                          value={formData.msClientId}
+                          onChange={(e) => setFormData({ ...formData, msClientId: e.target.value })}
+                        />
+                      </Field>
+                      {/* Wie beim SMTP-Passwort: Das gespeicherte Secret kommt nie in den Browser */}
+                      <Field
+                        label="Client-Secret"
+                        hint={
+                          msSecretStatus === 'saved'
+                            ? 'Gespeichert. Leer lassen, um es zu behalten.'
+                            : msSecretStatus === 'unreadable'
+                              ? 'Nicht mehr lesbar. Bitte neu eingeben.'
+                              : 'Den Wert, nicht die ID. Wird verschlüsselt gespeichert.'
+                        }
+                      >
+                        <Input
+                          type="password"
+                          required={msSecretStatus !== 'saved'}
+                          autoComplete="new-password"
+                          placeholder={msSecretStatus === 'saved' ? '•••••••• (gespeichert)' : 'Secret eingeben'}
+                          value={formData.msSecret}
+                          onChange={(e) => setFormData({ ...formData, msSecret: e.target.value })}
+                        />
+                      </Field>
+                      <Field
+                        label="Secret gültig bis"
+                        hint={
+                          expiry.status === 'ok'
+                            ? `Noch ${expiry.days} Tage gültig. Wir erinnern dich 30 Tage vorher.`
+                            : `Höchstens ${SECRET_MAX_MONTHS} Monate. Wir erinnern dich 30 Tage vorher.`
+                        }
+                      >
+                        <Input
+                          type="date"
+                          value={formData.msSecretExpiresAt}
+                          onChange={(e) => setFormData({ ...formData, msSecretExpiresAt: e.target.value })}
+                        />
+                      </Field>
+                    </FieldGrid>
+                    {(expiry.status === 'expired' || expiry.status === 'soon') && (
+                      <Note tone={expiry.status === 'expired' ? 'error' : 'warn'}>{secretExpiryHint(formData.msSecretExpiresAt)}</Note>
+                    )}
+                  </div>
                 </>
               ) : (
               <>
