@@ -31,6 +31,17 @@ export interface SmtpSettingsData {
   skipCertCheck: boolean;
   /** false: Spalte smtp_skip_cert_check fehlt (sql/0.18.0_smtp_zertifikat.sql) */
   certSwitchAvailable: boolean;
+  /** Versandart (ab v0.19.0) */
+  transport: "smtp" | "microsoft365";
+  /** false: Spalten für Microsoft 365 fehlen (sql/0.19.0_microsoft_365.sql) */
+  msAvailable: boolean;
+  msTenantId: string;
+  msClientId: string;
+  msSender: string;
+  /** Nur ob ein Client-Secret gespeichert ist, nie das Secret selbst */
+  msSecretStatus: "none" | "saved" | "unreadable";
+  /** YYYY-MM-DD oder "" */
+  msSecretExpiresAt: string;
   missing: string[];
   forms: FormRecipientsInfo;
 }

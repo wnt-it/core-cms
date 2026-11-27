@@ -3,6 +3,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { classifySmtpError, okResult } from "../../src/email/smtp-check-types";
+import { graphOkResult } from "../../src/email/graph-check-types";
 
 const check = vi.fn();
 vi.mock("../../src/admin/settings-actions", () => ({ checkSmtpConnection: (o: unknown) => check(o) }));
@@ -32,6 +33,16 @@ describe("SmtpStatus", () => {
     await screen.findByText("Mail-Versand gestört");
     expect(screen.getByText(/gilt nicht für „mail.kunde.de“/)).toBeTruthy();
     expect(screen.getByText(/Es gilt für: smtp.ionos.de/)).toBeTruthy();
+  });
+
+  it("Microsoft 365: eigene Schritte, Postfach und Warnung vor Ablauf des Secrets", async () => {
+    check.mockResolvedValue(graphOkResult({ sender: "anfragen@kunde.de", secretExpiresAt: "2026-12-01" }, [], new Date(2026, 10, 27)));
+    render(<SmtpStatus />);
+    await screen.findByText("Mail-Versand funktioniert");
+    expect(screen.getByText("Microsoft-Tenant gefunden")).toBeTruthy();
+    expect(screen.getByText("Senderecht: wird erst bei der Test-E-Mail sichtbar")).toBeTruthy();
+    expect(screen.getByText(/Microsoft 365 · anfragen@kunde.de/)).toBeTruthy();
+    expect(screen.getByText(/Client-Secret läuft in 4 Tagen ab/)).toBeTruthy();
   });
 
   it("prüft nach dem Speichern sofort neu", async () => {

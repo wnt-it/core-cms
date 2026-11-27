@@ -25,6 +25,13 @@ const STEP_LABELS = {
   login: 'Anmeldung mit Benutzername und Passwort',
 } as const
 
+// Microsoft 365 (ab v0.19.0): gleiche Schritte, andere Bedeutung (siehe email/graph-check-types.ts)
+const MS_STEP_LABELS = {
+  server: 'Microsoft-Tenant gefunden',
+  encryption: 'App angemeldet (Client-ID und Secret)',
+  login: 'Senderecht für das Postfach',
+} as const
+
 function StepIcon({ step }: { step: SmtpCheckStep }) {
   if (step === 'ok') return <Check size={15} className="text-[#15803D]" aria-hidden="true" />
   if (step === 'fail') return <X size={15} className="text-[#B91C1C]" aria-hidden="true" />
@@ -64,11 +71,11 @@ export function SmtpStatus({ refreshKey = 0, className }: SmtpStatusProps) {
 
   const result = state.status === 'done' ? state.result : null
   const incomplete = result?.problem === 'incomplete'
-  const tone = state.status === 'loading' ? 'loading' : result?.ok ? (result.certCheckSkipped ? 'warn' : 'ok') : incomplete ? 'warn' : 'error'
+  const tone = state.status === 'loading' ? 'loading' : result?.ok ? (result.certCheckSkipped || result.secretExpiresSoon ? 'warn' : 'ok') : incomplete ? 'warn' : 'error'
 
   const title =
     state.status === 'loading'
-      ? 'Verbindung zum Mailserver wird geprüft …'
+      ? 'Mail-Versand wird geprüft …'
       : state.status === 'error'
         ? 'Prüfung nicht möglich'
         : result!.ok
@@ -80,6 +87,8 @@ export function SmtpStatus({ refreshKey = 0, className }: SmtpStatusProps) {
   const Icon = tone === 'loading' ? Loader2 : tone === 'ok' ? CheckCircle2 : tone === 'warn' ? AlertTriangle : XCircle
   const iconColor = tone === 'loading' ? 'text-[#64748B] animate-spin' : tone === 'ok' ? 'text-[#15803D]' : tone === 'warn' ? 'text-[#B45309]' : 'text-[#B91C1C]'
   const showSteps = result && !incomplete
+  const isMs = result?.transport === 'microsoft365'
+  const labels = isMs ? MS_STEP_LABELS : STEP_LABELS
 
   return (
     <section
@@ -107,7 +116,11 @@ export function SmtpStatus({ refreshKey = 0, className }: SmtpStatusProps) {
                 <li key={k} className="flex items-center gap-2 text-[13px] text-[#334155]">
                   <StepIcon step={result.steps[k]} />
                   <span>
-                    {k === 'encryption' && result.certCheckSkipped ? 'Verbindung verschlüsselt (Zertifikat wird nicht geprüft)' : STEP_LABELS[k]}
+                    {k === 'encryption' && result.certCheckSkipped
+                      ? 'Verbindung verschlüsselt (Zertifikat wird nicht geprüft)'
+                      : k === 'login' && isMs && result.steps.login === 'skip' && result.ok
+                        ? 'Senderecht: wird erst bei der Test-E-Mail sichtbar'
+                        : labels[k]}
                     <span className="sr-only">: {stepText[result.steps[k]]}</span>
                   </span>
                 </li>
@@ -120,6 +133,7 @@ export function SmtpStatus({ refreshKey = 0, className }: SmtpStatusProps) {
               <span className={mutedClass}>
                 {result.cached ? 'Zuletzt geprüft' : 'Geprüft'} um {time(result.checkedAt)} Uhr
                 {result.host ? ` · ${result.host}:${result.port}` : ''}
+                {result.mailbox ? ` · Microsoft 365 · ${result.mailbox}` : ''}
               </span>
             )}
             <span className="ml-auto flex items-center gap-2">

@@ -17,10 +17,24 @@ export type SmtpProblem =
   | "cert-self-signed"
   | "cert-untrusted"
   | "auth"
+  // Microsoft 365 (ab v0.19.0, graph-check-types.ts)
+  | "ms-tenant"
+  | "ms-app"
+  | "ms-permission"
+  | "ms-mailbox"
+  | "secret-expired"
   | "other";
 
 export interface SmtpCheckResult {
   ok: boolean;
+  /** Versandart (ab v0.19.0). Fehlt = SMTP. Bei „microsoft365“ heißen die Schritte: Tenant gefunden, App angemeldet, Senderecht. */
+  transport?: "smtp" | "microsoft365";
+  /** Microsoft 365: Absender-Postfach */
+  mailbox?: string;
+  /** Microsoft 365: Ablaufdatum des Client-Secrets (YYYY-MM-DD), falls eingetragen */
+  secretExpiresAt?: string;
+  /** Microsoft 365: Secret läuft in den nächsten 30 Tagen ab */
+  secretExpiresSoon?: boolean;
   /** ISO-Zeitpunkt der Prüfung */
   checkedAt: string;
   host?: string;

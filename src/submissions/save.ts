@@ -9,10 +9,10 @@
 import "server-only";
 import { createClient } from "../supabase/server";
 import { createServiceRoleClient } from "../supabase/service-role";
-import { getEmailProvider } from "../email";
 import type { EmailProvider } from "../email/provider";
 import { loadFormRecipients, loadSmtpSettings } from "../email/smtp-settings";
 import { recipientFor } from "../email/form-recipients";
+import { providerForConfig } from "../email/mail-transport";
 import type { ColumnField } from "./form";
 
 // Eingaben aus dem öffentlichen Formular dürfen nie als HTML in die Mail gelangen.
@@ -107,7 +107,7 @@ export async function insertSubmission(input: SaveInput, id: string = crypto.ran
 /** Schickt die Benachrichtigung. Fehler werden nur protokolliert, die Anfrage ist ja schon gespeichert. */
 export async function notifySubmission(input: SaveInput, options: NotifyOptions = {}): Promise<void> {
   try {
-    // SMTP ausschließlich aus email_settings (im Admin gepflegt), über den Service-Role-Client, weil die
+    // Versand (SMTP oder ab v0.19.0 Microsoft 365) ausschließlich aus email_settings (im Admin gepflegt), über den Service-Role-Client, weil die
     // Tabelle Zugangsdaten enthält. Dieselbe Prüfung wie die Test-E-Mail im Admin (loadSmtpSettings).
     const service = createServiceRoleClient();
     if (!service) {
@@ -116,17 +116,18 @@ export async function notifySubmission(input: SaveInput, options: NotifyOptions 
     }
     const [smtp, forms] = await Promise.all([loadSmtpSettings(service), loadFormRecipients(service)]);
     let provider = options.emailProvider;
-    const { fromName, fromEmail, recipient: generalRecipient } = smtp.values;
+    const { fromName, recipient: generalRecipient } = smtp.values;
+    // Microsoft 365 sendet immer aus dem Absender-Postfach
+    const fromEmail = smtp.config?.fromEmail ?? smtp.values.fromEmail;
     // Empfänger je Formular (ab v0.17.0), sonst der „Empfänger für Anfragen“
     const recipientEmail = generalRecipient ? recipientFor(input.type, forms.recipients, generalRecipient) : "";
 
     if (!provider) {
       if (!smtp.config) {
-        console.warn(`[submissions] SMTP im Admin nicht vollständig eingerichtet (fehlt: ${smtp.missing.join(", ")}), keine E-Mail gesendet.`);
+        console.warn(`[submissions] E-Mail-Versand im Admin nicht vollständig eingerichtet (fehlt: ${smtp.missing.join(", ")}), keine E-Mail gesendet.`);
         return;
       }
-      const { host, port, user, pass, skipCertCheck } = smtp.config;
-      provider = getEmailProvider({ type: "smtp", config: { host, port, user, pass, skipCertCheck } });
+      provider = providerForConfig(smtp.config);
     }
     // Eigener Provider (z. B. Resend): Empfänger und Absender kommen trotzdem aus den Einstellungen
     if (!recipientEmail) {

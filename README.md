@@ -91,7 +91,7 @@ Abhängigkeit), sondern ausschließlich als Vercel-Environment-Variablen pro Pro
 SUPABASE_URL=
 SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=  # Pflicht ab v0.3.1 - siehe unten
-ENCRYPTION_KEY=          # Pflicht ab v0.7.0 - verschlüsselt das SMTP-Passwort
+ENCRYPTION_KEY=          # Pflicht ab v0.7.0 - verschlüsselt das SMTP-Passwort (ab v0.19.0 auch das Microsoft-365-Secret)
 RESEND_API_KEY=          # falls Resend als Provider gewählt wird
 STORAGE_QUOTA_GB=        # optional ab v0.14.0 - nur für Sonderfälle, sonst kommt das Kontingent automatisch
 ```
@@ -418,6 +418,62 @@ Ein Mailserver pro Website bleibt. Nur die Adresse, **an die** eine Anfrage geht
 - Logik: `src/email/smtp-check-types.ts` (`classifySmtpError`, ohne Server-Code, getestet in `tests/email/smtp-check.test.ts`), `src/email/smtp-check.ts` (Prüfung), Anzeige `src/admin/SmtpStatus.tsx`.
 
 **Vor dem Rollout je Projekt:** Nach dem Update die Einstellungen öffnen und die Prüfung ansehen. Steht dort ein Zertifikatsproblem, verschickt das Projekt ab jetzt keine E-Mails mehr (Anfragen landen weiter im Posteingang): Servernamen korrigieren oder, nur bei eigenem Server, den Schalter setzen (dafür vorher die SQL-Datei ausführen).
+
+## Versand über Microsoft 365 (ab v0.19.0)
+
+Microsoft schaltet in Exchange Online SMTP mit Benutzername und Passwort ab (Basic Auth, auch App-Passwörter). Kunden mit Microsoft 365 versenden deshalb über **Microsoft Graph**: Die Website meldet sich als App beim Tenant des Kunden an (App-Registrierung in Entra ID, Client Credentials) und sendet aus genau einem Postfach. Kein Benutzerkonto, kein Passwort, keine MFA-Ausnahme.
+
+- **Admin:** Einstellungen → E-Mail & SMTP → Versand → „Microsoft 365 (für Techniker)“, Versandart „Microsoft 365“. Felder: Tenant-ID, Client-ID, Client-Secret (Wert), Secret gültig bis, Absender-Postfach. Absender-Adresse der E-Mails ist immer das Absender-Postfach; Absender-Name, Empfänger und Empfänger je Formular gelten wie bei SMTP.
+- **Secret:** wie das SMTP-Passwort mit `ENCRYPTION_KEY` verschlüsselt in `email_settings.ms_client_secret`, kommt nie in den Browser (das Feld zeigt nur „gespeichert“). Leer gelassen bleibt es beim Speichern erhalten. Mit Ablaufdatum warnt der Admin 30 Tage vorher (Verbindungsprüfung und Einstellungen), abgelaufen zeigt er einen Fehler.
+- **Verbindungsprüfung** (ohne Versand): holt ein Token beim Tenant. Ergebnis: Tenant gefunden, App angemeldet (Client-ID und Secret), Senderecht. Das Senderecht ist ohne Versand nur sichtbar, wenn es in Entra ID vergeben ist (Weg B unten); bei Exchange-RBAC (Weg A) steht dort „wird erst bei der Test-E-Mail sichtbar“. **Die Test-E-Mail ist deshalb Pflicht nach der Einrichtung.**
+- **Versand:** `POST https://graph.microsoft.com/v1.0/users/{absender}/sendMail`, HTML, mehrere Empfänger, Antwort-an = Besucher. Eine Kopie liegt in „Gesendete Elemente“ des Absender-Postfachs. Token wird bis kurz vor Ablauf gemerkt.
+- **Datenbank:** einmal `sql/0.19.0_microsoft_365.sql` (neue Spalten, Standard `smtp`, nichts entfernt). Ohne die Datei bietet der Admin nur SMTP an. **Gemeinsame Datenbank beachten:** Wird im Admin der Vorschau (v0.19.0) auf Microsoft 365 umgestellt, sendet eine Live-Seite mit älterer core-cms-Version weiter mit den alten SMTP-Angaben. Erst umstellen, wenn v0.19.0 live ist (oder die Seite noch nicht live ist).
+- Code: `src/email/graph-provider.ts` (Token, Versand, nur `fetch`), `graph-check.ts` / `graph-check-types.ts` (Prüfung, Fehlertexte), `microsoft365-input.ts` (Eingaben), `mail-transport.ts` (Auswahl SMTP/Microsoft 365). Tests mit nachgebauten Microsoft-Antworten in `tests/email/graph-*.test.ts`, gegen einen echten Tenant ist der Code nicht automatisch getestet.
+
+### Einrichtung im Tenant des Kunden (Schritt für Schritt)
+
+Braucht ein Konto mit den Rollen **Anwendungsadministrator** (Entra ID) und **Exchange-Administrator**, oder Globaler Administrator, dazu das PowerShell-Modul `ExchangeOnlineManagement`. Am besten gemeinsam mit der IT des Kunden.
+
+**1. Absender-Postfach.** Exchange Admin Center → Empfänger → Postfächer → „Freigegebenes Postfach hinzufügen“, z. B. `anfragen@kunde.de` (Anzeigename = Absender-Name in den E-Mails). Ein freigegebenes Postfach braucht keine Lizenz und kein Passwort. Ein bestehendes Benutzerpostfach geht auch, ist aber unnötig mächtig.
+
+**2. App registrieren.** Entra Admin Center → Identität → Anwendungen → App-Registrierungen → „Neue Registrierung“: Name z. B. „Website kunde.de – Mailversand“, „Nur Konten in diesem Organisationsverzeichnis“, keine Umleitungs-URI. Auf der Übersicht notieren: **Anwendungs-ID (Client-ID)** und **Verzeichnis-ID (Tenant-ID)**. Unter Unternehmensanwendungen → dieselbe App die **Objekt-ID** notieren (die des Dienstprinzipals, nicht die der App-Registrierung; braucht Weg A).
+
+**3. Client-Secret anlegen.** In der App-Registrierung → Zertifikate & Geheimnisse → „Neuer geheimer Clientschlüssel“, Ablauf höchstens 24 Monate (Microsoft lässt nicht mehr zu). Den **Wert** sofort kopieren (er ist nur jetzt sichtbar), nicht die „Geheimnis-ID“. Das **Ablaufdatum** notieren und im Admin eintragen.
+
+**4. Senderecht vergeben und auf das eine Postfach beschränken.** Ohne Beschränkung dürfte die App aus *jedem* Postfach des Tenants senden, auch aus dem der Geschäftsführung. Das ist nie in Ordnung. Zwei Wege, **nicht beide mischen**:
+
+*Weg A (empfohlen): RBAC for Applications in Exchange Online.* Das Recht kommt nur aus Exchange und gilt nur für das Postfach. Wichtig: In Entra ID bei der App **keine** Graph-Anwendungsberechtigung `Mail.Send` erteilen. Ist sie schon erteilt, unter API-Berechtigungen die Zustimmung widerrufen und die Berechtigung entfernen: Rechte aus Entra ID gelten für den ganzen Tenant und kommen zur Beschränkung in Exchange hinzu, die Beschränkung wäre wirkungslos.
+
+```powershell
+Connect-ExchangeOnline
+# App in Exchange bekannt machen: AppId = Client-ID, ObjectId = Objekt-ID der Unternehmensanwendung
+New-ServicePrincipal -AppId <Client-ID> -ObjectId <Objekt-ID> -DisplayName "Website Mailversand"
+# Bereich, der genau das Absender-Postfach enthält
+New-ManagementScope -Name "Website Mailversand" -RecipientRestrictionFilter "PrimarySmtpAddress -eq 'anfragen@kunde.de'"
+# Recht „Application Mail.Send“ nur in diesem Bereich
+New-ManagementRoleAssignment -App <Client-ID> -Role "Application Mail.Send" -CustomResourceScope "Website Mailversand"
+# Kontrolle: beim Absender-Postfach InScope = True, bei jedem anderen Postfach False
+Test-ServicePrincipalAuthorization -Identity <Client-ID> -Resource anfragen@kunde.de
+Test-ServicePrincipalAuthorization -Identity <Client-ID> -Resource chef@kunde.de
+```
+
+*Weg B (älter, Microsoft ersetzt ihn durch Weg A): `Mail.Send` in Entra ID + Application Access Policy.* In der App-Registrierung → API-Berechtigungen → Berechtigung hinzufügen → Microsoft Graph → **Anwendungsberechtigungen** → `Mail.Send` → „Administratorzustimmung für … erteilen“. Dann eine **E-Mail-aktivierte Sicherheitsgruppe** anlegen, z. B. `website-mailversand@kunde.de`, mit dem Absender-Postfach als einzigem Mitglied, und die App darauf beschränken:
+
+```powershell
+Connect-ExchangeOnline
+New-ApplicationAccessPolicy -AppId <Client-ID> -PolicyScopeGroupId website-mailversand@kunde.de -AccessRight RestrictAccess -Description "Website darf nur aus anfragen@ senden"
+# Kontrolle: Granted beim Absender-Postfach, Denied bei jedem anderen
+Test-ApplicationAccessPolicy -Identity anfragen@kunde.de -AppId <Client-ID>
+Test-ApplicationAccessPolicy -Identity chef@kunde.de -AppId <Client-ID>
+```
+
+Rechte und Beschränkungen in Exchange wirken oft erst **nach 30 Minuten bis 2 Stunden**. Bis dahin meldet die Test-E-Mail „darf nicht senden“ (Weg A) oder sendet noch ohne Beschränkung (Weg B): mit dem Test aus Schritt 4 abwarten, nicht nachjustieren.
+
+**5. Im Admin der Website eintragen.** Versandart „Microsoft 365“, Tenant-ID, Client-ID, Secret-Wert, Ablaufdatum, Absender-Postfach, speichern. Die Verbindungsprüfung muss „Tenant gefunden“ und „App angemeldet“ zeigen. Danach **Test-E-Mail senden** und prüfen, dass sie ankommt (und in „Gesendete Elemente“ des Absender-Postfachs liegt). Gibt es bedingten Zugriff für Workload-Identitäten, braucht die App dort eine Ausnahme.
+
+**6. Secret rechtzeitig erneuern.** Vor Ablauf (der Admin warnt 30 Tage vorher) in Entra ID ein zweites Secret anlegen, Wert und neues Ablaufdatum im Admin eintragen, Test-E-Mail senden, dann das alte Secret löschen. Ablaufdatum zusätzlich im Kundenregister bzw. Kalender von WNT-IT notieren.
+
+**Häufige Meldungen:** „Microsoft hat das Client-Secret abgelehnt“ = meist die Geheimnis-ID statt des Werts kopiert. „Die App ist in diesem Tenant nicht bekannt“ = Client-ID oder Tenant-ID vertauscht. „Die App darf aus … nicht senden“ = Rolle/Policy fehlt, Postfach nicht im Bereich oder noch nicht wirksam (Schritt 4). „Das Postfach … wurde nicht gefunden“ = Tippfehler oder kein Exchange-Online-Postfach (Verteilerlisten gehen nicht).
 
 ## Absicherung und Aufräumen (ab v0.16.0)
 

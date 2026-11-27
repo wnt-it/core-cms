@@ -9,9 +9,9 @@ import { EMPTY_SMTP_VALUES, loadFormRecipients, loadSmtpSettings } from "../emai
 import { listFormTypes, recipientFor, validateFormRecipients, type FormRecipients, type SmtpSettingsData } from "../email/form-recipients";
 import { isAllowedImageSettingColumn, sanitizeGeneralSettings, type GeneralSettingsField } from "./general-settings";
 import { revalidatePath } from "next/cache";
-import { SmtpEmailProvider } from "../email/smtp-provider";
-import { checkSmtp } from "../email/smtp-check";
-import { classifySmtpError, incompleteResult, type SmtpCheckResult } from "../email/smtp-check-types";
+import { checkMailConfig, classifyMailError, providerForConfig } from "../email/mail-transport";
+import { incompleteResult, type SmtpCheckResult } from "../email/smtp-check-types";
+import { validateMicrosoft365Input, type Microsoft365Payload } from "../email/microsoft365-input";
 import { dbErrorMessage, smtpErrorMessage } from "../auth/auth-errors";
 
 // Defense in depth: Server Actions sind öffentlich aufrufbar, daher nie nur auf RLS verlassen.
@@ -46,6 +46,21 @@ export async function saveSmtpSettings(formData: FormData) {
     const checked = validateFormRecipients(parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>) : {});
     if (!checked.ok) return { success: false, error: `Empfänger je Formular: ${checked.error}` };
     formRecipients = checked.value;
+  }
+
+  // Versandart und Microsoft 365 (ab v0.19.0): ebenfalls vor dem Speichern prüfen
+  let msInput: Microsoft365Payload | null = null;
+  const transport = formData.get("mail_transport")?.toString();
+  if (transport === "smtp" || transport === "microsoft365") {
+    const ms = validateMicrosoft365Input({
+      transport,
+      tenantId: formData.get("ms_tenant_id")?.toString() ?? "",
+      clientId: formData.get("ms_client_id")?.toString() ?? "",
+      sender: formData.get("ms_sender")?.toString() ?? "",
+      secretExpiresAt: formData.get("ms_secret_expires_at")?.toString() ?? "",
+    });
+    if (!ms.ok) return { success: false, error: `Microsoft 365: ${ms.error}` };
+    msInput = ms.value;
   }
 
   const updatePayload: Record<string, string | null> = {
@@ -110,6 +125,31 @@ export async function saveSmtpSettings(formData: FormData) {
     }
   }
 
+  // Versandart und Microsoft 365 (ab v0.19.0): eigenes Update, fehlen die Spalten, bleiben die SMTP-Daten gespeichert
+  if (msInput) {
+    const msPayload: Record<string, string | null> = { ...msInput };
+    const secret = formData.get("ms_client_secret")?.toString().trim() || "";
+    if (secret) {
+      try {
+        msPayload.ms_client_secret = encrypt(secret);
+      } catch (err) {
+        console.error("Client secret encryption failed:", err);
+        return { success: false, error: "Das Client-Secret konnte nicht verschlüsselt werden. Prüf den ENCRYPTION_KEY (Vercel → Environment Variables)." };
+      }
+    }
+    const { error: msError } = await supabase.from("email_settings").update(msPayload).eq("id", "general");
+    if (msError) {
+      console.error("Failed to save Microsoft 365 settings:", msError);
+      revalidatePath("/admin/einstellungen");
+      return {
+        success: false,
+        error: /mail_transport|ms_/.test(msError.message ?? "")
+          ? "SMTP-Daten gespeichert. Die Versandart Microsoft 365 braucht noch die Datenbank-Aktualisierung für core-cms v0.19.0 (sql/0.19.0_microsoft_365.sql)."
+          : dbErrorMessage(msError, "Speichern der Microsoft-365-Einstellungen"),
+      };
+    }
+  }
+
   revalidatePath("/admin/einstellungen");
   return { success: true };
 }
@@ -163,7 +203,7 @@ export async function updateHeroImageSetting(fieldId: string, url: string | null
   return { success: true };
 }
 
-/** Gespeicherte SMTP-Angaben für das Formular im Admin. Das Passwort verlässt den Server nie,
+/** Gespeicherte E-Mail-Angaben für das Formular im Admin. Passwort und Client-Secret verlassen den Server nie,
  *  nur ob eines gespeichert und lesbar ist (passStatus). Leer gelassen bleibt es beim Speichern erhalten. */
 export async function getSmtpSettings(): Promise<SmtpSettingsData> {
   const supabase = await createClient();
@@ -199,7 +239,7 @@ export async function sendTestEmail(formType?: string): Promise<{ success: true;
   const what = typeof formType === "string" && formType ? `Neue Anfragen aus „${formType}“` : "Neue Anfragen";
 
   try {
-    const provider = new SmtpEmailProvider({ host: config.host, port: config.port, user: config.user, pass: config.pass, skipCertCheck: config.skipCertCheck });
+    const provider = providerForConfig(config);
     await provider.send({
       to,
       subject: "Test-E-Mail aus dem Admin",
@@ -209,16 +249,18 @@ export async function sendTestEmail(formType?: string): Promise<{ success: true;
     });
     return { success: true, to };
   } catch (err) {
-    console.error("SMTP test failed:", err);
+    console.error("Mail test failed:", err);
     // Verbindungs- und Zertifikatsfehler so erklären wie die Verbindungsprüfung, alles andere (z. B. Adressen abgelehnt) wie bisher
-    const checked = classifySmtpError(err, config);
+    const checked = classifyMailError(err, config);
+    if (config.transport === "microsoft365") return { success: false, error: [checked.message, checked.hint].filter(Boolean).join(" ") };
     return { success: false, error: checked.problem && checked.problem !== "other" ? [checked.message, checked.hint].filter(Boolean).join(" ") : smtpErrorMessage(err as Error) };
   }
 }
 
 /**
  * Prüft die Verbindung zum Mailserver mit den GESPEICHERTEN Einstellungen, ohne eine E-Mail zu senden:
- * Server erreichbar, Verbindung verschlüsselt (Zertifikat), Anmeldung. Ergebnis wird 10 Minuten gemerkt,
+ * Server erreichbar, Verbindung verschlüsselt (Zertifikat), Anmeldung. Bei Microsoft 365 (ab v0.19.0):
+ * Tenant gefunden, App angemeldet, Senderecht (soweit ohne Versand sichtbar). Ergebnis wird 10 Minuten gemerkt,
  * `fresh` prüft sofort neu (z. B. nach dem Speichern oder per „Erneut prüfen“).
  * Für die Anzeige in den Einstellungen (SmtpStatus).
  */
@@ -227,5 +269,5 @@ export async function checkSmtpConnection(options: { fresh?: boolean } = {}): Pr
   if (!(await isLoggedIn(supabase))) return { ok: false, notLoggedIn: true };
   const { config, missing } = await loadSmtpSettings(supabase);
   if (!config) return incompleteResult(missing);
-  return checkSmtp(config, { fresh: options?.fresh === true });
+  return checkMailConfig(config, { fresh: options?.fresh === true });
 }

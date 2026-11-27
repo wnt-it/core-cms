@@ -17,6 +17,18 @@ export interface ChangelogEntry {
 /** Neueste Version zuerst. */
 export const CORE_CHANGELOG: ChangelogEntry[] = [
   {
+    // Entwurf: noch nicht veröffentlicht (kein Tag).
+    version: "0.19.0",
+    date: "2026-11-27",
+    changes: [
+      { type: "feature", text: "E-Mails über Microsoft 365 ohne Passwort: Unter Einstellungen → E-Mail & SMTP → Versand kannst du statt SMTP jetzt „Microsoft 365“ wählen. Die Website meldet sich dann als App bei deinem Microsoft-365-Konto an und sendet aus einem festen Postfach, zum Beispiel anfragen@deine-firma.de. Das ist nötig, weil Microsoft den Versand mit Benutzername und Passwort abschaltet. Die Einrichtung übernimmt WNT-IT mit deinem IT-Ansprechpartner." },
+      { type: "feature", text: "Die Live-Anzeige zum Mail-Versand prüft auch Microsoft 365: ob dein Microsoft-Konto gefunden wird und die App sich anmelden darf. Bei einem Problem steht dabei, was zu tun ist." },
+      { type: "feature", text: "Erinnerung an den App-Schlüssel: Der Schlüssel für Microsoft 365 gilt höchstens zwei Jahre. Trägst du sein Ablaufdatum ein, warnt dich der Admin 30 Tage vorher, damit der Versand nicht plötzlich ausfällt." },
+    ],
+    releaseNotes:
+      "**Für Entwickler:** Neue Versandart `microsoft365` neben SMTP: Microsoft Graph `POST /v1.0/users/{absender}/sendMail` mit Token aus Client Credentials (`login.microsoftonline.com/{tenant}/oauth2/v2.0/token`, Scope `https://graph.microsoft.com/.default`), nur `fetch`, keine neue Abhängigkeit (`src/email/graph-provider.ts`, `GraphEmailProvider`, `getEmailProvider({ type: \"microsoft365\", config })`). Einmal je Projekt `sql/0.19.0_microsoft_365.sql` ausführen (vor oder nach dem Update; neue Spalten in `email_settings`: `mail_transport` Standard `smtp`, `ms_tenant_id`, `ms_client_id`, `ms_client_secret` verschlüsselt mit `ENCRYPTION_KEY`, `ms_sender`, `ms_secret_expires_at`). Ohne die Spalten bleibt alles SMTP. Kein Code im Projekt nötig. Benachrichtigung, Test-E-Mail und `checkSmtpConnection` wählen die Versandart über `src/email/mail-transport.ts`; die Prüfung holt nur ein Token und sendet nichts (`graph-check.ts`, Auswertung `classifyGraphError` in `graph-check-types.ts`). `SmtpCheckResult` hat neu `transport`, `mailbox`, `secretExpiresAt`, `secretExpiresSoon`; `loadSmtpSettings().config` ist jetzt `SmtpConfig | Microsoft365Config` (Feld `transport`). Einrichtung im Tenant inkl. Beschränkung auf ein Postfach (RBAC for Applications bzw. Application Access Policy): README „Versand über Microsoft 365“. Achtung gemeinsame Datenbank: Stellt jemand im Admin der Vorschau auf Microsoft 365 um, sendet eine Live-Seite mit älterer Version weiter per SMTP.",
+  },
+  {
     version: "0.18.1",
     date: "2026-11-23",
     changes: [

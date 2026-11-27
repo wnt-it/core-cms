@@ -1,17 +1,19 @@
 'use client'
 
-// SMTP-Einstellungen im Admin. Das gespeicherte Passwort kommt nie in den Browser: Das Feld bleibt leer,
-// leer gespeichert bleibt das alte Passwort erhalten. Angezeigt wird nur, ob eines gespeichert ist.
+// E-Mail-Einstellungen im Admin. Zwei Versandarten (ab v0.19.0): SMTP und Microsoft 365 (Graph).
+// Das gespeicherte Passwort bzw. Client-Secret kommt nie in den Browser: Das Feld bleibt leer,
+// leer gespeichert bleibt der alte Wert erhalten. Angezeigt wird nur, ob einer gespeichert ist.
 
 import { useState, useEffect } from 'react'
 import { saveSmtpSettings, getSmtpSettings, sendTestEmail } from './settings-actions'
 import { Send, Save, Loader2, ChevronDown, Settings2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { cx, hintClass, mutedClass } from '../ui/styles'
-import { Button, Card, CardFooter, Field, FieldGrid, Input, Note, SaveBar, Section, SwitchRow } from '../ui/components'
+import { Button, Card, CardFooter, Field, FieldGrid, Input, Note, SaveBar, Section, Segmented, SwitchRow } from '../ui/components'
 import { SmtpStatus } from './SmtpStatus'
 import type { SmtpFormValues } from '../email/smtp-settings'
 import { listFormTypes, type FormRecipientsInfo } from '../email/form-recipients'
+import { secretExpiry, secretExpiryHint, SECRET_MAX_MONTHS } from '../email/graph-check-types'
 
 interface SmtpSettingsFormProps {
   initialSettings?: Partial<SmtpFormValues> & { missing?: string[]; forms?: FormRecipientsInfo }
@@ -30,6 +32,12 @@ const toForm = (s?: Partial<SmtpFormValues>) => ({
   fromEmail: s?.fromEmail || '',
   recipient: s?.recipient || '',
   skipCertCheck: s?.skipCertCheck === true,
+  transport: (s?.transport ?? 'smtp') as SmtpFormValues['transport'],
+  msTenantId: s?.msTenantId || '',
+  msClientId: s?.msClientId || '',
+  msSecret: '',
+  msSender: s?.msSender || '',
+  msSecretExpiresAt: s?.msSecretExpiresAt || '',
 })
 
 export default function SmtpSettingsForm({ initialSettings, declaredForms = [] }: SmtpSettingsFormProps) {
@@ -45,6 +53,10 @@ export default function SmtpSettingsForm({ initialSettings, declaredForms = [] }
   const [isLoading, setIsLoading] = useState(!initialSettings)
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [certSwitchAvailable, setCertSwitchAvailable] = useState(initialSettings?.certSwitchAvailable ?? true)
+  const [msAvailable, setMsAvailable] = useState(initialSettings?.msAvailable ?? true)
+  const [msSecretStatus, setMsSecretStatus] = useState<SmtpFormValues['msSecretStatus']>(initialSettings?.msSecretStatus ?? 'none')
+  const isMs = formData.transport === 'microsoft365'
+  const expiry = secretExpiry(formData.msSecretExpiresAt)
   /** Nach dem Speichern hochzählen: Die Verbindungsprüfung läuft dann sofort mit den neuen Angaben */
   const [checkKey, setCheckKey] = useState(0)
 
@@ -57,6 +69,8 @@ export default function SmtpSettingsForm({ initialSettings, declaredForms = [] }
         setForms(settings.forms)
         setFormRecipients({ ...settings.forms.recipients })
         setCertSwitchAvailable(settings.certSwitchAvailable)
+        setMsAvailable(settings.msAvailable)
+        setMsSecretStatus(settings.msSecretStatus)
         setIsLoading(false)
       })
     }
@@ -95,11 +109,19 @@ export default function SmtpSettingsForm({ initialSettings, declaredForms = [] }
     form.append('smtp_recipient', formData.recipient)
     if (forms.available) form.append('form_recipients', JSON.stringify(formRecipients))
     if (certSwitchAvailable) form.append('smtp_skip_cert_check', formData.skipCertCheck ? '1' : '0')
+    if (msAvailable) {
+      form.append('mail_transport', formData.transport)
+      form.append('ms_tenant_id', formData.msTenantId)
+      form.append('ms_client_id', formData.msClientId)
+      form.append('ms_client_secret', formData.msSecret)
+      form.append('ms_sender', formData.msSender)
+      form.append('ms_secret_expires_at', formData.msSecretExpiresAt)
+    }
 
     try {
       const result = await saveSmtpSettings(form)
       if (result.success) {
-        toast.success('SMTP-Einstellungen erfolgreich gespeichert!')
+        toast.success('E-Mail-Einstellungen gespeichert.')
         // Neuer Stand vom Server (Passwort-Status, was noch fehlt); das eingegebene Passwort leeren
         const fresh = await getSmtpSettings()
         setFormData(toForm(fresh))
@@ -108,6 +130,8 @@ export default function SmtpSettingsForm({ initialSettings, declaredForms = [] }
         setForms(fresh.forms)
         setFormRecipients({ ...fresh.forms.recipients })
         setCertSwitchAvailable(fresh.certSwitchAvailable)
+        setMsAvailable(fresh.msAvailable)
+        setMsSecretStatus(fresh.msSecretStatus)
         setCheckKey((k) => k + 1)
       } else {
         // Teilweise gespeichert (z. B. Spalte fehlt): Verbindung trotzdem neu prüfen
@@ -126,7 +150,7 @@ export default function SmtpSettingsForm({ initialSettings, declaredForms = [] }
       <Card>
         <div className="flex items-center justify-center gap-2 py-4 text-[13px] text-[#64748B]" role="status">
           <Loader2 size={18} className="animate-spin" aria-hidden="true" />
-          <span>SMTP-Einstellungen werden geladen...</span>
+          <span>E-Mail-Einstellungen werden geladen...</span>
         </div>
       </Card>
     )
@@ -156,14 +180,21 @@ export default function SmtpSettingsForm({ initialSettings, declaredForms = [] }
               onChange={(e) => setFormData({ ...formData, fromName: e.target.value })}
             />
           </Field>
-          <Field label="Absender E-Mail">
-            <Input
-              type="email"
-              placeholder="z.B. noreply@example.com"
-              value={formData.fromEmail}
-              onChange={(e) => setFormData({ ...formData, fromEmail: e.target.value })}
-            />
-          </Field>
+          {isMs ? (
+            // Microsoft 365 sendet immer aus dem Absender-Postfach (unten bei „Versand“)
+            <Field label="Absender E-Mail" hint="Bei Microsoft 365 ist das immer das Absender-Postfach.">
+              <Input type="email" readOnly value={formData.msSender} placeholder="Absender-Postfach unten eintragen" />
+            </Field>
+          ) : (
+            <Field label="Absender E-Mail">
+              <Input
+                type="email"
+                placeholder="z.B. noreply@example.com"
+                value={formData.fromEmail}
+                onChange={(e) => setFormData({ ...formData, fromEmail: e.target.value })}
+              />
+            </Field>
+          )}
           <Field label="Empfänger für Anfragen" className="sm:col-span-2">
             <Input
               type="email"
@@ -220,8 +251,8 @@ export default function SmtpSettingsForm({ initialSettings, declaredForms = [] }
 
       {/* SERVER-DATEN + ZUGANGSDATEN - technische Details, standardmäßig eingeklappt */}
       <Section
-        title="Mailserver"
-        description="Zentrale Serverdaten für den Versand von Kontaktanfragen und System-Benachrichtigungen."
+        title="Versand"
+        description="Worüber die Website Kontaktanfragen und System-Benachrichtigungen verschickt: einen Mailserver (SMTP) oder Microsoft 365."
         bare
       >
         <Card padded={false}>
@@ -234,8 +265,10 @@ export default function SmtpSettingsForm({ initialSettings, declaredForms = [] }
             <span className="flex min-w-0 items-center gap-3">
               <Settings2 size={16} className="shrink-0 text-[#64748B]" aria-hidden="true" />
               <span className="min-w-0">
-                <span className="block text-[14px] font-medium text-[#0F172A]">Server-Einstellungen (für Techniker)</span>
-                {formData.host && (
+                <span className="block text-[14px] font-medium text-[#0F172A]">{isMs ? 'Microsoft 365 (für Techniker)' : 'Server-Einstellungen (für Techniker)'}</span>
+                {isMs ? (
+                  formData.msSender && <span className={cx(mutedClass, 'block truncate')}>Microsoft 365 · {formData.msSender}</span>
+                ) : formData.host && (
                   <span className={cx(mutedClass, 'block truncate')}>
                     {formData.host}
                     {formData.port ? ` · Port ${formData.port}` : ''}
@@ -256,9 +289,119 @@ export default function SmtpSettingsForm({ initialSettings, declaredForms = [] }
               Anfragen nur im Posteingang gespeichert.
             </p>
           )}
+          {/* Ablauf des Client-Secrets auch eingeklappt sichtbar */}
+          {isMs && !showAdvanced && (expiry.status === 'soon' || expiry.status === 'expired') && (
+            <div className="px-5 pb-5 sm:px-6">
+              <Note tone={expiry.status === 'expired' ? 'error' : 'warn'}>{secretExpiryHint(formData.msSecretExpiresAt)}</Note>
+            </div>
+          )}
 
           {showAdvanced && (
             <div className="flex flex-col gap-5 px-5 pb-6 pt-1 sm:px-6">
+              {/* Versandart (ab v0.19.0) */}
+              {msAvailable ? (
+                <div className="flex flex-col gap-2">
+                  <span className="text-[13px] font-medium text-[#0F172A]">Versandart</span>
+                  <div>
+                    <Segmented
+                      label="Versandart"
+                      value={formData.transport}
+                      onChange={(v) => setFormData({ ...formData, transport: v })}
+                      options={[
+                        { value: 'smtp', label: 'SMTP (Benutzername und Passwort)' },
+                        { value: 'microsoft365', label: 'Microsoft 365' },
+                      ]}
+                    />
+                  </div>
+                  <p className={hintClass}>
+                    {isMs
+                      ? 'Die Website meldet sich als App bei deinem Microsoft-365-Tenant an und sendet aus einem festen Postfach, ohne Passwort. Die App muss in Exchange auf genau dieses Postfach beschränkt sein.'
+                      : 'Für Postfächer bei IONOS, Strato, All-Inkl, Google und anderen. Microsoft 365 schaltet SMTP mit Passwort ab, dort bitte „Microsoft 365“ wählen.'}
+                  </p>
+                </div>
+              ) : (
+                <p className={hintClass}>Versand über Microsoft 365 (ohne Passwort) braucht noch die Datenbank-Aktualisierung für core-cms v0.19.0.</p>
+              )}
+
+              {isMs ? (
+                <>
+                  <FieldGrid>
+                    <Field label="Tenant-ID (Verzeichnis-ID)" hint="Entra ID → Übersicht → Mandanten-ID">
+                      <Input
+                        type="text"
+                        required
+                        autoComplete="off"
+                        spellCheck={false}
+                        placeholder="z.B. 00000000-0000-0000-0000-000000000000"
+                        value={formData.msTenantId}
+                        onChange={(e) => setFormData({ ...formData, msTenantId: e.target.value })}
+                      />
+                    </Field>
+                    <Field label="Client-ID (Anwendungs-ID)" hint="Entra ID → App-Registrierungen → deine App">
+                      <Input
+                        type="text"
+                        required
+                        autoComplete="off"
+                        spellCheck={false}
+                        placeholder="z.B. 00000000-0000-0000-0000-000000000000"
+                        value={formData.msClientId}
+                        onChange={(e) => setFormData({ ...formData, msClientId: e.target.value })}
+                      />
+                    </Field>
+                    {/* Wie beim SMTP-Passwort: Das gespeicherte Secret kommt nie in den Browser */}
+                    <Field
+                      label="Client-Secret (Wert)"
+                      hint={
+                        msSecretStatus === 'saved'
+                          ? 'Gespeichert. Leer lassen, um es zu behalten.'
+                          : msSecretStatus === 'unreadable'
+                            ? 'Das gespeicherte Secret lässt sich nicht mehr lesen. Bitte neu eingeben.'
+                            : 'Den „Wert“ kopieren, nicht die Geheimnis-ID. Wird verschlüsselt gespeichert.'
+                      }
+                    >
+                      <Input
+                        type="password"
+                        required={msSecretStatus !== 'saved'}
+                        autoComplete="new-password"
+                        placeholder={msSecretStatus === 'saved' ? '•••••••• (gespeichert)' : 'Secret eingeben'}
+                        value={formData.msSecret}
+                        onChange={(e) => setFormData({ ...formData, msSecret: e.target.value })}
+                      />
+                    </Field>
+                    <Field label="Secret gültig bis" hint={`Steht in Entra ID unter „Zertifikate & Geheimnisse“. Höchstens ${SECRET_MAX_MONTHS} Monate.`}>
+                      <Input
+                        type="date"
+                        value={formData.msSecretExpiresAt}
+                        onChange={(e) => setFormData({ ...formData, msSecretExpiresAt: e.target.value })}
+                      />
+                    </Field>
+                    <Field
+                      label="Absender-Postfach"
+                      className="sm:col-span-2"
+                      hint="Aus diesem Postfach gehen alle E-Mails raus, gern ein freigegebenes Postfach (Shared Mailbox) wie anfragen@…"
+                    >
+                      <Input
+                        type="email"
+                        required
+                        placeholder="z.B. anfragen@example.com"
+                        value={formData.msSender}
+                        onChange={(e) => setFormData({ ...formData, msSender: e.target.value })}
+                      />
+                    </Field>
+                  </FieldGrid>
+                  {expiry.status === 'expired' || expiry.status === 'soon' ? (
+                    <Note tone={expiry.status === 'expired' ? 'error' : 'warn'}>{secretExpiryHint(formData.msSecretExpiresAt)}</Note>
+                  ) : (
+                    <Note>
+                      Ein Client-Secret gilt höchstens {SECRET_MAX_MONTHS} Monate. Danach gehen keine E-Mails mehr raus, bis ein neues eingetragen ist.
+                      {expiry.status === 'ok'
+                        ? ` Dieses gilt noch ${expiry.days} Tage.`
+                        : ' Trag das Ablaufdatum ein, dann erinnert dich der Admin rechtzeitig.'}
+                    </Note>
+                  )}
+                </>
+              ) : (
+              <>
               <div className="grid gap-5 sm:grid-cols-[minmax(0,3fr)_minmax(0,1fr)]">
                 <Field label="SMTP Host / Server-Adresse">
                   <Input
@@ -331,6 +474,8 @@ export default function SmtpSettingsForm({ initialSettings, declaredForms = [] }
                   Das Zertifikat des Mailservers wird immer geprüft. Der Schalter für Ausnahmen braucht noch die Datenbank-Aktualisierung für core-cms v0.18.0.
                 </p>
               )}
+              </>
+              )}
             </div>
           )}
 
@@ -347,7 +492,7 @@ export default function SmtpSettingsForm({ initialSettings, declaredForms = [] }
       <SaveBar start={<p className={hintClass}>Änderungen gelten sofort für alle Formulare.</p>}>
         <Button type="submit" variant="primary" disabled={isSaving}>
           {isSaving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-          <span>SMTP-Einstellungen speichern</span>
+          <span>E-Mail-Einstellungen speichern</span>
         </Button>
       </SaveBar>
     </form>
