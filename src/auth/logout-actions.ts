@@ -1,8 +1,5 @@
 'use server'
 
-// Quelle: template/src/app/admin/logout/actions.ts
-// Import von createClient auf core-cms-internen relativen Pfad umgestellt.
-
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { createClient } from '../supabase/server'

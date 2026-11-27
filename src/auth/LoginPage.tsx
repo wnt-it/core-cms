@@ -1,4 +1,3 @@
-// Quelle: template/src/app/admin/login/page.tsx
 // Zentrale Login-Seite mit automatischem Branding (Logo/Site-Name aus site_settings) -
 // siehe AuthCardShell. Kundenprojekte binden diese Seite direkt ein statt eine eigene zu pflegen.
 
@@ -18,7 +17,7 @@ export default async function LoginPage(props: LoginPageProps) {
   return (
     <AuthCardShell
       title="Anmelden"
-      subtitle="Bitte melden Sie sich an, um Inhalte zu verwalten."
+      subtitle="Bitte melde dich an, um Inhalte zu verwalten."
       footer={
         <a href="/" className="text-[#64748B] transition-colors hover:text-[#0F172A]">
           &larr; Zurück zur Website
@@ -35,7 +34,7 @@ export default async function LoginPage(props: LoginPageProps) {
             name="email"
             required
             autoComplete="username"
-            placeholder="name@firma.de"
+            placeholder="name@example.com"
             aria-invalid={error ? true : undefined}
           />
         </label>

@@ -1,7 +1,5 @@
 'use client'
 
-// Quelle: template/src/components/ui/ImageUpload.tsx
-// Imports auf core-cms-interne relative Pfade umgestellt.
 // Bildfeld: leer = Ablagefläche, gefüllt = Vorschau mit Ersetzen/Entfernen.
 
 import { useState, useRef, useId } from 'react'
@@ -23,6 +21,10 @@ interface ImageUploadProps {
   value?: string
   bucket?: string
   folder?: string
+  /** Mediathek-Ordner für Uploads, falls er anders heißt als `folder` (z. B. „Erneuerbare Energien“). */
+  libraryFolder?: string
+  /** Vorschau: „cover“ füllt die Fläche (Standard), „contain“ zeigt das ganze Bild, z. B. für Logos. */
+  fit?: 'cover' | 'contain'
   onChange?: (url: string) => void
   /** Bilder beim Upload verkleinern (Standard: an, 2000 px, WebP). */
   imageOptimization?: ImageOptimizationOptions
@@ -44,6 +46,8 @@ export default function ImageUpload({
   value,
   bucket = 'images',
   folder = 'uploads',
+  libraryFolder,
+  fit = 'cover',
   onChange,
   imageOptimization
 }: ImageUploadProps) {
@@ -74,7 +78,7 @@ export default function ImageUpload({
       const [file] = await prepareFilesForUpload([original], imageOptimization)
       if (!confirmLargeFiles([file])) return
 
-      const publicUrl = await uploadToLibrary(supabase, file, { bucket, folder })
+      const publicUrl = await uploadToLibrary(supabase, file, { bucket, folder, libraryFolder })
 
       handleUrlChange(publicUrl)
     } catch (err: any) {
@@ -144,7 +148,7 @@ export default function ImageUpload({
               src={currentUrl}
               alt={label || "Hochgeladenes Bild"}
               fill
-              className="object-cover"
+              className={fit === 'contain' ? 'object-contain p-3' : 'object-cover'}
               sizes="(max-width: 768px) 100vw, 448px"
             />
           </div>
